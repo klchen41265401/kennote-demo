@@ -1,0 +1,108 @@
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kn-space-3);
+  width: 100%;
+  height: 100%;
+  padding: var(--kn-space-4);
+  background: var(--kn-color-bg-subtle);
+  border-left: 1px solid var(--kn-color-divider);
+  overflow-y: auto;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.title {
+  margin: 0;
+  font-size: var(--kn-font-size-sm);
+  font-weight: var(--kn-font-weight-semibold);
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--kn-space-2);
+}
+
+.item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: var(--kn-space-3);
+  border: 1px solid var(--kn-color-border);
+  border-radius: var(--kn-radius-md);
+  background: var(--kn-color-surface);
+  text-align: left;
+}
+
+.item:hover {
+  background: var(--kn-color-surface-hover);
+}
+
+.unread {
+  border-left: 3px solid var(--kn-color-accent);
+}
+
+.line {
+  font-size: var(--kn-font-size-sm);
+}
+
+.snippet {
+  color: var(--kn-color-text-secondary);
+  font-size: var(--kn-font-size-xs);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.time {
+  color: var(--kn-color-text-tertiary);
+  font-size: var(--kn-font-size-xs);
+}
+
+.linkButton {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--kn-color-text-tertiary);
+  font-size: var(--kn-font-size-xs);
+  text-decoration: underline;
+}
+
+.more {
+  align-self: center;
+  padding: var(--kn-space-2) var(--kn-space-4);
+  border: 1px solid var(--kn-color-border);
+  border-radius: var(--kn-radius-md);
+  background: none;
+  font-size: var(--kn-font-size-xs);
+}
+
+.hint {
+  margin: 0;
+  color: var(--kn-color-text-tertiary);
+  font-size: var(--kn-font-size-xs);
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: var(--kn-radius-full);
+  background: var(--kn-color-danger);
+  color: #fff;
+  font-size: 11px;
+  font-weight: var(--kn-font-weight-semibold);
+  line-height: 1;
+}

@@ -1,0 +1,67 @@
+.popover {
+  position: fixed;
+  z-index: var(--kn-z-popover);
+  display: flex;
+  flex-direction: column;
+  gap: var(--kn-space-2);
+  width: 280px;
+  padding: var(--kn-space-3);
+  border: 1px solid var(--kn-color-border);
+  border-radius: var(--kn-radius-lg);
+  background: var(--kn-color-surface);
+  box-shadow: var(--kn-shadow-popover);
+}
+
+.quote {
+  margin: 0;
+  padding-left: var(--kn-space-3);
+  border-left: 2px solid var(--kn-color-accent-subtle);
+  color: var(--kn-color-text-secondary);
+  font-size: var(--kn-font-size-xs);
+  max-height: 4.5em;
+  overflow: hidden;
+}
+
+.input {
+  width: 100%;
+  padding: var(--kn-space-2);
+  border: 1px solid var(--kn-color-border);
+  border-radius: var(--kn-radius-md);
+  background: var(--kn-color-bg);
+  font-size: var(--kn-font-size-sm);
+  resize: vertical;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--kn-space-2);
+}
+
+.primaryButton {
+  padding: var(--kn-space-2) var(--kn-space-3);
+  border: none;
+  border-radius: var(--kn-radius-md);
+  background: var(--kn-color-accent);
+  color: var(--kn-color-text-on-accent);
+  font-size: var(--kn-font-size-xs);
+}
+
+.primaryButton:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.ghostButton {
+  padding: var(--kn-space-2) var(--kn-space-3);
+  border: 1px solid var(--kn-color-border);
+  border-radius: var(--kn-radius-md);
+  background: none;
+  font-size: var(--kn-font-size-xs);
+}
+
+.error {
+  margin: 0;
+  color: var(--kn-color-danger);
+  font-size: var(--kn-font-size-xs);
+}

@@ -1,0 +1,132 @@
+.popover {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kn-space-3);
+  width: 340px;
+  padding: var(--kn-space-4);
+  border: 1px solid var(--kn-color-border);
+  border-radius: var(--kn-radius-lg);
+  background: var(--kn-color-surface);
+  box-shadow: var(--kn-shadow-popover);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.title {
+  margin: 0;
+  font-size: var(--kn-font-size-sm);
+  font-weight: var(--kn-font-weight-semibold);
+}
+
+.inviteRow,
+.linkRow {
+  display: flex;
+  gap: var(--kn-space-2);
+}
+
+.input {
+  flex: 1;
+  min-width: 0;
+  padding: var(--kn-space-2) var(--kn-space-3);
+  border: 1px solid var(--kn-color-border);
+  border-radius: var(--kn-radius-md);
+  background: var(--kn-color-bg);
+  font-size: var(--kn-font-size-sm);
+}
+
+.members {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--kn-space-2);
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.member {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--kn-space-3);
+}
+
+.memberName {
+  display: flex;
+  align-items: baseline;
+  gap: var(--kn-space-2);
+  font-size: var(--kn-font-size-sm);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.role {
+  color: var(--kn-color-text-tertiary);
+  font-size: var(--kn-font-size-xs);
+}
+
+.select {
+  padding: 2px var(--kn-space-2);
+  border: 1px solid var(--kn-color-border);
+  border-radius: var(--kn-radius-md);
+  background: var(--kn-color-bg);
+  font-size: var(--kn-font-size-xs);
+}
+
+.publicSection {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kn-space-2);
+  padding-top: var(--kn-space-3);
+  border-top: 1px solid var(--kn-color-divider);
+}
+
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--kn-space-2);
+  font-size: var(--kn-font-size-sm);
+}
+
+.primaryButton {
+  padding: var(--kn-space-2) var(--kn-space-3);
+  border: none;
+  border-radius: var(--kn-radius-md);
+  background: var(--kn-color-accent);
+  color: var(--kn-color-text-on-accent);
+  font-size: var(--kn-font-size-xs);
+}
+
+.primaryButton:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.ghostButton {
+  padding: var(--kn-space-2) var(--kn-space-3);
+  border: 1px solid var(--kn-color-border);
+  border-radius: var(--kn-radius-md);
+  background: none;
+  font-size: var(--kn-font-size-xs);
+}
+
+.linkButton {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--kn-color-text-tertiary);
+  font-size: var(--kn-font-size-xs);
+  text-decoration: underline;
+}
+
+.error {
+  margin: 0;
+  color: var(--kn-color-danger);
+  font-size: var(--kn-font-size-xs);
+}

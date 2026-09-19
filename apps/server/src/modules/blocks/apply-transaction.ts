@@ -203,6 +203,17 @@ export function setBroadcaster(fn: BroadcastFn): void {
   broadcast = fn;
 }
 
+/**
+ * 權限守門員掛勾（M5）。所有 block 寫入都必經這裡，
+ * 因此「guest 只能留言不能編輯」在 HTTP 與 WS 兩條路徑上是同一道檢查。
+ * 預設 no-op：M1–M4 只有 workspace 成員檢查（findPageForUser）。
+ */
+export type PermissionGuardFn = (ctx: ApplyContext, conn: Tx) => Promise<void>;
+let permissionGuard: PermissionGuardFn = async () => {};
+export function setPermissionGuard(fn: PermissionGuardFn): void {
+  permissionGuard = fn;
+}
+
 async function applyWithin(
   tx: Tx,
   ctx: ApplyContext,
@@ -212,6 +223,9 @@ async function applyWithin(
     // 權限：非本 workspace 成員一律當作頁面不存在
     const page = await findPageForUser(ctx.pageId, ctx.userId, tx);
     if (!page) throw pageNotFound();
+
+    // 頁面層級權限（M5）：read / comment 權限的人在這裡就被擋下
+    await permissionGuard(ctx, tx);
 
     // 冪等：重送同一 txId 不會重複套用
     const existing = await tx.queryOne<{ result: TransactionResult }>(sql`

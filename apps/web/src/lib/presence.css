@@ -1,0 +1,53 @@
+/**
+ * 協作者 presence 的外觀（04 §8 M5-7）。
+ * 這是**全域 CSS**（不是 CSS module）：套用對象是 editor-core 產生的 DOM，
+ * 不是 React 元件，所以 class 名稱必須是穩定、可預測的字串。
+ *
+ * 顏色由 JS 寫進 --kn-presence-color（伺服器依 userId 指派，每個人到處都同一色）。
+ */
+
+.kn-presence-block {
+  position: relative;
+  border-radius: var(--kn-radius-sm, 4px);
+  box-shadow: inset 0 0 0 1px var(--kn-presence-color, #3b82c4);
+  background: color-mix(in srgb, var(--kn-presence-color, #3b82c4) 6%, transparent);
+  transition: box-shadow 120ms ease-out;
+}
+
+/* 名牌：淡入、不擋點擊 */
+.kn-presence-label {
+  position: absolute;
+  top: -0.85em;
+  right: 0;
+  z-index: 3;
+  padding: 1px 6px;
+  border-radius: var(--kn-radius-full, 999px);
+  background: var(--kn-presence-color, #3b82c4);
+  color: #fff;
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: nowrap;
+  pointer-events: none;
+  user-select: none;
+  opacity: 0.92;
+}
+
+/* 多人同時在同一個 block：名牌往左疊 */
+.kn-presence-label + .kn-presence-label {
+  right: auto;
+  left: 0;
+}
+
+/* 他人的游標（選取範圍摘要）——只畫一條細線，不搶視覺焦點 */
+.kn-presence-caret {
+  position: absolute;
+  width: 2px;
+  background: var(--kn-presence-color, #3b82c4);
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kn-presence-block {
+    transition: none;
+  }
+}

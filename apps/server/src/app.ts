@@ -12,7 +12,12 @@ import { authRoutes } from './modules/auth/routes.js';
 import { initAuthProviders } from './modules/auth/providers/registry.js';
 import { databaseRoutes } from './modules/databases/routes.js';
 import { fileRoutes } from './modules/files/routes.js';
+import { commentRoutes } from './modules/comments/routes.js';
+import { historyRoutes } from './modules/history/routes.js';
+import { notificationRoutes } from './modules/notifications/routes.js';
 import { pageRoutes } from './modules/pages/routes.js';
+import { permissionRoutes, publicShareRoutes } from './modules/permissions/routes.js';
+import { initRealtime } from './modules/realtime/index.js';
 import { listTrash } from './modules/pages/service.js';
 import { websocketRoutes } from './modules/realtime/ws.js';
 import { searchRoutes } from './modules/search/routes.js';
@@ -53,6 +58,8 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   registerAuthPlugin(app);
   initAuthProviders();
+  // M5：接上 WS 廣播、留言/通知推播與權限守門員（掛勾都在 realtime/index.ts）
+  initRealtime();
 
   app.get('/api/health', async () => {
     const db = await pingDatabase();
@@ -72,6 +79,11 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(databaseRoutes, { prefix: '/api/databases' });
   await app.register(fileRoutes, { prefix: '/api/files' });
   await app.register(searchRoutes, { prefix: '/api/search' });
+  await app.register(notificationRoutes, { prefix: '/api/notifications' });
+  await app.register(commentRoutes);
+  await app.register(permissionRoutes);
+  await app.register(publicShareRoutes);
+  await app.register(historyRoutes);
 
   await app.register(async (instance) => {
     instance.addHook('preHandler', instance.requireAuth);

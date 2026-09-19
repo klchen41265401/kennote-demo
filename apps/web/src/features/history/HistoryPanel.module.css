@@ -1,0 +1,122 @@
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kn-space-3);
+  width: 100%;
+  height: 100%;
+  padding: var(--kn-space-4);
+  background: var(--kn-color-bg-subtle);
+  border-left: 1px solid var(--kn-color-divider);
+  overflow-y: auto;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.title {
+  margin: 0;
+  font-size: var(--kn-font-size-sm);
+  font-weight: var(--kn-font-weight-semibold);
+}
+
+.banner {
+  padding: var(--kn-space-2) var(--kn-space-3);
+  border: 1px solid var(--kn-color-warning);
+  border-radius: var(--kn-radius-md);
+  background: var(--kn-color-bg);
+  color: var(--kn-color-text-secondary);
+  font-size: var(--kn-font-size-xs);
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--kn-space-2);
+}
+
+.item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: var(--kn-space-3);
+  border: 1px solid var(--kn-color-border);
+  border-radius: var(--kn-radius-md);
+  background: var(--kn-color-surface);
+  text-align: left;
+}
+
+.item:hover {
+  background: var(--kn-color-surface-hover);
+}
+
+.selected {
+  border-color: var(--kn-color-accent);
+}
+
+.when {
+  font-size: var(--kn-font-size-sm);
+}
+
+.meta {
+  color: var(--kn-color-text-tertiary);
+  font-size: var(--kn-font-size-xs);
+}
+
+.actions {
+  display: flex;
+  gap: var(--kn-space-2);
+}
+
+.primaryButton {
+  padding: var(--kn-space-2) var(--kn-space-3);
+  border: none;
+  border-radius: var(--kn-radius-md);
+  background: var(--kn-color-accent);
+  color: var(--kn-color-text-on-accent);
+  font-size: var(--kn-font-size-xs);
+}
+
+.primaryButton:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.ghostButton {
+  padding: var(--kn-space-2) var(--kn-space-3);
+  border: 1px solid var(--kn-color-border);
+  border-radius: var(--kn-radius-md);
+  background: none;
+  font-size: var(--kn-font-size-xs);
+}
+
+.preview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kn-space-2);
+  padding: var(--kn-space-3);
+  border: 1px dashed var(--kn-color-border);
+  border-radius: var(--kn-radius-md);
+  background: var(--kn-color-bg);
+  font-size: var(--kn-font-size-sm);
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.previewLine {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.hint {
+  margin: 0;
+  color: var(--kn-color-text-tertiary);
+  font-size: var(--kn-font-size-xs);
+}
