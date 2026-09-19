@@ -26,8 +26,10 @@ export function needsValue(operator: FilterOperator): boolean {
 }
 
 export function filterableProperties(schema: CollectionSchema): string[] {
+  /* 標題欄排第一（跟 views/types.ts 的 visibleProperties()、07k/07l 參考圖一致） */
   return Object.entries(schema)
     .filter(([, def]) => def && getFieldType(def.type).filterable)
+    .sort(([a], [b]) => (a === 'title' ? -1 : b === 'title' ? 1 : 0))
     .map(([id]) => id);
 }
 

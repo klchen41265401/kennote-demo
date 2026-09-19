@@ -46,6 +46,8 @@
   --kn-color-accent-active: #006bc7; /* --c-bluButPreBac */
   --kn-color-accent-subtle: rgba(35, 131, 226, 0.14); /* --ca-pilHovBacBlu */
   --kn-color-accent-faint: rgba(35, 131, 226, 0.05);
+  /* 資料庫儲存格「選取中」的淡藍底（07d-db-cell-edit-light.png 實測 rgb(239,246,253)） */
+  --kn-color-cell-selected: #eff6fd;
   --kn-color-focus-ring: rgba(35, 131, 226, 0.45);
   --kn-color-danger: #cf5148;
   --kn-color-danger-subtle: rgba(207, 81, 72, 0.12);
@@ -222,6 +224,7 @@
   --kn-color-accent-active: #0077d4;
   --kn-color-accent-subtle: rgba(35, 131, 226, 0.2);
   --kn-color-accent-faint: rgba(35, 131, 226, 0.08);
+  --kn-color-cell-selected: rgba(35, 131, 226, 0.16);
   --kn-color-focus-ring: rgba(35, 131, 226, 0.6);
   --kn-color-danger: #ff7369;
   --kn-color-danger-subtle: rgba(255, 115, 105, 0.16);

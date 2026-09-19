@@ -16,7 +16,11 @@ interface Props {
 
 export function SortBuilder({ schema, query, onChange }: Props) {
   const sorts = query.sort ?? [];
-  const sortable = Object.entries(schema).filter(([, def]) => def && getFieldType(def.type).sortable);
+  /* Notion 的排序屬性清單一律把標題欄排第一（07l-db-sort 參考圖的第一列是「名稱」），
+     跟 views/types.ts 的 visibleProperties() 同一個規則。 */
+  const sortable = Object.entries(schema)
+    .filter(([, def]) => def && getFieldType(def.type).sortable)
+    .sort(([a], [b]) => (a === 'title' ? -1 : b === 'title' ? 1 : 0));
   const unused = sortable.filter(([id]) => !sorts.some((s) => s.property === id));
 
   function update(next: SortSpec[]) {

@@ -363,7 +363,8 @@
 }
 
 .pickerItem:hover,
-.pickerItem:focus-visible {
+.pickerItem:focus-visible,
+.pickerItemActive {
   background: var(--kn-color-menu-hover);
   outline: none;
 }

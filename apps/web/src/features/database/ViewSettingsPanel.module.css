@@ -96,9 +96,19 @@
   border-top: 1px solid var(--kn-color-divider);
 }
 
+/* 有標籤的組下緣留白 11px（無標籤的第一組實測已經對齊，不要一起改）。
+   Notion：第 2 組 y313..508 ＝ 196 ＝ 標籤區 40 ＋ 5×29 ＋ 下留白 11。 */
+.section:has(> .sectionLabel) {
+  padding-bottom: 11px;
+}
+
+/* 第五輪實測（07m-db-settings-light.png）：Notion 的組標籤區塊（分隔線 → 第一列上緣）
+   是 **40px**，kennote 原本只有 30；標籤文字中心在分隔線下 24px（kennote 19）。
+   → 上下各補 5px（6→11 / 2→7），列整體下移 10px、標籤文字下移 5px。
+   左內距 12 → 16（Notion 的標籤字身左緣 x30、面板左框線 x13）。 */
 .sectionLabel {
   margin: 0;
-  padding: 6px 12px 2px;
+  padding: 11px 16px 7px;
   color: var(--kn-color-text-tertiary);
   font-size: var(--kn-font-size-xs);
 }
@@ -110,7 +120,9 @@
   gap: 8px;
   flex: 0 0 auto;
   height: 29px;
-  padding: 0 10px 0 12px;
+  /* 右內距 10 → 16：Notion 的右側值靠右內縮 22px（面板右緣 x305、字身最右 x283），
+     kennote 原本只內縮 15 → 整張圖的最佳位移一直是 dx -6。 */
+  padding: 0 16px 0 14px;
   border: 0;
   background: transparent;
   color: var(--kn-color-text);

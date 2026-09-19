@@ -37,12 +37,17 @@ export function PropertyPicker({
   ariaLabel,
 }: PropertyPickerProps) {
   const [search, setSearch] = useState('');
+  /* Notion 這張清單一打開就把第一列標成「作用中」（07k/07l 參考圖的第一列底是 rgb(244,243,243)），
+     上下鍵會移動這個標記、Enter 選它。 */
+  const [active, setActive] = useState(0);
 
   const matched = useMemo(() => {
     const keyword = search.trim().toLowerCase();
     if (!keyword) return properties;
     return properties.filter((id) => (schema[id]?.name ?? '').toLowerCase().includes(keyword));
   }, [properties, schema, search]);
+
+  const index = matched.length === 0 ? 0 : Math.min(active, matched.length - 1);
 
   return (
     <div className={styles.picker} role="listbox" aria-label={ariaLabel}>
@@ -52,9 +57,20 @@ export function PropertyPicker({
         placeholder={placeholder}
         aria-label={placeholder}
         autoFocus
-        onChange={(e) => setSearch(e.target.value)}
+        onChange={(e) => {
+          setSearch(e.target.value);
+          setActive(0);
+        }}
         onKeyDown={(e) => {
-          if (e.key === 'Enter' && matched[0]) onSelect(matched[0]);
+          if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            setActive((i) => Math.min(i + 1, Math.max(matched.length - 1, 0)));
+          } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            setActive((i) => Math.max(i - 1, 0));
+          } else if (e.key === 'Enter' && matched[index]) {
+            onSelect(matched[index]);
+          }
         }}
       />
 
@@ -62,7 +78,7 @@ export function PropertyPicker({
         {matched.length === 0 ? (
           <p className={styles.pickerEmpty}>沒有符合的屬性</p>
         ) : (
-          matched.map((id) => {
+          matched.map((id, i) => {
             const def = schema[id];
             if (!def) return null;
             return (
@@ -70,8 +86,9 @@ export function PropertyPicker({
                 key={id}
                 type="button"
                 role="option"
-                aria-selected={false}
-                className={styles.pickerItem}
+                aria-selected={i === index}
+                className={i === index ? `${styles.pickerItem} ${styles.pickerItemActive}` : styles.pickerItem}
+                onMouseEnter={() => setActive(i)}
                 onClick={() => onSelect(id)}
               >
                 <FieldIcon type={def.type} />

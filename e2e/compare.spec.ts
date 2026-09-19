@@ -423,7 +423,11 @@ for (const theme of ['light', 'dark'] as Theme[]) {
           await page.waitForTimeout(300);
           const size = refSize('07b-db-header-hover', theme)!;
           const hb = await header.boundingBox();
-          if (hb) await clip(page, '07b-db-header-hover', theme, { x: box.x - 48, y: hb.y - 30, width: size.width, height: size.height });
+          // 裁切原點實測（第五輪，`measure.mjs rows/colseg 07b-db-header-hover light`）：
+          //   Notion：tab 膠囊 y14..45（x30..106）、表頭下框線 y85、資料列 y86..121 / y123..
+          //   kennote（padX 48 / padY 30）：膠囊 x50..126、表頭下框線 y62
+          // → 水平差 20（padX 48→28）、垂直差 23（padY 30→53）。
+          if (hb) await clip(page, '07b-db-header-hover', theme, { x: box.x - 28, y: hb.y - 53, width: size.width, height: size.height });
         }
 
         /* 07k / 07l / 07m：篩選 / 排序 / 設定浮層 */
@@ -463,13 +467,17 @@ for (const theme of ['light', 'dark'] as Theme[]) {
 
           /* 07d：儲存格「選取中」——Notion 那張是點一下的選取態（藍框 + 右下角小方塊），
              不是打開編輯器的狀態（UI-SPEC §8.2），而且拍的是**名稱欄**。 */
-          const cell = row.locator('[class*="cellWrap"]').first();
+          // 第五輪實測：Notion 的 07d 參考圖選的是**第二列**的名稱欄
+          //   （表頭下框線 y49、第一列 y50..85、選取格 y87..122、藍框 2px、底 rgb(239,246,253)）。
+          //   kennote 原本選第一列 + padY 40 → 表頭剛好落在 Notion 的第一列位置，整張錯一列。
+          const row2 = db.locator('[class*="_row_"]').nth(1);
+          const cell = (await row2.count() ? row2 : row).locator('[class*="cellWrap"]').first();
           if (await cell.count()) {
             await cell.click();
             await page.waitForTimeout(500);
             const size2 = refSize('07d-db-cell-edit', theme)!;
             const cb = await cell.boundingBox();
-            if (cb) await clip(page, '07d-db-cell-edit', theme, { x: box.x - 48, y: cb.y - 40, width: size2.width, height: size2.height });
+            if (cb) await clip(page, '07d-db-cell-edit', theme, { x: box.x - 48, y: cb.y - 87, width: size2.width, height: size2.height });
             await page.keyboard.press('Escape');
           }
 
@@ -614,6 +622,7 @@ const KNOWN_GAPS = [
   '| `07o-db-row-peek` | 整窗截圖，兩邊頁面內容不同（Notion 那頁是空資料庫）。結構（右側滑出面板 + 屬性清單 + 分隔線 + 正文）已經對齊。 |',
 
   '| `07j-db-proptype-menu` | kennote 的型別選單沒有「整合」那一組，入口也在欄位設定裡而不是表頭 `+`。未納入比對。 |',
+  '| `07b-db-header-hover` / `07d-db-cell-edit` 的 **dark** | 第五輪實測：Notion 那兩張深色參考拍到的是**開著的下拉選單**（面板底 `rgb(37,37,37)` ＋ 28px 反白 `rgb(49,49,49)`），跟 light 不是同一個狀態。light 可以比，dark 比不了。 |',
   '',
   '> `07i-db-timeline` 從第三輪開始已經納入比對（時程表視圖 + 遠端後端跑完 migration 0060）。',
   '',

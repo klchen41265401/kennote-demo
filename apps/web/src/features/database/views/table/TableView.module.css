@@ -77,8 +77,10 @@
   cursor: pointer;
 }
 
+/* 第五輪：Notion 的 07b-db-header-hover 參考圖裡表頭底其實還是白的（light 量到 rgb(255,255,255)），
+   欄頭的互動底用的是實色那顆（--c-bacInt / rgb(244,243,243)），不是半透明的 --ca-graBacSecTra。 */
 .headerButton:hover {
-  background: var(--kn-color-surface-hover);
+  background: var(--kn-color-menu-hover);
 }
 
 .headerName {
@@ -156,6 +158,9 @@
 /** 選取中的儲存格：藍色外框 **+ 右下角的小方塊**（07d-db-cell-edit-light.png） */
 .cellActive {
   z-index: 2;
+  /* 第五輪：Notion 的選取態儲存格帶淡藍底 rgb(239,246,253)（07d 量到 y89..120），
+     kennote 原本沿用列 hover 的 rgb(249,248,247)。 */
+  background: var(--kn-color-cell-selected);
   box-shadow: inset 0 0 0 2px var(--kn-color-accent);
   border-radius: 2px;
 }
