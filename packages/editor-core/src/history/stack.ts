@@ -85,8 +85,24 @@ export class HistoryStack {
     this.pendingBreak = true;
   }
 
-  /** 取出一筆要 undo 的紀錄（呼叫端負責套用 inverseOps 與還原 selectionBefore）。 */
-  popUndo(): HistoryEntry | null {
+  /**
+   * 看一眼下一筆要 undo 的紀錄，**不動 stack**。
+   *
+   * 呼叫端（`Editor.undo()`）要先確定這筆真的套得上去，再呼叫 `commitUndo()` 把它搬過去。
+   * 「先 pop 再套用」的寫法在套用失敗時會把紀錄留在錯的那一邊
+   * （BUG-18：redo 失敗之後 redo stack 就空了，內容再也回不來）。
+   */
+  peekUndo(): HistoryEntry | null {
+    return this.undoStack[this.undoStack.length - 1] ?? null;
+  }
+
+  /** 看一眼下一筆要 redo 的紀錄，**不動 stack**。 */
+  peekRedo(): HistoryEntry | null {
+    return this.redoStack[this.redoStack.length - 1] ?? null;
+  }
+
+  /** 確認 `peekUndo()` 那一筆已經套用成功 → 搬到 redo stack。 */
+  commitUndo(): HistoryEntry | null {
     const entry = this.undoStack.pop();
     if (!entry) return null;
     this.redoStack.push(entry);
@@ -94,13 +110,23 @@ export class HistoryStack {
     return entry;
   }
 
-  /** 取出一筆要 redo 的紀錄。 */
-  popRedo(): HistoryEntry | null {
+  /** 確認 `peekRedo()` 那一筆已經套用成功 → 搬回 undo stack。 */
+  commitRedo(): HistoryEntry | null {
     const entry = this.redoStack.pop();
     if (!entry) return null;
     this.undoStack.push(entry);
     this.pendingBreak = true;
     return entry;
+  }
+
+  /** 取出一筆要 undo 的紀錄（呼叫端負責套用 inverseOps 與還原 selectionBefore）。 */
+  popUndo(): HistoryEntry | null {
+    return this.commitUndo();
+  }
+
+  /** 取出一筆要 redo 的紀錄。 */
+  popRedo(): HistoryEntry | null {
+    return this.commitRedo();
   }
 
   /** 收到遠端 ops：丟掉受影響的紀錄與更早的（M1-M5 的保守做法）。 */

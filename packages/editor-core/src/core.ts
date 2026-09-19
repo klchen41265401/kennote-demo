@@ -35,6 +35,7 @@ import { DomView } from './view/view.js';
 import { BlockRegistry, createDefaultRegistry } from './plugins/block-registry.js';
 import type { EditorPlugin, PluginContext } from './plugins/types.js';
 import { HistoryStack, type HistoryDelta, type HistoryOptions } from './history/stack.js';
+import type { HistoryEntry } from './history/types.js';
 import {
   apply as applyOtDelta,
   deltaFromDiff,
@@ -420,58 +421,122 @@ export class Editor {
   // ── 常用命令 ─────────────────────────────────────────────
 
   undo(): boolean {
-    const entry = this.history.popUndo();
-    if (!entry) return false;
-    const tx = createTransaction(this.doc, {
-      ops: this.historyOps(entry.deltas, 'inverse') ?? entry.inverseOps,
-      selectionBefore: entry.selectionAfter,
-      selectionAfter: entry.selectionBefore,
-      source: 'history',
-      kind: entry.kind,
-      timestamp: this.now(),
-    });
-    return this.applyTransaction(tx);
+    return this.applyHistory('inverse');
   }
 
   redo(): boolean {
-    const entry = this.history.popRedo();
-    if (!entry) return false;
-    const tx = createTransaction(this.doc, {
-      ops: this.historyOps(entry.deltas, 'forward') ?? entry.ops,
-      selectionBefore: entry.selectionBefore,
-      selectionAfter: entry.selectionAfter,
-      source: 'history',
-      kind: entry.kind,
-      timestamp: this.now(),
-    });
-    return this.applyTransaction(tx);
+    return this.applyHistory('forward');
   }
 
   /**
-   * 協作 undo（04 §8 M6-5）。
+   * undo / redo 的**唯一**路徑（BUG-18）。
+   *
+   * 兩件事一起保證：
+   *   1. 先 `peek` 再套用，成功了才 `commit` 把紀錄搬到另一邊。
+   *      舊寫法是「先 pop 再套用」，套用失敗時紀錄已經被搬走 ——
+   *      redo 失敗一次，redo stack 就永遠空了，內容再也回不來。
+   *   2. delta 路徑失敗（block 被刪掉 / transform 後不合法）時退回保守的整段 ops；
+   *      連保守路徑都套不上就回 `false`，**紀錄留在原地**。
+   */
+  private applyHistory(direction: 'forward' | 'inverse'): boolean {
+    const entry = direction === 'inverse' ? this.history.peekUndo() : this.history.peekRedo();
+    if (!entry) return false;
+
+    const fallback = direction === 'inverse' ? entry.inverseOps : entry.ops;
+    const primary = this.historyOps(entry, direction);
+    const candidates = primary ? [primary, fallback] : [fallback];
+
+    for (const ops of candidates) {
+      if (ops.length === 0) continue;
+      let tx: Transaction;
+      try {
+        tx = createTransaction(this.doc, {
+          ops,
+          selectionBefore: direction === 'inverse' ? entry.selectionAfter : entry.selectionBefore,
+          selectionAfter: direction === 'inverse' ? entry.selectionBefore : entry.selectionAfter,
+          source: 'history',
+          kind: entry.kind,
+          timestamp: this.now(),
+        });
+      } catch (error) {
+        if (error instanceof OperationError) continue; // 這一組不合法 → 試下一組
+        throw error;
+      }
+      if (!this.applyTransaction(tx)) continue;
+      if (direction === 'inverse') this.history.commitUndo();
+      else this.history.commitRedo();
+      return true;
+    }
+    return false; // 兩組都套不上 → 紀錄保留在原本的 stack 上
+  }
+
+  /**
+   * 協作 undo（04 §8 M6-5）＋ 跨 block 的結構 op（BUG-18）。
    *
    * OT 模式下，undo/redo 不再套用「當時記下的整段舊內容」（那會蓋掉別人後來打的字），
-   * 而是把已經對後續遠端 delta transform 過的 inverse delta，
-   * 套到**目前**的內容上。
+   * 而是把已經對後續遠端 delta transform 過的 delta，套到**目前**的內容上。
+   *
+   * ⭐ 關鍵是**逐 op 分流**，不是「用 delta 生出來的那幾個 op 整批取代 entry.ops」：
+   *
+   *   - 只改 content 的 `block.update`  → 換成「現在的內容 + transform 過的 delta」
+   *   - 結構 op（`block.insert` / `block.delete` / `block.move` /
+   *     帶 `blockType` / `props` 的 `block.update`）→ **原樣保留**、順序不變
+   *
+   * 舊寫法只從 delta 生 `block.update`，一筆同時含 `block.insert` 的 entry
+   * （Enter 把段落拆兩半）會把 `block.insert` 整個丟掉 ——
+   * redo「拆段落」於是變成「把前一段的字砍掉、但不建新 block」。
+   *
+   * 同一個 block 在一筆 entry 裡被連續改好幾次（coalesce 過的打字）時，
+   * 合併後的 delta 一次到位，所以只保留**最後一個**內容 op 的位置，
+   * 前面那幾個丟掉；這樣它與結構 op 的相對順序仍然正確。
    */
-  private historyOps(
-    deltas: HistoryDelta[] | undefined,
-    direction: 'forward' | 'inverse',
-  ): Operation[] | null {
-    if (!this.ot.enabled || !deltas || deltas.length === 0) return null;
-    const ops: Operation[] = [];
-    for (const item of deltas) {
-      const block = this.doc.blocks[item.blockId];
-      if (!block) return null; // block 已被刪掉 → 退回保守路徑
-      const delta = direction === 'forward' ? item.forward : item.inverse;
-      if (isNoop(delta)) continue;
-      ops.push({
-        type: 'block.update',
-        blockId: item.blockId,
-        patch: { content: applyOtDelta(block.content, delta) },
-      });
+  private historyOps(entry: HistoryEntry, direction: 'forward' | 'inverse'): Operation[] | null {
+    if (!this.ot.enabled) return null;
+    const deltas = entry.deltas;
+    if (!deltas || deltas.length === 0) return null;
+    const source = direction === 'forward' ? entry.ops : entry.inverseOps;
+    if (source.length === 0) return null;
+
+    const byBlock = new Map<string, OtDelta>();
+    for (const item of deltas) byBlock.set(item.blockId, direction === 'forward' ? item.forward : item.inverse);
+
+    // 每個 block 只在「最後一個內容 op」的位置套 delta（前面的已經被 compose 進去了）
+    const lastContentIndex = new Map<string, number>();
+    source.forEach((op, index) => {
+      if (isContentOnlyUpdate(op) && byBlock.has(op.blockId)) lastContentIndex.set(op.blockId, index);
+    });
+
+    // 沒有結構 op（連打的 entry，最常見）→ 不必模擬中間狀態，省掉每個 op 一次 cloneDoc
+    const structural = source.some((op) => !isContentOnlyUpdate(op));
+    let doc = this.doc;
+    const out: Operation[] = [];
+    for (let index = 0; index < source.length; index++) {
+      const op = source[index]!;
+      let next: Operation = op;
+      if (isContentOnlyUpdate(op) && byBlock.has(op.blockId)) {
+        if (lastContentIndex.get(op.blockId) !== index) continue; // 合併進後面那一個
+        const delta = byBlock.get(op.blockId)!;
+        if (isNoop(delta)) continue;
+        const block = doc.blocks[op.blockId];
+        if (!block) return null; // block 已被刪掉 → 退回保守路徑
+        next = {
+          type: 'block.update',
+          blockId: op.blockId,
+          patch: { content: applyOtDelta(block.content, delta) },
+        };
+      }
+      // 逐步推進：後面的 delta 必須以「前面幾個 op 套完」的內容為基準
+      if (structural) {
+        try {
+          doc = applyOps(doc, [next]);
+        } catch (error) {
+          if (error instanceof OperationError) return null;
+          throw error;
+        }
+      }
+      out.push(next);
     }
-    return ops.length > 0 ? ops : null;
+    return out.length > 0 ? out : null;
   }
 
   /**
@@ -701,11 +766,19 @@ function isContentOnlyUpdate(
 }
 
 /**
- * 從「套用前 / 套用後」的 doc 算出每個 content-only 變更的 forward / inverse delta。
+ * 從「套用前 / 套用後」的 doc 算出每個 content 變更的 forward / inverse delta。
  *
- * 同一批 ops 若對同一個 block 連續改兩次 content，會依序算出兩個 delta
- * （用 running content 推進，不能兩次都拿 prevDoc 當基準）。
- * 只要批次裡有任何不是 content-only 的 op，就整批放棄 delta 化（退回 LWW 的 block.update）。
+ * ⭐ BUG-18：**批次裡有結構 op 時不再整批放棄**。
+ * 以前只要 ops 裡有一個 `block.insert`（Enter 拆段落）就回 `null`，
+ * 那一筆 entry 於是完全沒有 delta 表示 ——
+ *   1. 收到遠端 delta 時 `rebaseStack()` 無法 transform 它，整條 redo stack 被丟掉；
+ *   2. undo/redo 只能套「當時的整段舊內容」，會蓋掉別人後來打的字。
+ * 現在改成**逐 op 模擬**：結構 op 照樣推進中間狀態，只是自己不產生 delta；
+ * 只有「只改 content 的 `block.update`」會被記成 delta。
+ *
+ * 同一批裡對同一個 block 連續改好幾次 content，會合併成**一個** delta
+ * （base = 這一批開始前的內容，target = 這一批結束後的內容），
+ * 與 `mergeEntry()` 的 coalescing 一致。
  */
 function contentDeltas(
   prevDoc: EditorDoc,
@@ -713,23 +786,42 @@ function contentDeltas(
   ops: Operation[],
 ): HistoryDelta[] | null {
   if (ops.length === 0) return null;
-  const running = new Map<string, RichText>();
-  const out: HistoryDelta[] = [];
+  // 沒有結構 op（連打，最常見）→ 內容的基準就是 prevDoc，不必模擬中間狀態
+  const structural = ops.some((op) => !isContentOnlyUpdate(op));
+  let doc = prevDoc;
+  /** blockId → { 這一批開始前的內容, 最後一次寫進去的內容 } */
+  const touched = new Map<string, { base: RichText; target: RichText }>();
   for (const op of ops) {
-    if (!isContentOnlyUpdate(op)) return null;
-    const before = running.get(op.blockId) ?? prevDoc.blocks[op.blockId]?.content;
-    if (before === undefined) return null;
-    const after = normalize(op.patch.content ?? []);
-    const forward = deltaFromDiff(before, after);
-    out.push({ blockId: op.blockId, forward, inverse: invertOtDelta(forward, before) });
-    running.set(op.blockId, after);
+    if (isContentOnlyUpdate(op)) {
+      const block = doc.blocks[op.blockId];
+      if (!block) return null; // 內容的基準不在我們手上 → 整批退回 LWW
+      const before = normalize(block.content);
+      const after = normalize(op.patch.content ?? []);
+      const existing = touched.get(op.blockId);
+      if (existing) existing.target = after;
+      else touched.set(op.blockId, { base: before, target: after });
+    }
+    if (structural) {
+      try {
+        doc = applyOps(doc, [op]);
+      } catch (error) {
+        if (error instanceof OperationError) return null;
+        throw error;
+      }
+    }
   }
-  // 防呆：算出來的 delta 套回去必須等於實際的新內容
-  for (const [blockId, content] of running) {
+  if (touched.size === 0) return null;
+
+  const out: HistoryDelta[] = [];
+  for (const [blockId, { base, target }] of touched) {
+    // 防呆：這個 block 還在的話，算出來的目標內容必須等於實際的新內容
     const actual = nextDoc.blocks[blockId]?.content;
-    if (!actual || JSON.stringify(normalize(actual)) !== JSON.stringify(content)) return null;
+    if (actual && JSON.stringify(normalize(actual)) !== JSON.stringify(target)) return null;
+    const forward = deltaFromDiff(base, target);
+    if (isNoop(forward)) continue;
+    out.push({ blockId, forward, inverse: invertOtDelta(forward, base) });
   }
-  return out.filter((d) => !isNoop(d.forward));
+  return out.length > 0 ? out : null;
 }
 
 /** 遠端 delta 套用之後，把本地游標推到正確位置（不是猜，是精確 transform）。 */

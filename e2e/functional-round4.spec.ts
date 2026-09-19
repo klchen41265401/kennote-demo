@@ -387,12 +387,32 @@ test.describe('功能 QA 第四輪回歸（編輯器）', () => {
   });
 
   /**
-   * BUG-18（**未修**，程式在 `packages/editor-core`，本輪不得改動）：
-   * 跨 block 的 redo 會把內容整段吃掉。undo 是對的，redo 回不來，
-   * 而且是**時有時無**（同一組操作有時候會過）。詳見 round4 報告 §2 BUG-18。
+   * BUG-18（editor-core 那一半**已修**）：跨 block 的 redo 會把內容再吃掉一段。
    *
-   * 這一條刻意留成 `fixme`：editor-core 的擁有者把 `historyOps()` 修好之後，
-   * 把 `test.fixme` 拿掉它就應該是綠的。
+   * 根因有兩層，這一條測的是**第一層之後仍然卡住的第二層**：
+   *
+   *   1. editor-core（已修，見 `docs/adr/0006-ot.md` §2.10）：
+   *      history entry 的 op 分流。`contentDeltas()` 只要批次裡有結構 op 就整批放棄 delta，
+   *      `historyOps()` 又只從 delta 生 `block.update` 會把 `block.insert` 丟掉。
+   *      單元回歸：`packages/editor-core/test/history/cross-block-redo.test.ts`（18 條）。
+   *      **實測**：按下 Ctrl+Shift+Z 的當下，編輯器自己的文件是完全正確的
+   *      —— 見下面那一條「redo 當下編輯器的狀態是正確的」。
+   *   2. **伺服器（未修，不在 editor-core）**：`block.delete` 是 soft delete
+   *      （`blocks.deleted_at`），而 `block.insert` 用 `findBlock()` 判斷重複時帶了
+   *      `deleted_at IS NULL`，所以「undo 刪掉的 block、redo 再插回來」會撞主鍵：
+   *
+   *      ```
+   *      POST /api/pages/:id/transactions  block.insert  → 200
+   *      POST /api/pages/:id/transactions  block.delete  → 200
+   *      POST /api/pages/:id/transactions  block.insert（同一個 id）→ 500 INTERNAL_ERROR
+   *      ```
+   *
+   *      前端收到 `txRejected` 之後 `useEditorHost` 會 `reload()`，
+   *      而 reload 是用「快取裡那份舊 snapshot」重建編輯器 → 畫面上整段內容消失。
+   *      修法：`apps/server/.../apply-transaction.ts` 的 `block.insert` 要能
+   *      **復活** soft-deleted 的 block（`ON CONFLICT (id) DO UPDATE SET deleted_at = NULL, …`）。
+   *
+   * 伺服器那一半修好之後，把 `test.fixme` 拿掉它就會是綠的。
    */
   test.fixme('BUG-18 Ctrl+Z / Ctrl+Shift+Z 跨 block 可以來回還原', async ({ page }) => {
     const p = await newPage(page, 'R4-undo-' + Date.now());
@@ -417,6 +437,47 @@ test.describe('功能 QA 第四輪回歸（編輯器）', () => {
     await page.waitForTimeout(1200);
     await page.keyboard.press('Control+Shift+z');
     await page.waitForTimeout(1200);
+    expect(await blockDump(page), 'redo 兩次要回到原狀').toEqual(typed);
+  });
+
+  /**
+   * BUG-18 的 editor-core 那一半（**已修**，這一條是綠的）。
+   *
+   * 與上面那條唯一的差別：在**伺服器把 redo 的 `block.insert` 退件之前**就檢查文件。
+   * 這一段時間窗裡看到的就是 editor-core 自己算出來的結果 ——
+   * 修好之前這裡會少掉「Enter 拆出來的那個 block」、內容還會被多吃一段。
+   */
+  test('BUG-18 redo 當下編輯器的狀態是正確的（跨 block，含結構 op）', async ({ page }) => {
+    const p = await newPage(page, 'R4-undo-core-' + Date.now());
+    await openPage(page, p.id);
+    await caretAtFreshTail(page);
+    await page.keyboard.type('第一段');
+    await page.waitForTimeout(1500);
+    await page.keyboard.press('Enter');
+    await page.waitForTimeout(1500);
+    await page.keyboard.type('第二段');
+    await page.waitForTimeout(2000);
+    const typed = await blockDump(page);
+    expect(typed.join('\n')).toContain('第二段');
+
+    await page.keyboard.press('Control+z');
+    await page.waitForTimeout(800);
+    const afterUndo1 = await blockDump(page);
+    expect(afterUndo1.join('\n'), 'undo 一次：只還原「第二段」的字').not.toContain('第二段');
+    expect(afterUndo1, 'undo 一次不該動到 block 數量').toHaveLength(typed.length);
+
+    await page.keyboard.press('Control+z');
+    await page.waitForTimeout(800);
+    expect(await blockDump(page), 'undo 兩次：Enter 拆出來的 block 被收回去').toEqual(
+      typed.slice(0, typed.length - 1),
+    );
+
+    // ⚠️ 這裡刻意**不等**：等超過一個 WS round-trip，伺服器退件造成的 reload 會把畫面洗掉
+    await page.keyboard.press('Control+Shift+z');
+    expect(await blockDump(page), 'redo 一次要把 Enter 拆出來的 block 建回來，內容不能被多吃').toEqual(
+      afterUndo1,
+    );
+    await page.keyboard.press('Control+Shift+z');
     expect(await blockDump(page), 'redo 兩次要回到原狀').toEqual(typed);
   });
 });
