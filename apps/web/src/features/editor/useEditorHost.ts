@@ -28,6 +28,7 @@ import { createHostRegistry } from './blocks/hostRegistry';
 import { getCreateDatabase } from './blocks/externalRegistry';
 import { createSessionId, createTransport, type Transport, type TransportState } from './transport';
 import { toast } from './ui/toast';
+import { createId } from '../../lib/sync-client';
 
 /** 想跳過 WebSocket 時設 `VITE_EDITOR_HTTP_TRANSPORT=1` */
 const HTTP_FALLBACK = import.meta.env.VITE_EDITOR_HTTP_TRANSPORT === '1';
@@ -159,6 +160,8 @@ export function useEditorHost(options: UseEditorHostOptions): EditorHostResult {
       doc: initialDoc,
       blockRegistry: createHostRegistry(),
       editable: !readOnly,
+      // 後端要求 block id 必須是 UUID（v7，與 server 同版面）
+      newId: createId,
     });
     editorRef.current = instance;
 

@@ -52,7 +52,7 @@ export interface EditorEventMap {
   /** 宿主開啟 block 操作選單（拖曳把手 / 右鍵）。 */
   blockMenu: (payload: { blockId: string; rect: DOMRect | null }) => void;
   /** 任何會讓 DOM 與 model 不一致的情況（開發期該為零）。 */
-  reconcile: (payload: { blockId: string; reason: string }) => void;
+  reconcile: (payload: { blockId: string; reason: string; dom?: unknown; model?: unknown; mutations?: string[] }) => void;
 }
 
 export interface MenuTriggerPayload {

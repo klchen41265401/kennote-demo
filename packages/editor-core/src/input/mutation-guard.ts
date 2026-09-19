@@ -80,7 +80,7 @@ export class MutationGuard {
       if (richTextEquals(domContent, block.content)) continue;
 
       this.triggerCount += 1;
-      this.editor.emit('reconcile', { blockId, reason: 'DOM 與 model 不一致，執行對帳' });
+      this.editor.emit('reconcile', { blockId, reason: 'DOM 與 model 不一致，執行對帳', dom: domContent, model: block.content, mutations: records.map((r) => `${r.type}:${(r.target as Element).nodeName}`) });
       // DOM 已經被改成這樣了 → 讓 model 追上（skipRender），保持單一真相
       this.editor.dispatch({
         ops: [{ type: 'block.update', blockId, patch: { content: domContent } }],

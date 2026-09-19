@@ -106,7 +106,7 @@ export function Editor({
     });
     const offReconcile = editor.on('reconcile', (payload) => {
       // 開發期把它當錯誤看：代表輸入管線有漏洞
-      console.warn('[kennote] reconcile', payload);
+      console.warn('[kennote] reconcile ' + JSON.stringify(payload));
     });
     return () => {
       offSlash();

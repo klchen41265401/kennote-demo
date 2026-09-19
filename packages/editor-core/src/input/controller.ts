@@ -107,6 +107,8 @@ export class InputController {
   // ── 事件處理 ─────────────────────────────────────────────
 
   private onBeforeInput = (event: InputEvent): void => {
+    // selectionchange 是 rAF 節流的；輸入事件必須看到「此刻」的 DOM 選取，否則會誤判為 none 而放行瀏覽器亂改 DOM
+    if (!this.isComposing && this.editor.getSelection().type !== 'block') this.editor.selection.refresh();
     for (const plugin of this.pluginList()) {
       if (plugin.onBeforeInput?.(event, this.pluginCtx())) return;
     }
@@ -116,6 +118,7 @@ export class InputController {
   };
 
   private onKeyDown = (event: KeyboardEvent): void => {
+    if (!this.isComposing && this.editor.getSelection().type !== 'block') this.editor.selection.refresh();
     for (const plugin of this.pluginList()) {
       if (plugin.onKeyDown?.(event, this.pluginCtx())) {
         event.preventDefault();
