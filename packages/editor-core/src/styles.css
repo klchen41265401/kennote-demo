@@ -1,0 +1,171 @@
+/**
+ * editor-core 的「必要」樣式。
+ *
+ * 這裡只放「不加就會壞掉」的規則（空白摺疊、空 block 塌陷、placeholder、選取高亮）。
+ * 視覺主題（字級、顏色、間距）由 apps/web 的 Tailwind 負責，不要寫在這裡。
+ */
+
+.kn-editor {
+  position: relative;
+}
+
+.kn-block {
+  position: relative;
+}
+
+.kn-block-children {
+  margin-left: 1.5em;
+}
+
+.kn-block-children:empty {
+  display: none;
+}
+
+/* 換行與空白必須保留，否則軟換行與連續空白會被瀏覽器摺疊 */
+.kn-block-content {
+  white-space: pre-wrap;
+  word-break: break-word;
+  outline: none;
+  min-height: 1.75em;
+}
+
+/* placeholder：用 ::before + attr()，絕不放進 DOM 文字節點（會被當成內容） */
+.kn-block-content[data-empty]::before {
+  content: attr(data-placeholder);
+  opacity: 0.4;
+  pointer-events: none;
+  position: absolute;
+  white-space: nowrap;
+}
+
+/* 只有聚焦中或整頁唯一的空 block 才顯示提示 */
+.kn-block-content[data-empty]:not(:focus)::before {
+  opacity: 0;
+}
+
+.kn-editor > .kn-block:only-child .kn-block-content[data-empty]::before,
+.kn-block-content[data-empty]:focus::before {
+  opacity: 0.4;
+}
+
+/* ── inline marks ───────────────────────────────────────── */
+.kn-b { font-weight: 700; }
+.kn-i { font-style: italic; }
+.kn-u { text-decoration: underline; }
+.kn-s { text-decoration: line-through; }
+.kn-u.kn-s { text-decoration: underline line-through; }
+
+.kn-code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.9em;
+  padding: 0.1em 0.3em;
+  border-radius: 3px;
+  background: rgba(135, 131, 120, 0.15);
+}
+
+.kn-link {
+  color: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.kn-comment {
+  background: rgba(255, 212, 0, 0.2);
+  border-bottom: 2px solid rgba(255, 212, 0, 0.6);
+}
+
+/* atom：不可分割，且不可讓點擊奪取 focus 造成游標跑掉 */
+.kn-atom {
+  display: inline-block;
+  user-select: none;
+  cursor: pointer;
+  border-radius: 3px;
+  padding: 0 0.2em;
+  background: rgba(55, 53, 47, 0.08);
+}
+
+/* ── block chrome ───────────────────────────────────────── */
+.kn-todo,
+.kn-toggle,
+.kn-callout {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.35em;
+}
+
+.kn-todo > .kn-block-content,
+.kn-toggle > .kn-block-content,
+.kn-callout > .kn-block-content {
+  flex: 1 1 auto;
+}
+
+.kn-todo-checkbox,
+.kn-toggle-arrow,
+.kn-callout-icon {
+  user-select: none;
+  cursor: pointer;
+  line-height: 1.6;
+}
+
+.kn-block[data-checked='true'] .kn-block-content {
+  opacity: 0.5;
+  text-decoration: line-through;
+}
+
+.kn-block--toggle[data-collapsed='true'] + .kn-block-children,
+.kn-toggle[data-collapsed='true'] ~ .kn-block-children {
+  display: none;
+}
+
+.kn-quote {
+  border-left: 3px solid currentColor;
+  padding-left: 0.8em;
+}
+
+.kn-callout {
+  padding: 0.75em;
+  border-radius: 4px;
+  background: rgba(135, 131, 120, 0.1);
+}
+
+.kn-code {
+  display: block;
+}
+
+pre.kn-code {
+  padding: 0.75em 1em;
+  border-radius: 4px;
+  background: rgba(135, 131, 120, 0.12);
+  overflow-x: auto;
+}
+
+pre.kn-code .kn-block-content {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  background: none;
+  padding: 0;
+}
+
+.kn-divider hr {
+  border: none;
+  border-top: 1px solid rgba(55, 53, 47, 0.16);
+  margin: 0.5em 0;
+}
+
+.kn-block-placeholder {
+  user-select: none;
+  opacity: 0.6;
+  border: 1px dashed rgba(55, 53, 47, 0.3);
+  border-radius: 4px;
+  padding: 0.5em;
+}
+
+/* ── block selection（跨 block 整塊反白）────────────────── */
+.kn-block[data-selected='true'] > .kn-block-main {
+  background: rgba(35, 131, 226, 0.18);
+  border-radius: 3px;
+}
+
+/* block 模式下必須關掉原生選取，否則會出現雙重高亮 */
+.kn-editor[data-block-select-mode='true'] {
+  user-select: none;
+}

@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>kennote editor-core playground</title>
+    <link rel="stylesheet" href="../src/styles.css" />
+    <style>
+      :root {
+        --bg: #ffffff;
+        --fg: #37352f;
+        --muted: #9b9a97;
+        --line: rgba(55, 53, 47, 0.12);
+        --accent: #2383e2;
+        color-scheme: light dark;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #191919;
+          --fg: #e9e9e7;
+          --muted: #7f7f7d;
+          --line: rgba(255, 255, 255, 0.12);
+        }
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--fg);
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans TC', 'PingFang TC',
+          'Microsoft JhengHei', sans-serif;
+        font-size: 16px;
+        line-height: 1.6;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 380px;
+        min-height: 100vh;
+      }
+      @media (max-width: 900px) {
+        body { grid-template-columns: 1fr; }
+        aside { border-left: none !important; border-top: 1px solid var(--line); }
+      }
+      main { padding: 40px 24px 120px; }
+      .wrap { max-width: 720px; margin: 0 auto; }
+      h1.page-title { font-size: 32px; margin: 0 0 4px; }
+      p.hint { color: var(--muted); margin: 0 0 24px; font-size: 14px; }
+      kbd {
+        border: 1px solid var(--line);
+        border-bottom-width: 2px;
+        border-radius: 4px;
+        padding: 0 4px;
+        font-size: 12px;
+        font-family: ui-monospace, Menlo, Consolas, monospace;
+      }
+      aside {
+        border-left: 1px solid var(--line);
+        padding: 24px 16px;
+        overflow: auto;
+        max-height: 100vh;
+        position: sticky;
+        top: 0;
+        font-size: 13px;
+      }
+      aside h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin: 20px 0 8px; }
+      aside h2:first-child { margin-top: 0; }
+      pre.panel {
+        background: rgba(135, 131, 120, 0.1);
+        border-radius: 6px;
+        padding: 10px;
+        overflow: auto;
+        max-height: 260px;
+        font-size: 11px;
+        line-height: 1.5;
+        margin: 0;
+      }
+      .row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+      button {
+        font: inherit;
+        font-size: 12px;
+        padding: 4px 10px;
+        border: 1px solid var(--line);
+        border-radius: 5px;
+        background: transparent;
+        color: inherit;
+        cursor: pointer;
+      }
+      button:hover { background: rgba(135, 131, 120, 0.12); }
+      .badge { display: inline-block; padding: 1px 6px; border-radius: 10px; font-size: 11px; background: rgba(135,131,120,.18); }
+      .badge[data-on='true'] { background: var(--accent); color: #fff; }
+      #log { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 11px; }
+      /* slash menu（宿主端的東西，playground 用最陽春的版本示範） */
+      #slash {
+        position: absolute;
+        z-index: 10;
+        background: var(--bg);
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16);
+        min-width: 220px;
+        max-height: 280px;
+        overflow: auto;
+        padding: 4px;
+        display: none;
+      }
+      #slash .item { padding: 6px 8px; border-radius: 4px; cursor: pointer; }
+      #slash .item[aria-selected='true'] { background: rgba(35, 131, 226, 0.14); }
+      #slash .item small { color: var(--muted); display: block; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="wrap">
+        <h1 class="page-title">editor-core playground</h1>
+        <p class="hint">
+          直接在下面打字測 IME（注音／拼音／倉頡）。試試看：<kbd>#␣</kbd> 變標題、<kbd>-␣</kbd> 變清單、
+          <kbd>/</kbd> 開選單、<kbd>Ctrl/Cmd+B</kbd> 粗體、<kbd>Tab</kbd> 縮排、<kbd>Esc</kbd> 整塊選取、
+          <kbd>Ctrl/Cmd+Z</kbd> 還原。
+        </p>
+        <div id="editor"></div>
+      </div>
+    </main>
+
+    <aside>
+      <h2>狀態</h2>
+      <div class="row">
+        <span>IME：<span class="badge" id="composing" data-on="false">idle</span></span>
+        <span>MutationObserver：<span class="badge" id="mutations">0</span></span>
+      </div>
+      <div class="row">
+        <button id="undo">Undo</button>
+        <button id="redo">Redo</button>
+        <button id="bold">Bold</button>
+        <button id="h1">H1</button>
+        <button id="todo">Todo</button>
+        <button id="remote">模擬遠端變更</button>
+      </div>
+
+      <h2>Selection</h2>
+      <pre class="panel" id="selection"></pre>
+
+      <h2>最近的 localOps</h2>
+      <pre class="panel" id="log"></pre>
+
+      <h2>Document</h2>
+      <pre class="panel" id="doc"></pre>
+    </aside>
+
+    <div id="slash" role="listbox"></div>
+
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>
