@@ -204,6 +204,7 @@ export async function websocketRoutes(app: FastifyInstance): Promise<void> {
       }
     };
 
+    let dispatchChain: Promise<void> = Promise.resolve();
     socket.on('message', (raw: Buffer | string) => {
       let msg: ClientMessage;
       try {
@@ -218,7 +219,9 @@ export async function websocketRoutes(app: FastifyInstance): Promise<void> {
         if (earlyMessages.length < 50) earlyMessages.push(msg);
         return;
       }
-      void dispatch(msg);
+      // 同一條連線的訊息必須「依到達順序」處理：client 先送 block.insert 再送 text.delta，
+      // 若並行處理，delta 可能搶先進入交易而 BLOCK_NOT_FOUND。逐頁的 FOR UPDATE 只保證原子性，不保證順序。
+      dispatchChain = dispatchChain.then(() => dispatch(msg)).catch(() => undefined);
     });
 
     /* ── 心跳：每 30s 檢查 lastSeenAt，超過 60s 清除死連線 ── */
