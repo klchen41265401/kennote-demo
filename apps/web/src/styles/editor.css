@@ -508,11 +508,11 @@
   position: relative;
   background: var(--kn-editor-code-bg);
   border-radius: 10px;
-  padding: 24px 22px;
+  padding: 36px 22px 34px;
   margin: 0;
   font-family: var(--kn-font-mono);
   font-size: 15px;
-  line-height: 24px;
+  line-height: 21px;
   overflow-x: auto;
 }
 
@@ -538,7 +538,7 @@
 
 .kn-code-highlight {
   position: absolute;
-  inset: 24px 22px;
+  inset: 36px 22px 34px;
   z-index: 0;
   pointer-events: none;
   color: var(--kn-color-text);
@@ -577,7 +577,7 @@
 
 .kn-code-gutter {
   position: absolute;
-  top: var(--kn-space-4);
+  top: 36px;
   left: 0;
   width: 44px;
   display: flex;
@@ -1051,14 +1051,17 @@
   display: none;
 }
 
-.kn-table-wrap { overflow-x: auto; }
+.kn-table-wrap {
+  overflow-x: auto;
+  padding-top: 8px;
+}
 
 /** 簡單表格：格線 rgb(230,229,227) / dark rgb(56,56,54)（_extra-*.json 的 tableBorder） */
 .kn-table {
   border-collapse: collapse;
   width: 100%;
-  font-size: var(--kn-font-size-md);
-  line-height: 24px;
+  font-size: var(--kn-font-size-sm);
+  line-height: 20px;
 }
 
 .kn-table-cell {

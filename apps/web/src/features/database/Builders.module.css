@@ -334,6 +334,12 @@
   box-shadow: inset 0 0 0 1px var(--kn-color-accent);
 }
 
+/* Notion 的搜尋框聚焦時只有 2px 實藍框，沒有外圈的淡藍外暈；
+   global.css 的 `:focus-visible { outline: 2px }` 會多畫一圈 rgb(156,199,242)。 */
+.pickerSearch:focus-visible {
+  outline: none;
+}
+
 .pickerSearch::placeholder {
   color: var(--kn-color-text-tertiary);
 }

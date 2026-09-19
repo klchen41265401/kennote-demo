@@ -192,6 +192,7 @@ async function selectView(page: Page, db: Locator, name: RegExp): Promise<boolea
   if (await inBar.count()) {
     await inBar.click();
     await page.waitForTimeout(900);
+    await dismissOverlays(page);
     return true;
   }
   const more = db.getByRole('button', { name: /還有 \d+ 個/ }).first();
@@ -205,7 +206,24 @@ async function selectView(page: Page, db: Locator, name: RegExp): Promise<boolea
   }
   await inMenu.click();
   await page.waitForTimeout(900);
+  await dismissOverlays(page);
   return true;
+}
+
+/**
+ * 關掉殘留的浮層。
+ * 第六輪實測：`07g-db-gallery-dark` 拍到的是 kennote 自己的「檢視型別」選單 ——
+ * 點一個**已經作用中**的檢視 tab，kennote 會把該檢視的設定選單打開，
+ * 而 `page.mouse.move()` 不會關掉它（它不是 hover 態）。
+ */
+async function dismissOverlays(page: Page): Promise<void> {
+  for (let i = 0; i < 2; i += 1) {
+    const open = await page.locator('[role="menu"], [role="dialog"], [class*="popover"]').count();
+    if (!open) break;
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(200);
+  }
+  await page.waitForTimeout(150);
 }
 
 /** 等圖片與字體都載完，不然截圖會抓到半張圖 */
@@ -474,6 +492,9 @@ for (const theme of ['light', 'dark'] as Theme[]) {
           const cell = (await row2.count() ? row2 : row).locator('[class*="cellWrap"]').first();
           if (await cell.count()) {
             await cell.click();
+            // Notion 的 07d 參考圖沒有「⤢ 開啟」按鈕（滑鼠停在格子上、不在列上）——
+            // kennote 的 .openButton 綁在 .row:hover，所以點完要把滑鼠移開。
+            await page.mouse.move(1380, 860);
             await page.waitForTimeout(500);
             const size2 = refSize('07d-db-cell-edit', theme)!;
             const cb = await cell.boundingBox();
@@ -622,7 +643,7 @@ const KNOWN_GAPS = [
   '| `07o-db-row-peek` | 整窗截圖，兩邊頁面內容不同（Notion 那頁是空資料庫）。結構（右側滑出面板 + 屬性清單 + 分隔線 + 正文）已經對齊。 |',
 
   '| `07j-db-proptype-menu` | kennote 的型別選單沒有「整合」那一組，入口也在欄位設定裡而不是表頭 `+`。未納入比對。 |',
-  '| `07b-db-header-hover` / `07d-db-cell-edit` 的 **dark** | 第五輪實測：Notion 那兩張深色參考拍到的是**開著的下拉選單**（面板底 `rgb(37,37,37)` ＋ 28px 反白 `rgb(49,49,49)`），跟 light 不是同一個狀態。light 可以比，dark 比不了。 |',
+  '| `07b-db-header-hover` / `07c-db-row-hover` / `07d-db-cell-edit` 的 **dark** | 第五、六輪實測：Notion 那三張深色參考拍到的都是**開著的下拉選單**（面板底 `rgb(37,37,37)` ＋ 28px 反白 `rgb(49,49,49)`），跟 light 不是同一個狀態。light 可以比，dark 比不了。 |',
   '',
   '> `07i-db-timeline` 從第三輪開始已經納入比對（時程表視圖 + 遠端後端跑完 migration 0060）。',
   '',
