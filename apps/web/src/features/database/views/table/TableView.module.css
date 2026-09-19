@@ -1,0 +1,258 @@
+/* Notion 表格的視覺基準：列高 32px、格線 rgba(55,53,47,.09)、標題灰字 14px */
+
+.wrapper {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+.grid {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow-x: auto;
+  font-size: var(--kn-font-size-sm);
+}
+
+.headerRow,
+.row,
+.aggRow {
+  display: flex;
+  align-items: stretch;
+  min-width: max-content;
+}
+
+.headerRow {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  height: 32px;
+  border-bottom: 1px solid var(--kn-color-divider);
+  background: var(--kn-color-bg);
+}
+
+.headerCell {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  border-right: 1px solid var(--kn-color-divider);
+  background: var(--kn-color-bg);
+}
+
+.headerButton {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  height: 100%;
+  padding: 0 8px;
+  border: 0;
+  background: transparent;
+  color: var(--kn-color-text-secondary);
+  font: inherit;
+  font-size: var(--kn-font-size-sm);
+  text-align: left;
+  cursor: pointer;
+}
+
+.headerButton:hover {
+  background: var(--kn-color-surface-hover);
+}
+
+.headerName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.resizeHandle {
+  position: absolute;
+  top: 0;
+  right: -2px;
+  width: 5px;
+  height: 100%;
+  cursor: col-resize;
+}
+
+.resizeHandle:hover {
+  background: var(--kn-color-accent);
+}
+
+.body {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.row {
+  height: 32px;
+  border-bottom: 1px solid var(--kn-color-divider);
+}
+
+.row:hover {
+  background: var(--kn-color-surface-hover);
+}
+
+.rowGutter {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 32px;
+  width: 32px;
+}
+
+.rowHandle {
+  opacity: 0;
+  color: var(--kn-color-text-tertiary);
+  cursor: grab;
+}
+
+.row:hover .rowHandle {
+  opacity: 1;
+}
+
+.cellWrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  min-width: 0;
+  border-right: 1px solid var(--kn-color-divider);
+  outline: none;
+}
+
+/* 凍結標題欄（sticky left） */
+.frozen {
+  position: sticky;
+  z-index: 1;
+  background: var(--kn-color-bg);
+}
+
+.row:hover .frozen {
+  background: var(--kn-color-bg-subtle);
+}
+
+.cellActive {
+  box-shadow: inset 0 0 0 2px var(--kn-color-accent);
+  border-radius: 2px;
+}
+
+.openButton {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  display: none;
+  align-items: center;
+  gap: 4px;
+  height: 20px;
+  padding: 0 6px;
+  transform: translateY(-50%);
+  border: 1px solid var(--kn-color-border);
+  border-radius: var(--kn-radius-sm);
+  background: var(--kn-color-bg);
+  color: var(--kn-color-text-secondary);
+  font-size: var(--kn-font-size-xs);
+  cursor: pointer;
+}
+
+.row:hover .openButton {
+  display: inline-flex;
+}
+
+.openButton:hover {
+  background: var(--kn-color-surface-hover);
+}
+
+.newRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-width: max-content;
+  height: 32px;
+  padding: 0 8px 0 32px;
+  border: 0;
+  border-bottom: 1px solid var(--kn-color-divider);
+  background: transparent;
+  color: var(--kn-color-text-tertiary);
+  font: inherit;
+  font-size: var(--kn-font-size-sm);
+  text-align: left;
+  cursor: pointer;
+}
+
+.newRow:hover {
+  background: var(--kn-color-surface-hover);
+  color: var(--kn-color-text-secondary);
+}
+
+.loading {
+  padding: 8px 32px;
+  color: var(--kn-color-text-tertiary);
+  font-size: var(--kn-font-size-xs);
+}
+
+.aggRow {
+  height: 32px;
+  border-top: 1px solid var(--kn-color-divider);
+  background: var(--kn-color-bg);
+}
+
+.aggCell {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  justify-content: flex-end;
+  border-right: 1px solid transparent;
+}
+
+.aggButton {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  width: 100%;
+  height: 100%;
+  padding: 0 8px;
+  border: 0;
+  background: transparent;
+  color: var(--kn-color-text-secondary);
+  font: inherit;
+  font-size: var(--kn-font-size-xs);
+  cursor: pointer;
+}
+
+.aggPlaceholder {
+  opacity: 0;
+  color: var(--kn-color-text-tertiary);
+}
+
+.aggRow:hover .aggPlaceholder {
+  opacity: 1;
+}
+
+.aggLabel {
+  color: var(--kn-color-text-tertiary);
+}
+
+.aggValue {
+  color: var(--kn-color-text);
+  font-weight: var(--kn-font-weight-medium);
+}
+
+.settings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kn-space-3);
+  min-width: 200px;
+  color: var(--kn-color-text);
+  font-size: var(--kn-font-size-sm);
+}
+
+.settings label {
+  display: flex;
+  align-items: center;
+  gap: var(--kn-space-2);
+}

@@ -1,0 +1,87 @@
+.wrapper {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 0 var(--kn-space-5);
+}
+
+.body {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--kn-space-3);
+  height: 36px;
+  padding: 0 var(--kn-space-2);
+  border-bottom: 1px solid var(--kn-color-divider);
+  cursor: pointer;
+}
+
+.row:hover {
+  background: var(--kn-color-surface-hover);
+}
+
+.icon {
+  flex: 0 0 auto;
+  font-size: 14px;
+}
+
+.title {
+  flex: 1 1 auto;
+  overflow: hidden;
+  color: var(--kn-color-text);
+  font-size: var(--kn-font-size-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.props {
+  display: flex;
+  align-items: center;
+  gap: var(--kn-space-3);
+  flex: 0 0 auto;
+}
+
+.prop {
+  max-width: 160px;
+  overflow: hidden;
+}
+
+.newRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  height: 36px;
+  padding: 0 var(--kn-space-2);
+  border: 0;
+  background: transparent;
+  color: var(--kn-color-text-tertiary);
+  font: inherit;
+  font-size: var(--kn-font-size-sm);
+  text-align: left;
+  cursor: pointer;
+}
+
+.newRow:hover {
+  background: var(--kn-color-surface-hover);
+}
+
+.settings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kn-space-3);
+  min-width: 200px;
+  color: var(--kn-color-text);
+  font-size: var(--kn-font-size-sm);
+}
+
+.settings label {
+  display: flex;
+  align-items: center;
+  gap: var(--kn-space-2);
+}

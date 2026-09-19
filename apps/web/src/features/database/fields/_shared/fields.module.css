@@ -1,0 +1,504 @@
+/* 儲存格 / 編輯器 / 設定面板的共用樣式。對齊 Notion 的視覺（02 §3.5） */
+
+.plain {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--kn-color-text);
+  font-size: var(--kn-font-size-sm);
+  line-height: 20px;
+}
+
+.plainMuted {
+  composes: plain;
+  color: var(--kn-color-text-tertiary);
+}
+
+.empty {
+  display: block;
+  min-height: 20px;
+}
+
+.chipRow {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  overflow: hidden;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  max-width: 160px;
+  height: 18px;
+  padding: 0 6px;
+  overflow: hidden;
+  border-radius: var(--kn-radius-sm);
+  background: var(--kn-color-block-gray-bg);
+  color: var(--kn-color-text);
+  font-size: var(--kn-font-size-xs);
+  line-height: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chip[data-color='gray'] { background: var(--kn-color-block-gray-bg); }
+.chip[data-color='brown'] { background: var(--kn-color-block-brown-bg); }
+.chip[data-color='orange'] { background: var(--kn-color-block-orange-bg); }
+.chip[data-color='yellow'] { background: var(--kn-color-block-yellow-bg); }
+.chip[data-color='green'] { background: var(--kn-color-block-green-bg); }
+.chip[data-color='blue'] { background: var(--kn-color-block-blue-bg); }
+.chip[data-color='purple'] { background: var(--kn-color-block-purple-bg); }
+.chip[data-color='pink'] { background: var(--kn-color-block-pink-bg); }
+.chip[data-color='red'] { background: var(--kn-color-block-red-bg); }
+
+.chipMore {
+  color: var(--kn-color-text-tertiary);
+  font-size: var(--kn-font-size-xs);
+}
+
+.link {
+  color: var(--kn-color-accent);
+  font-size: var(--kn-font-size-sm);
+  text-decoration: none;
+}
+
+.link:hover {
+  text-decoration: underline;
+}
+
+.checkbox {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--kn-color-accent);
+  cursor: pointer;
+}
+
+.rating {
+  display: inline-flex;
+  gap: 1px;
+  line-height: 1;
+}
+
+.ratingOn,
+.ratingOff {
+  padding: 0;
+  border: 0;
+  background: none;
+  font-size: 14px;
+  line-height: 20px;
+  cursor: pointer;
+}
+
+.ratingOn {
+  color: var(--kn-color-warning);
+}
+
+.ratingOff {
+  color: var(--kn-color-border-strong);
+}
+
+.editorInput {
+  width: 100%;
+  min-height: 20px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--kn-color-text);
+  font: inherit;
+  font-size: var(--kn-font-size-sm);
+  line-height: 20px;
+  resize: vertical;
+}
+
+.editorInput:focus {
+  outline: none;
+}
+
+.picker {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kn-space-2);
+  min-width: 220px;
+}
+
+.pickerSearch {
+  width: 100%;
+  height: 28px;
+  padding: 0 var(--kn-space-3);
+  border: 1px solid var(--kn-color-border);
+  border-radius: var(--kn-radius-sm);
+  background: var(--kn-color-bg);
+  color: var(--kn-color-text);
+  font-size: var(--kn-font-size-sm);
+}
+
+.pickerSearch:focus {
+  border-color: var(--kn-color-accent);
+  outline: none;
+}
+
+.pickerList {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  max-height: 260px;
+  overflow: auto;
+}
+
+.pickerItem {
+  display: flex;
+  align-items: center;
+  gap: var(--kn-space-3);
+  width: 100%;
+  min-height: 28px;
+  padding: 0 var(--kn-space-2);
+  border: 0;
+  border-radius: var(--kn-radius-sm);
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.pickerItem:hover {
+  background: var(--kn-color-surface-hover);
+}
+
+.pickerItemLabel {
+  flex: 1 1 auto;
+  overflow: hidden;
+  color: var(--kn-color-text);
+  font-size: var(--kn-font-size-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pickerCreate {
+  composes: pickerItem;
+  color: var(--kn-color-text-secondary);
+  font-size: var(--kn-font-size-sm);
+}
+
+.pickerEmpty {
+  margin: 0;
+  padding: var(--kn-space-3);
+  color: var(--kn-color-text-tertiary);
+  font-size: var(--kn-font-size-xs);
+}
+
+.avatar,
+.avatarFallback {
+  width: 20px;
+  height: 20px;
+  border-radius: var(--kn-radius-full);
+  flex: 0 0 auto;
+}
+
+.avatarFallback {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--kn-color-block-blue-bg);
+  color: var(--kn-color-text);
+  font-size: 11px;
+}
+
+.personRow {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  overflow: hidden;
+}
+
+.personName {
+  overflow: hidden;
+  color: var(--kn-color-text);
+  font-size: var(--kn-font-size-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.datePicker {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kn-space-2);
+  min-width: 240px;
+}
+
+.dateRow,
+.dateToggle {
+  display: flex;
+  align-items: center;
+  gap: var(--kn-space-3);
+  font-size: var(--kn-font-size-sm);
+}
+
+.dateRow span {
+  width: 40px;
+  color: var(--kn-color-text-secondary);
+}
+
+.dateRow input {
+  flex: 1 1 auto;
+  height: 28px;
+  padding: 0 var(--kn-space-2);
+  border: 1px solid var(--kn-color-border);
+  border-radius: var(--kn-radius-sm);
+  background: var(--kn-color-bg);
+  color: var(--kn-color-text);
+  font-size: var(--kn-font-size-sm);
+}
+
+.dateClear {
+  height: 28px;
+  border: 0;
+  border-radius: var(--kn-radius-sm);
+  background: var(--kn-color-surface-hover);
+  color: var(--kn-color-text-secondary);
+  font-size: var(--kn-font-size-sm);
+  cursor: pointer;
+}
+
+/* ── 篩選條件的值編輯器 ── */
+
+.filterInput {
+  min-width: 120px;
+  height: 28px;
+  padding: 0 var(--kn-space-2);
+  border: 1px solid var(--kn-color-border);
+  border-radius: var(--kn-radius-sm);
+  background: var(--kn-color-bg);
+  color: var(--kn-color-text);
+  font-size: var(--kn-font-size-sm);
+}
+
+.filterInput:focus {
+  border-color: var(--kn-color-accent);
+  outline: none;
+}
+
+.filterNoValue {
+  color: var(--kn-color-text-tertiary);
+  font-size: var(--kn-font-size-sm);
+}
+
+.filterDate {
+  display: flex;
+  gap: var(--kn-space-2);
+}
+
+.filterChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  max-width: 260px;
+}
+
+.filterChip,
+.filterChipOn {
+  height: 22px;
+  padding: 0 8px;
+  border: 1px solid var(--kn-color-border);
+  border-radius: var(--kn-radius-full);
+  background: transparent;
+  color: var(--kn-color-text-secondary);
+  font-size: var(--kn-font-size-xs);
+  cursor: pointer;
+}
+
+.filterChipOn {
+  border-color: var(--kn-color-accent);
+  background: var(--kn-color-accent-subtle);
+  color: var(--kn-color-text);
+}
+
+/* ── 欄位設定面板 ── */
+
+.configBody {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kn-space-3);
+  min-width: 260px;
+}
+
+.configRow {
+  display: flex;
+  align-items: center;
+  gap: var(--kn-space-3);
+  font-size: var(--kn-font-size-sm);
+}
+
+.configRow > span {
+  width: 84px;
+  flex: 0 0 auto;
+  color: var(--kn-color-text-secondary);
+}
+
+.configRow input,
+.configRow select,
+.configRow button {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 28px;
+  padding: 0 var(--kn-space-2);
+  border: 1px solid var(--kn-color-border);
+  border-radius: var(--kn-radius-sm);
+  background: var(--kn-color-bg);
+  color: var(--kn-color-text);
+  font-size: var(--kn-font-size-sm);
+}
+
+.configCheck {
+  display: flex;
+  align-items: center;
+  gap: var(--kn-space-2);
+  color: var(--kn-color-text);
+  font-size: var(--kn-font-size-sm);
+}
+
+.configLabel {
+  margin: 0;
+  color: var(--kn-color-text-tertiary);
+  font-size: var(--kn-font-size-xs);
+  font-weight: var(--kn-font-weight-medium);
+}
+
+.configHint {
+  margin: 0;
+  color: var(--kn-color-text-tertiary);
+  font-size: var(--kn-font-size-xs);
+  line-height: 1.5;
+}
+
+.optionList {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 220px;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+}
+
+.optionRow {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.optionColor {
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--kn-color-border);
+  border-radius: var(--kn-radius-sm);
+  background: var(--kn-color-block-gray-bg);
+  color: transparent;
+  cursor: pointer;
+}
+
+.optionColor[data-color='blue'] { background: var(--kn-color-block-blue-bg); }
+.optionColor[data-color='green'] { background: var(--kn-color-block-green-bg); }
+.optionColor[data-color='red'] { background: var(--kn-color-block-red-bg); }
+.optionColor[data-color='yellow'] { background: var(--kn-color-block-yellow-bg); }
+.optionColor[data-color='purple'] { background: var(--kn-color-block-purple-bg); }
+.optionColor[data-color='pink'] { background: var(--kn-color-block-pink-bg); }
+.optionColor[data-color='orange'] { background: var(--kn-color-block-orange-bg); }
+.optionColor[data-color='brown'] { background: var(--kn-color-block-brown-bg); }
+
+.optionName {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 24px;
+  padding: 0 var(--kn-space-2);
+  border: 1px solid transparent;
+  border-radius: var(--kn-radius-sm);
+  background: transparent;
+  color: var(--kn-color-text);
+  font-size: var(--kn-font-size-sm);
+}
+
+.optionName:hover,
+.optionName:focus {
+  border-color: var(--kn-color-border);
+  outline: none;
+}
+
+.optionMove,
+.optionRemove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: var(--kn-radius-sm);
+  background: transparent;
+  color: var(--kn-color-text-tertiary);
+  cursor: pointer;
+}
+
+.optionMove:hover,
+.optionRemove:hover {
+  background: var(--kn-color-surface-hover);
+}
+
+.formulaInput {
+  width: 100%;
+  padding: var(--kn-space-2);
+  border: 1px solid var(--kn-color-border);
+  border-radius: var(--kn-radius-sm);
+  background: var(--kn-color-bg-subtle);
+  color: var(--kn-color-text);
+  font-family: var(--kn-font-mono);
+  font-size: var(--kn-font-size-xs);
+  resize: vertical;
+}
+
+.formulaError {
+  margin: 0;
+  color: var(--kn-color-danger);
+  font-size: var(--kn-font-size-xs);
+}
+
+.formulaHelp {
+  color: var(--kn-color-text-secondary);
+  font-size: var(--kn-font-size-xs);
+}
+
+.formulaHelp ul {
+  max-height: 200px;
+  margin: var(--kn-space-2) 0 0;
+  padding-left: var(--kn-space-5);
+  overflow: auto;
+}
+
+.formulaHelp code {
+  font-family: var(--kn-font-mono);
+}
+
+.computed {
+  composes: plain;
+  color: var(--kn-color-text);
+}
+
+.computedError {
+  display: block;
+  color: var(--kn-color-danger);
+  font-size: var(--kn-font-size-xs);
+  line-height: 20px;
+}
+
+.relationChip {
+  composes: chip;
+  background: var(--kn-color-block-blue-bg);
+  cursor: pointer;
+}
+
+.fileChip {
+  composes: chip;
+  background: var(--kn-color-bg-sunken);
+}

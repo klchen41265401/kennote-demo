@@ -11,4 +11,6 @@ export * from './history.js';
 export * from './permissions.js';
 export * from './notifications.js';
 export * from './comments.js';
+export * from './search.js';
+export * from './export.js';
 export * from './api.js';

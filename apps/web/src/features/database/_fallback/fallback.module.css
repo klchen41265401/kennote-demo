@@ -1,0 +1,153 @@
+/* 暫時的 UI 基元樣式。色票一律走 tokens.css 的 --kn-* 變數。 */
+
+.popover {
+  position: fixed;
+  z-index: var(--kn-z-popover);
+  max-height: min(70vh, 560px);
+  overflow: auto;
+  padding: var(--kn-space-2);
+  border-radius: var(--kn-radius-md);
+  background: var(--kn-color-surface);
+  box-shadow: var(--kn-shadow-popover);
+  color: var(--kn-color-text);
+  font-size: var(--kn-font-size-sm);
+}
+
+.menu {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 180px;
+}
+
+.menuItem {
+  display: flex;
+  align-items: center;
+  gap: var(--kn-space-3);
+  width: 100%;
+  min-height: 28px;
+  padding: var(--kn-space-1) var(--kn-space-3);
+  border: 0;
+  border-radius: var(--kn-radius-sm);
+  background: transparent;
+  color: var(--kn-color-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.menuItem:hover:not(:disabled),
+.menuItem:focus-visible {
+  background: var(--kn-color-surface-hover);
+  outline: none;
+}
+
+.menuItem:disabled {
+  color: var(--kn-color-text-tertiary);
+  cursor: default;
+}
+
+.menuItemDanger {
+  color: var(--kn-color-danger);
+}
+
+.menuItemSelected {
+  background: var(--kn-color-accent-subtle);
+}
+
+.menuItemIcon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  color: var(--kn-color-text-secondary);
+}
+
+.menuItemLabel {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.menuItemHint {
+  flex: 0 0 auto;
+  color: var(--kn-color-text-tertiary);
+  font-size: var(--kn-font-size-xs);
+}
+
+.menuSeparator {
+  height: 1px;
+  margin: var(--kn-space-2) calc(-1 * var(--kn-space-2));
+  background: var(--kn-color-divider);
+}
+
+.menuLabel {
+  padding: var(--kn-space-2) var(--kn-space-3) var(--kn-space-1);
+  color: var(--kn-color-text-tertiary);
+  font-size: var(--kn-font-size-xs);
+  font-weight: var(--kn-font-weight-medium);
+}
+
+.dialogOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--kn-z-dialog);
+  display: flex;
+  background: var(--kn-color-overlay);
+}
+
+.dialogCenter {
+  width: min(720px, calc(100vw - 32px));
+  max-height: min(86vh, 900px);
+  margin: auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: var(--kn-radius-lg);
+  background: var(--kn-color-bg);
+  box-shadow: var(--kn-shadow-lg);
+}
+
+/* Notion 的資料庫列預設是右側 side peek */
+.dialogSide {
+  width: min(560px, calc(100vw - 48px));
+  height: 100%;
+  margin-left: auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--kn-color-bg);
+  box-shadow: var(--kn-shadow-lg);
+  animation: slideIn var(--kn-motion-normal) var(--kn-motion-ease);
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateX(24px);
+    opacity: 0;
+  }
+}
+
+.dialogHeader {
+  display: flex;
+  align-items: center;
+  gap: var(--kn-space-3);
+  padding: var(--kn-space-3) var(--kn-space-5);
+  border-bottom: 1px solid var(--kn-color-divider);
+}
+
+.dialogBody {
+  flex: 1 1 auto;
+  overflow: auto;
+  padding: var(--kn-space-5);
+}
+
+.dialogFooter {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--kn-space-3);
+  padding: var(--kn-space-3) var(--kn-space-5);
+  border-top: 1px solid var(--kn-color-divider);
+}

@@ -1,0 +1,128 @@
+.wrapper {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: var(--kn-space-3) var(--kn-space-5) var(--kn-space-8);
+  overflow-y: auto;
+}
+
+.grid {
+  display: grid;
+  gap: var(--kn-space-4);
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+}
+
+.grid[data-size='small'] {
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+}
+
+.grid[data-size='large'] {
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 6px;
+  background: var(--kn-color-surface);
+  box-shadow: var(--kn-shadow-sm), 0 0 0 1px var(--kn-color-divider);
+  cursor: pointer;
+}
+
+.card:hover {
+  background: var(--kn-color-bg-subtle);
+}
+
+.cover {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 140px;
+  overflow: hidden;
+  background: var(--kn-color-bg-sunken);
+}
+
+.cover[data-empty='true'] {
+  background: var(--kn-color-bg-subtle);
+}
+
+.coverGlyph {
+  font-size: 32px;
+  opacity: 0.6;
+}
+
+.fill {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.fit {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.cardBody {
+  padding: var(--kn-space-3);
+}
+
+.cardTitle {
+  margin: 0 0 var(--kn-space-2);
+  color: var(--kn-color-text);
+  font-size: var(--kn-font-size-sm);
+  font-weight: var(--kn-font-weight-medium);
+}
+
+.cardProperty {
+  margin: 2px -8px;
+}
+
+.newCard {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 160px;
+  border: 1px dashed var(--kn-color-border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--kn-color-text-tertiary);
+  font: inherit;
+  font-size: var(--kn-font-size-sm);
+  cursor: pointer;
+}
+
+.newCard:hover {
+  background: var(--kn-color-surface-hover);
+}
+
+.loadMore {
+  display: block;
+  width: 100%;
+  margin-top: var(--kn-space-4);
+  padding: var(--kn-space-3);
+  border: 0;
+  border-radius: var(--kn-radius-sm);
+  background: var(--kn-color-surface-hover);
+  color: var(--kn-color-text-secondary);
+  font: inherit;
+  font-size: var(--kn-font-size-sm);
+  cursor: pointer;
+}
+
+.settings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kn-space-3);
+  min-width: 220px;
+  color: var(--kn-color-text);
+  font-size: var(--kn-font-size-sm);
+}
+
+.settings label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--kn-space-2);
+}

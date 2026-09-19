@@ -130,20 +130,8 @@ export interface FileMeta {
 export type UploadFileResponse = FileMeta;
 
 /* ── 搜尋 ─────────────────────────────────────────────── */
-export interface SearchHit {
-  pageId: string;
-  blockId: string | null;
-  workspaceId: string;
-  title: string;
-  snippet: string;
-  icon: string | null;
-  updatedAt: string;
-  score: number;
-}
-export interface SearchResponse {
-  query: string;
-  hits: SearchHit[];
-}
+// SearchHit / SearchResponse 在 M6 搬到 ./search.ts（多了 parentTitles、type、cursor）。
+// 這裡不再重複宣告，index.ts 會一併 re-export。
 
 /* ── 端點總表（給前端 api-client 與文件用的單一事實來源） ── */
 export const API_ROUTES = {
@@ -175,5 +163,11 @@ export const API_ROUTES = {
   fileUpload: '/api/files/upload',
   file: (id: string) => `/api/files/${id}`,
   search: '/api/search',
+  recent: '/api/recent',
+  pageVisit: (id: string) => `/api/pages/${id}/visit`,
+  pageExport: (id: string) => `/api/pages/${id}/export`,
+  import: '/api/import',
+  metrics: '/api/metrics',
+  adminGc: '/api/admin/gc',
   ws: '/ws',
 } as const;

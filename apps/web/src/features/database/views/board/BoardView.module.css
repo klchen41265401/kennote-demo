@@ -1,0 +1,166 @@
+/* Notion 看板：欄寬 260、卡片圓角 6、卡片陰影 */
+
+.board {
+  display: flex;
+  gap: var(--kn-space-4);
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: var(--kn-space-3) var(--kn-space-5) var(--kn-space-6);
+  overflow-x: auto;
+}
+
+.column {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 auto;
+  min-height: 0;
+  border-radius: var(--kn-radius-md);
+  transition: background var(--kn-motion-fast) var(--kn-motion-ease);
+}
+
+.columnOver {
+  background: var(--kn-color-accent-subtle);
+}
+
+.columnHeader {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 4px;
+}
+
+.collapse {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: 0;
+  border-radius: var(--kn-radius-sm);
+  background: transparent;
+  color: var(--kn-color-text-tertiary);
+  cursor: pointer;
+}
+
+.collapse:hover {
+  background: var(--kn-color-surface-hover);
+}
+
+.columnLabel {
+  max-width: 160px;
+  height: 20px;
+  padding: 0 8px;
+  overflow: hidden;
+  border-radius: var(--kn-radius-sm);
+  background: var(--kn-color-block-gray-bg);
+  color: var(--kn-color-text);
+  font-size: var(--kn-font-size-sm);
+  line-height: 20px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.columnLabel[data-color='blue'] { background: var(--kn-color-block-blue-bg); }
+.columnLabel[data-color='green'] { background: var(--kn-color-block-green-bg); }
+.columnLabel[data-color='red'] { background: var(--kn-color-block-red-bg); }
+.columnLabel[data-color='yellow'] { background: var(--kn-color-block-yellow-bg); }
+.columnLabel[data-color='purple'] { background: var(--kn-color-block-purple-bg); }
+.columnLabel[data-color='pink'] { background: var(--kn-color-block-pink-bg); }
+.columnLabel[data-color='orange'] { background: var(--kn-color-block-orange-bg); }
+.columnLabel[data-color='brown'] { background: var(--kn-color-block-brown-bg); }
+
+.columnCount {
+  color: var(--kn-color-text-tertiary);
+  font-size: var(--kn-font-size-xs);
+}
+
+.cards {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kn-space-2);
+  flex: 1 1 auto;
+  min-height: 40px;
+  overflow-y: auto;
+  padding: var(--kn-space-1) 0;
+}
+
+.card {
+  padding: var(--kn-space-3);
+  border-radius: 6px;
+  background: var(--kn-color-surface);
+  box-shadow: var(--kn-shadow-sm), 0 0 0 1px var(--kn-color-divider);
+  cursor: pointer;
+}
+
+.card:hover {
+  background: var(--kn-color-bg-subtle);
+}
+
+.cardDragging {
+  opacity: 0.4;
+}
+
+.cardTitle {
+  margin: 0 0 var(--kn-space-2);
+  color: var(--kn-color-text);
+  font-size: var(--kn-font-size-sm);
+  font-weight: var(--kn-font-weight-medium);
+  line-height: 1.4;
+}
+
+.cardProperty {
+  margin: 2px -8px;
+}
+
+.newCard,
+.loadMore {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  height: 32px;
+  padding: 0 var(--kn-space-3);
+  border: 0;
+  border-radius: var(--kn-radius-sm);
+  background: transparent;
+  color: var(--kn-color-text-tertiary);
+  font: inherit;
+  font-size: var(--kn-font-size-sm);
+  text-align: left;
+  cursor: pointer;
+}
+
+.newCard:hover,
+.loadMore:hover {
+  background: var(--kn-color-surface-hover);
+  color: var(--kn-color-text-secondary);
+}
+
+.empty {
+  padding: var(--kn-space-8) var(--kn-space-5);
+  color: var(--kn-color-text-secondary);
+  font-size: var(--kn-font-size-sm);
+  text-align: center;
+}
+
+.hint {
+  color: var(--kn-color-text-tertiary);
+  font-size: var(--kn-font-size-xs);
+}
+
+.settings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kn-space-3);
+  min-width: 220px;
+  color: var(--kn-color-text);
+  font-size: var(--kn-font-size-sm);
+}
+
+.settings label {
+  display: flex;
+  align-items: center;
+  gap: var(--kn-space-2);
+  justify-content: space-between;
+}

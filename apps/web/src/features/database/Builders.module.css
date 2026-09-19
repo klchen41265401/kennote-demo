@@ -1,0 +1,305 @@
+/* FilterBuilder / SortBuilder / GroupSettings / PropertyList / FieldConfigPopover 共用 */
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kn-space-3);
+  min-width: 300px;
+  max-width: 560px;
+  color: var(--kn-color-text);
+  font-size: var(--kn-font-size-sm);
+}
+
+.panelActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--kn-space-2);
+  padding-top: var(--kn-space-2);
+  border-top: 1px solid var(--kn-color-divider);
+}
+
+.group,
+.nestedGroup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kn-space-2);
+}
+
+.nestedGroup {
+  padding-left: var(--kn-space-3);
+  border-left: 2px solid var(--kn-color-border);
+}
+
+.groupBody {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--kn-space-2);
+  min-width: 0;
+}
+
+.filterRow,
+.sortRow,
+.propertyRow {
+  display: flex;
+  align-items: center;
+  gap: var(--kn-space-2);
+}
+
+.joiner {
+  flex: 0 0 56px;
+  width: 56px;
+  color: var(--kn-color-text-tertiary);
+  font-size: var(--kn-font-size-xs);
+}
+
+.joiner select {
+  width: 100%;
+  height: 24px;
+  border: 1px solid var(--kn-color-border);
+  border-radius: var(--kn-radius-sm);
+  background: var(--kn-color-bg);
+  color: var(--kn-color-text);
+  font-size: var(--kn-font-size-xs);
+}
+
+.joinerText {
+  display: inline-block;
+  padding-left: 4px;
+}
+
+.select {
+  min-width: 96px;
+  max-width: 160px;
+  height: 28px;
+  padding: 0 var(--kn-space-2);
+  border: 1px solid var(--kn-color-border);
+  border-radius: var(--kn-radius-sm);
+  background: var(--kn-color-bg);
+  color: var(--kn-color-text);
+  font-size: var(--kn-font-size-sm);
+}
+
+.select:focus {
+  border-color: var(--kn-color-accent);
+  outline: none;
+}
+
+.fieldIcon {
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+
+.iconButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: var(--kn-radius-sm);
+  background: transparent;
+  color: var(--kn-color-text-tertiary);
+  cursor: pointer;
+}
+
+.iconButton:hover:not(:disabled) {
+  background: var(--kn-color-surface-hover);
+  color: var(--kn-color-text);
+}
+
+.iconButton:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.ghostButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 var(--kn-space-3);
+  border: 0;
+  border-radius: var(--kn-radius-sm);
+  background: transparent;
+  color: var(--kn-color-text-secondary);
+  font: inherit;
+  font-size: var(--kn-font-size-sm);
+  cursor: pointer;
+}
+
+.ghostButton:hover {
+  background: var(--kn-color-surface-hover);
+}
+
+.primaryButton {
+  height: 30px;
+  padding: 0 var(--kn-space-4);
+  border: 0;
+  border-radius: var(--kn-radius-sm);
+  background: var(--kn-color-accent);
+  color: var(--kn-color-text-on-accent);
+  font: inherit;
+  font-size: var(--kn-font-size-sm);
+  cursor: pointer;
+}
+
+.dangerButton {
+  height: 28px;
+  border: 0;
+  border-radius: var(--kn-radius-sm);
+  background: transparent;
+  color: var(--kn-color-danger);
+  font: inherit;
+  font-size: var(--kn-font-size-sm);
+  text-align: left;
+  cursor: pointer;
+}
+
+.dangerButton:hover:not(:disabled) {
+  background: var(--kn-color-danger-subtle);
+}
+
+.dangerButton:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.hint {
+  margin: 0;
+  color: var(--kn-color-text-tertiary);
+  font-size: var(--kn-font-size-xs);
+}
+
+.rowLabel,
+.checkLabel {
+  display: flex;
+  align-items: center;
+  gap: var(--kn-space-2);
+}
+
+.rowLabel {
+  justify-content: space-between;
+}
+
+.laneList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kn-space-2);
+  max-height: 240px;
+  overflow: auto;
+}
+
+.laneName {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.laneCount {
+  color: var(--kn-color-text-tertiary);
+  font-size: var(--kn-font-size-xs);
+}
+
+.propertyList {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  max-height: 320px;
+  overflow: auto;
+}
+
+.propertyRow {
+  height: 30px;
+  padding: 0 4px;
+  border-radius: var(--kn-radius-sm);
+}
+
+.propertyRow:hover {
+  background: var(--kn-color-surface-hover);
+}
+
+.propertyName {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  border: 0;
+  background: transparent;
+  color: var(--kn-color-text);
+  font: inherit;
+  font-size: var(--kn-font-size-sm);
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.dragHandle {
+  display: inline-flex;
+  flex: 0 0 auto;
+  color: var(--kn-color-text-tertiary);
+  cursor: grab;
+}
+
+.rowDragging {
+  opacity: 0.4;
+}
+
+.rowOver {
+  box-shadow: inset 0 2px 0 var(--kn-color-accent);
+}
+
+.nameInput {
+  width: 100%;
+  height: 30px;
+  padding: 0 var(--kn-space-3);
+  border: 1px solid var(--kn-color-border);
+  border-radius: var(--kn-radius-sm);
+  background: var(--kn-color-bg);
+  color: var(--kn-color-text);
+  font-size: var(--kn-font-size-sm);
+}
+
+.typeButton {
+  display: flex;
+  align-items: center;
+  gap: var(--kn-space-2);
+  width: 100%;
+  height: 30px;
+  padding: 0 var(--kn-space-3);
+  border: 0;
+  border-radius: var(--kn-radius-sm);
+  background: var(--kn-color-surface-hover);
+  color: var(--kn-color-text);
+  font: inherit;
+  font-size: var(--kn-font-size-sm);
+  cursor: pointer;
+}
+
+.typeHint {
+  margin-left: auto;
+  color: var(--kn-color-text-tertiary);
+  font-size: var(--kn-font-size-xs);
+}
+
+.castBody {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kn-space-3);
+  color: var(--kn-color-text);
+  font-size: var(--kn-font-size-sm);
+  line-height: 1.6;
+}
+
+.castBody p {
+  margin: 0;
+}
+
+.castSamples {
+  margin: 0;
+  padding-left: var(--kn-space-5);
+  color: var(--kn-color-text-tertiary);
+  font-size: var(--kn-font-size-xs);
+}

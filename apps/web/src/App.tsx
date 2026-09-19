@@ -1,4 +1,5 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { DatabaseRoute } from './routes/DatabaseRoute';
 import { LoginRoute } from './routes/LoginRoute';
 import { PageRoute } from './routes/PageRoute';
 import { ProtectedRoute } from './routes/ProtectedRoute';
@@ -15,6 +16,7 @@ export function App() {
           <Route path="/" element={<WorkspaceRoute />}>
             <Route index element={<PageRoute />} />
             <Route path="page/:pageId" element={<PageRoute />} />
+            <Route path="w/:workspaceId/db/:collectionId" element={<DatabaseRoute />} />
           </Route>
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />

@@ -1,0 +1,184 @@
+.header,
+.headerInline {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 auto;
+}
+
+.header {
+  padding: var(--kn-space-6) var(--kn-space-5) 0;
+}
+
+.headerInline {
+  padding: var(--kn-space-2) 0 0;
+}
+
+.title {
+  margin: 0 0 var(--kn-space-4);
+  color: var(--kn-color-text);
+  font-size: var(--kn-font-size-2xl);
+  font-weight: var(--kn-font-weight-bold);
+  line-height: 1.2;
+}
+
+.bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--kn-space-4);
+  min-height: 34px;
+  border-bottom: 1px solid var(--kn-color-divider);
+}
+
+.tabs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  overflow-x: auto;
+}
+
+.tab,
+.tabActive {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 var(--kn-space-3);
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--kn-color-text-tertiary);
+  font: inherit;
+  font-size: var(--kn-font-size-sm);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.tab:hover {
+  color: var(--kn-color-text-secondary);
+}
+
+.tabActive {
+  border-bottom-color: var(--kn-color-text);
+  color: var(--kn-color-text);
+  font-weight: var(--kn-font-weight-medium);
+}
+
+.tabIcon {
+  font-size: 12px;
+}
+
+.tabAdd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: var(--kn-radius-sm);
+  background: transparent;
+  color: var(--kn-color-text-tertiary);
+  cursor: pointer;
+}
+
+.tabAdd:hover {
+  background: var(--kn-color-surface-hover);
+}
+
+.tools {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: 0 0 auto;
+}
+
+.toolButton,
+.toolButtonActive {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 var(--kn-space-2);
+  border: 0;
+  border-radius: var(--kn-radius-sm);
+  background: transparent;
+  color: var(--kn-color-text-secondary);
+  cursor: pointer;
+}
+
+.toolButton:hover,
+.toolButtonActive:hover {
+  background: var(--kn-color-surface-hover);
+}
+
+.toolButtonActive {
+  color: var(--kn-color-accent);
+}
+
+.badge {
+  font-size: var(--kn-font-size-xs);
+  font-weight: var(--kn-font-weight-medium);
+}
+
+.search {
+  width: 160px;
+  height: 28px;
+  padding: 0 var(--kn-space-3);
+  border: 1px solid var(--kn-color-border);
+  border-radius: var(--kn-radius-sm);
+  background: var(--kn-color-bg);
+  color: var(--kn-color-text);
+  font-size: var(--kn-font-size-sm);
+}
+
+.search:focus {
+  border-color: var(--kn-color-accent);
+  outline: none;
+}
+
+.newButton {
+  height: 28px;
+  margin-left: var(--kn-space-2);
+  padding: 0 var(--kn-space-4);
+  border: 0;
+  border-radius: var(--kn-radius-sm);
+  background: var(--kn-color-accent);
+  color: var(--kn-color-text-on-accent);
+  font: inherit;
+  font-size: var(--kn-font-size-sm);
+  font-weight: var(--kn-font-weight-medium);
+  cursor: pointer;
+}
+
+.newButton:hover {
+  background: var(--kn-color-accent-hover);
+}
+
+.panelHint {
+  margin: 0;
+  min-width: 200px;
+  color: var(--kn-color-text-tertiary);
+  font-size: var(--kn-font-size-xs);
+}
+
+.renameOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--kn-z-dialog);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--kn-color-overlay);
+}
+
+.renameInput {
+  width: 280px;
+  height: 36px;
+  padding: 0 var(--kn-space-3);
+  border: 1px solid var(--kn-color-border);
+  border-radius: var(--kn-radius-md);
+  background: var(--kn-color-bg);
+  color: var(--kn-color-text);
+  font-size: var(--kn-font-size-md);
+}
