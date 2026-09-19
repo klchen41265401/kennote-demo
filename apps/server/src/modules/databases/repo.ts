@@ -91,19 +91,15 @@ export async function insertCollection(
 }
 
 /** 取 collection 並同時驗證存取權（非成員 → null → 呼叫端回 404） */
-export async function findCollectionForUser(
-  collectionId: string,
-  userId: string,
-  conn: Queryable = db,
-): Promise<CollectionRow | null> {
-  return conn.queryOne<CollectionRow>(sql`
-    SELECT ${collectionColumns('c')}
-      FROM collections c
-      JOIN workspace_members m
-        ON m.workspace_id = c.workspace_id AND m.user_id = ${userId} AND m.deleted_at IS NULL
-     WHERE c.id = ${collectionId} AND c.deleted_at IS NULL
-  `);
-}
+/*
+ * 第八輪 BUG-40：那支「依使用者取 collection」的查詢整個刪掉了。
+ *
+ * 它只 JOIN `workspace_members`，卻是 databases 模組**唯一**的「權限檢查」——
+ * 於是 baseline `none` 的 guest 讀得到整個資料庫、改得了儲存格與 schema、
+ * 刪得掉視圖、匯得出 CSV。留著它等於把同一個地雷留在原地，
+ * 所以不是加檢查而是**移除這個入口**：service 層一律
+ * `findCollectionById()` + `requirePagePermission(collection.page_id, need)`。
+ */
 
 export async function findCollectionById(
   collectionId: string,

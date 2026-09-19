@@ -18,6 +18,9 @@ import type {
 import { withTransaction } from '../../db/client.js';
 import { AppError } from '../../lib/errors.js';
 import { listUsersByIds } from '../permissions/repo.js';
+// ⚠️ 循環引用（permissions/service → notifications/fanout → 這裡）是刻意的：
+// 兩邊都只在函式內用，ESM 的 live binding 解得開，與 fanout.ts 同一個形狀。
+import { requirePagePermission } from '../permissions/service.js';
 import * as repo from './repo.js';
 
 /** room-manager 的推播掛勾。由 realtime/index.ts 在啟動時接上，避免模組循環相依 */
@@ -125,6 +128,13 @@ export async function setSubscription(
   pageId: string,
   kind: 'explicit' | 'muted',
 ): Promise<void> {
+  /*
+   * 第八輪 BUG-43：原本只有「這一頁存在嗎」。baseline `none` 的 guest
+   * 追蹤得起來任何一頁，之後每次有人編輯就收到一則帶**頁面標題**的
+   * `page_updated` 通知 —— 等於用收件匣把第七輪堵住的標題洩漏重新打開，
+   * 而且 200 還直接確認了「這個 pageId 存在」。
+   */
+  await requirePagePermission(userId, pageId, 'read');
   const page = await repo.findPageContext(pageId);
   if (!page) throw new AppError('PAGE_NOT_FOUND');
   await withTransaction((tx) =>

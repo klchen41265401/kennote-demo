@@ -89,10 +89,19 @@ export async function findPageById(
 }
 
 /**
- * 取頁面 **並同時驗證存取權**：非本 workspace 成員一律回 null，
- * 呼叫端轉成 404（不洩漏存在性）。
+ * ⚠️ **這不是權限檢查。** 它只回答「這一頁在不在這個使用者所屬的工作區裡」
+ * （唯一的 JOIN 是 `workspace_members`）。
+ *
+ * 第八輪改名（第七輪 §5 的建議）：原名 `findPageForUser()` 讀起來像
+ * 「這個使用者拿得到的頁面」，四輪下來被當成權限檢查誤用了**四次** ——
+ * 第五輪 BUG-27（patch/delete/move）、第六輪 BUG-29（permanent delete）、
+ * 第七輪 BUG-35/36（get/snapshot/duplicate）、第八輪 BUG-41（transactions）。
+ * 新名字把它的語意寫死在呼叫端：**「在使用者的工作區裡」≠「使用者能看」**。
+ *
+ * 每一個呼叫端旁邊都必須另外有 `requirePagePermission(...)`；
+ * `apps/server/test/route-permission-audit.test.ts` 會掃原始碼強制這件事。
  */
-export async function findPageForUser(
+export async function findPageInUserWorkspace(
   pageId: string,
   userId: string,
   conn: Queryable = db,

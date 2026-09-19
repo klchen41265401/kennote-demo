@@ -33,7 +33,7 @@ import { AppError, pageNotFound } from '../../lib/errors.js';
 import { contentDeltaOf, receiveDelta, recordContentUpdateAsDelta } from './ot-service.js';
 import {
   bumpPageSeq,
-  findPageForUser,
+  findPageInUserWorkspace,
   lockPageForUpdate,
   setPageChildren,
   updatePageMeta,
@@ -337,7 +337,7 @@ export function setTransactionNotifier(fn: TransactionNotifierFn): void {
 /**
  * 權限守門員掛勾（M5）。所有 block 寫入都必經這裡，
  * 因此「guest 只能留言不能編輯」在 HTTP 與 WS 兩條路徑上是同一道檢查。
- * 預設 no-op：M1–M4 只有 workspace 成員檢查（findPageForUser）。
+ * 預設 no-op：M1–M4 只有 workspace 成員檢查（findPageInUserWorkspace）。
  */
 export type PermissionGuardFn = (ctx: ApplyContext, conn: Tx) => Promise<void>;
 let permissionGuard: PermissionGuardFn = async () => {};
@@ -354,7 +354,7 @@ async function applyWithin(
 ): Promise<TransactionResult> {
   {
     // 權限：非本 workspace 成員一律當作頁面不存在
-    const page = await findPageForUser(ctx.pageId, ctx.userId, tx);
+    const page = await findPageInUserWorkspace(ctx.pageId, ctx.userId, tx);
     if (!page) throw pageNotFound();
 
     // 頁面層級權限（M5）：read / comment 權限的人在這裡就被擋下

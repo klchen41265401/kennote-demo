@@ -4,7 +4,7 @@
 import type { RecentPage, SearchResultType } from '@kennote/shared-types';
 import { db } from '../../db/client.js';
 import { pageNotFound, workspaceNotFound } from '../../lib/errors.js';
-import { findPageForUser } from '../pages/repo.js';
+import { findPageInUserWorkspace } from '../pages/repo.js';
 import { buildPermissionIndex, canSee } from '../permissions/bulk.js';
 import { resolvePagePermission } from '../permissions/service.js';
 import { getMemberRole } from '../workspaces/repo.js';
@@ -29,7 +29,7 @@ export async function recordPageVisit(pageId: string, userId: string): Promise<v
   // 第七輪：沒有讀取權限的頁面不該進「最近瀏覽」（BUG-35 之前 guest 讀得到任何頁面，
   // 連帶把標題留在自己的 recent 裡；讀取補上守門員之後這裡也一起收緊）
   if ((await resolvePagePermission(userId, pageId)) === 'none') throw pageNotFound();
-  const page = await findPageForUser(pageId, userId);
+  const page = await findPageInUserWorkspace(pageId, userId);
   if (!page) throw pageNotFound();
   await repo.recordVisit(userId, pageId, page.workspace_id, db);
 }

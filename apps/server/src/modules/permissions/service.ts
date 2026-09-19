@@ -80,7 +80,7 @@ export async function requirePagePermission(
  * 所以已刪除的頁面對**任何人**（含擁有者）都是 `none` → 直接套上去會讓擁有者
  * 連自己的東西都還原不了。第五輪 BUG-27 因此刻意跳過 `permanentlyDeletePage`，
  * 結果留下一個更糟的洞（第六輪 BUG-29）：
- * `findPageForUser()` 只 JOIN `workspace_members`，於是**任何工作區成員（含 guest）
+ * `findPageInUserWorkspace()` 只 JOIN `workspace_members`，於是**任何工作區成員（含 guest）
  * 都能永久刪掉別人的頁面** —— 而且是 hard delete，沒有回頭路。
  *
  * 已刪除的頁面沒有「現在的權限」可言，改問「誰有資格處置這份殘骸」：

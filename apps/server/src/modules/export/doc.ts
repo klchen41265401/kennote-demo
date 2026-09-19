@@ -11,6 +11,9 @@ import { richTextToPlainText } from '@kennote/shared-types';
 import { db } from '../../db/client.js';
 import { sql } from '../../db/sql.js';
 import { pageNotFound } from '../../lib/errors.js';
+import { buildPermissionIndex, canSee } from '../permissions/bulk.js';
+import { requirePagePermission } from '../permissions/service.js';
+import { getMemberRole } from '../workspaces/repo.js';
 
 export interface ExportPage {
   id: string;
@@ -56,19 +59,29 @@ interface BlockRow {
   children: string[];
 }
 
-/** 一次撈整棵子樹的頁面（含權限檢查：非成員看不到 = 404） */
+/**
+ * 一次撈整棵子樹的頁面。
+ *
+ * ⭐ 第八輪 BUG-42：原本的「權限檢查」只有 `JOIN workspace_members` ——
+ * 與 `findPageInUserWorkspace()` 同一個誤用。第七輪把 `/pages/:id` 與
+ * `/snapshot` 鎖上之後，`POST /api/pages/:id/export` 仍然把**整頁 Markdown /
+ * HTML（含整棵子樹與附件）**交給 baseline `none` 的 guest。
+ *
+ * 現在：根頁面要 `read`（`none` → 404），而且 `includeSubpages` 的子樹
+ * **逐頁過濾**（看不見的子頁整棵拿掉，不只是遮標題）。
+ */
 export async function loadPageTree(
   pageId: string,
   userId: string,
   options: { includeSubpages: boolean; maxPages?: number },
 ): Promise<ExportNode> {
   const maxPages = options.maxPages ?? 500;
+  // 第八輪：`read` 才拿得到（`none` → 404，不洩漏存在性）
+  await requirePagePermission(userId, pageId, 'read');
   const root = await db.queryOne<PageRow>(sql`
     SELECT p.id, p.workspace_id, p.parent_id, p.title, p.icon, p.children,
            p.is_database, p.collection_id, p.properties, p.updated_at, p.sort_key
       FROM pages p
-      JOIN workspace_members m
-        ON m.workspace_id = p.workspace_id AND m.user_id = ${userId} AND m.deleted_at IS NULL
      WHERE p.id = ${pageId} AND p.deleted_at IS NULL
   `);
   if (!root) throw pageNotFound();
@@ -90,6 +103,16 @@ export async function loadPageTree(
        LIMIT ${maxPages}
     `);
     if (rows.length === 0) rows = [root];
+    /*
+     * 逐頁過濾：子樹裡看不見的頁面整棵拿掉。
+     * 用 `buildPermissionIndex`（第七輪的共用原語）而不是每頁一次
+     * `resolvePagePermission()` —— 500 頁 = 1000 次往返。
+     */
+    const role = await getMemberRole(root.workspace_id, userId);
+    const index = await buildPermissionIndex(root.workspace_id, userId, role);
+    const visible = new Set(rows.filter((r) => canSee(index, r.id)).map((r) => r.id));
+    visible.add(root.id); // 根頁面上面已經驗過 read 了
+    rows = rows.filter((r) => visible.has(r.id) && (r.id === root.id || visible.has(r.parent_id ?? '')));
   }
 
   const pageIds = rows.map((r) => r.id);

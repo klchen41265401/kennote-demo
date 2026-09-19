@@ -474,7 +474,7 @@ test('提及 → 通知 → 標為已讀 → 全部已讀', async ({ page, brows
  * 把 `expect(...).toBe(before)` 改成 `expect.poll(...).toBeGreaterThan(before)`，
  * 並且改成斷言通知 type === 'mention'、pageId 對得上。
  */
-test('BUG-30 頁面 block 裡的提及目前不會產生通知（釘住現況）', async ({
+test.skip('BUG-30 頁面 block 裡的提及目前不會產生通知（釘住現況；第七輪已實作 block 提及通知，改由 functional-round7 覆蓋）', async ({
   page,
   browser,
 }: {

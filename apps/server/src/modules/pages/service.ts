@@ -42,7 +42,7 @@ export async function createPage(input: CreatePageRequest, userId: string): Prom
 
     const parentId = input.parentId ?? null;
     if (parentId) {
-      const parent = await repo.findPageForUser(parentId, userId, tx);
+      const parent = await repo.findPageInUserWorkspace(parentId, userId, tx);
       if (!parent || parent.workspace_id !== input.workspaceId) throw pageNotFound();
     }
 
@@ -92,7 +92,7 @@ export async function createPage(input: CreatePageRequest, userId: string): Prom
 }
 
 /**
- * 第六輪：`findPageForUser()` 只 JOIN `workspace_members`，所以**工作區外的
+ * 第六輪：`findPageInUserWorkspace()` 只 JOIN `workspace_members`，所以**工作區外的
  * 被授權者**（只有 `page_permissions` 的 user 條目）會拿到 404。
  * 這支補一層 fallback：成員照舊走原路，非成員再問一次
  * `resolvePagePermission()`（它現在認得非成員的直接授權，封頂 `edit`）。
@@ -102,8 +102,8 @@ export async function createPage(input: CreatePageRequest, userId: string): Prom
  */
 async function findVisiblePage(pageId: string, userId: string) {
   /*
-   * ⭐ 第七輪 BUG-35：原本這裡是「先 `findPageForUser()`，**有列就直接回**，
-   * 只有非成員才 fallback 去問權限」。`findPageForUser()` 只 JOIN
+   * ⭐ 第七輪 BUG-35：原本這裡是「先 `findPageInUserWorkspace()`，**有列就直接回**，
+   * 只有非成員才 fallback 去問權限」。`findPageInUserWorkspace()` 只 JOIN
    * `workspace_members` —— 於是 baseline `none` 的 guest 對工作區裡的**任何**
    * 頁面都拿得到 `GET /api/pages/:id` 與 `GET /snapshot`（整份 recordMap，
    * 含所有 block 內容）。遠端實測：guest 讀得到「CEO 年薪 1234 萬」。
@@ -116,7 +116,7 @@ async function findVisiblePage(pageId: string, userId: string) {
    * （`resolvePagePermission` 對 `deleted_at !== null` 一律回 none）。
    */
   if ((await resolvePagePermission(userId, pageId)) === 'none') throw pageNotFound();
-  const row = (await repo.findPageForUser(pageId, userId)) ?? (await repo.findPageById(pageId));
+  const row = (await repo.findPageInUserWorkspace(pageId, userId)) ?? (await repo.findPageById(pageId));
   if (!row || row.deleted_at !== null) throw pageNotFound();
   return row;
 }
@@ -180,10 +180,10 @@ export async function patchPage(
   userId: string,
   patch: { title?: RichText; icon?: string | null; cover?: string | null },
 ): Promise<Page> {
-  const row = await repo.findPageForUser(pageId, userId);
+  const row = await repo.findPageInUserWorkspace(pageId, userId);
   if (!row) throw pageNotFound();
   /*
-   * 第五輪 BUG-27：`findPageForUser` 只回答「看不看得見」，不看權限等級 ——
+   * 第五輪 BUG-27：`findPageInUserWorkspace` 只回答「看不看得見」，不看權限等級 ——
    * 所以只有 comment / read 權限的人（例如被分享進來的 guest）可以改標題、
    * 換 icon、換封面。block 的寫入早就有 permission guard 了
    * （permissions/service.ts 的 registerPermissionGuard），頁面 meta 漏掉了。
@@ -197,7 +197,7 @@ export async function patchPage(
 /** 軟刪除：子孫一併進垃圾桶 */
 export async function deletePage(pageId: string, userId: string): Promise<{ deleted: string[] }> {
   return withTransaction(async (tx) => {
-    const row = await repo.findPageForUser(pageId, userId, tx);
+    const row = await repo.findPageInUserWorkspace(pageId, userId, tx);
     if (!row) throw pageNotFound();
     // BUG-27：只有 comment / read 權限的人不能把整棵子樹丟進垃圾桶
     await requirePagePermission(userId, pageId, 'edit', tx);
@@ -210,10 +210,10 @@ export async function deletePage(pageId: string, userId: string): Promise<{ dele
 /** 還原：子孫一併還原 */
 export async function restorePage(pageId: string, userId: string): Promise<Page> {
   return withTransaction(async (tx) => {
-    const row = await repo.findPageForUser(pageId, userId, tx, { includeDeleted: true });
+    const row = await repo.findPageInUserWorkspace(pageId, userId, tx, { includeDeleted: true });
     if (!row) throw pageNotFound();
     if (row.deleted_at === null) throw new AppError('PAGE_ALREADY_DELETED', '這個頁面不在垃圾桶裡');
-    // BUG-29：`findPageForUser` 只驗「是不是工作區成員」，還原也要看得出是誰的東西
+    // BUG-29：`findPageInUserWorkspace` 只驗「是不是工作區成員」，還原也要看得出是誰的東西
     await requireTrashedPageControl(userId, pageId, tx);
     const ids = await repo.collectDescendantIds(pageId, tx, { includeDeleted: true });
     await repo.restoreSubtree(tx, ids, userId);
@@ -233,7 +233,7 @@ export async function restorePage(pageId: string, userId: string): Promise<Page>
 /**
  * 永久刪除（hard delete，沒有回頭路）。
  *
- * **BUG-29**：這裡原本只有 `findPageForUser()` —— 那支只 JOIN `workspace_members`，
+ * **BUG-29**：這裡原本只有 `findPageInUserWorkspace()` —— 那支只 JOIN `workspace_members`，
  * 於是任何工作區成員（**包括 guest**）都刪得掉別人的頁面。實測遠端站台：
  * 一個沒有任何頁面授權的 guest `DELETE /api/pages/:id/permanent` 拿到 **200**。
  *
@@ -243,7 +243,7 @@ export async function restorePage(pageId: string, userId: string): Promise<Page>
  */
 export async function permanentlyDeletePage(pageId: string, userId: string): Promise<void> {
   await withTransaction(async (tx) => {
-    const row = await repo.findPageForUser(pageId, userId, tx, { includeDeleted: true });
+    const row = await repo.findPageInUserWorkspace(pageId, userId, tx, { includeDeleted: true });
     if (!row) throw pageNotFound();
     if (row.deleted_at === null) {
       throw new AppError('PAGE_ALREADY_DELETED', '這個頁面不在垃圾桶裡，請先刪除再永久刪除');
@@ -261,13 +261,13 @@ export async function movePage(
   input: { parentId: string | null; afterId?: string | null },
 ): Promise<Page> {
   return withTransaction(async (tx) => {
-    const row = await repo.findPageForUser(pageId, userId, tx);
+    const row = await repo.findPageInUserWorkspace(pageId, userId, tx);
     if (!row) throw pageNotFound();
     // BUG-27：搬頁面也算編輯
     await requirePagePermission(userId, pageId, 'edit', tx);
 
     if (input.parentId !== null) {
-      const parent = await repo.findPageForUser(input.parentId, userId, tx);
+      const parent = await repo.findPageInUserWorkspace(input.parentId, userId, tx);
       if (!parent || parent.workspace_id !== row.workspace_id) throw pageNotFound();
       if (await repo.isDescendantOf(input.parentId, pageId, tx)) {
         throw new AppError('PAGE_CYCLE');
@@ -296,7 +296,7 @@ export async function duplicatePage(
   userId: string,
 ): Promise<{ page: Page; idMap: Record<string, string> }> {
   /*
-   * ⭐ 第七輪 BUG-36（第六輪 §5-13 留下來確認的）：原本只有 `findPageForUser()`，
+   * ⭐ 第七輪 BUG-36（第六輪 §5-13 留下來確認的）：原本只有 `findPageInUserWorkspace()`，
    * 完全沒問權限 —— 遠端實測 guest（baseline none、沒有任何授權）
    * `POST /api/pages/:id/duplicate` 回 **201**，整棵子樹被複製成他自己的頁面
    * （而且他是複本的 `created_by` → 對複本有 full）。等於唯讀被完全繞過。
@@ -307,7 +307,7 @@ export async function duplicatePage(
    */
   await requirePagePermission(userId, pageId, 'edit');
   return withTransaction(async (tx) => {
-    const root = await repo.findPageForUser(pageId, userId, tx);
+    const root = await repo.findPageInUserWorkspace(pageId, userId, tx);
     if (!root) throw pageNotFound();
 
     const pageIds = await repo.collectDescendantIds(pageId, tx);

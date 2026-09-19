@@ -32,10 +32,13 @@ import type {
   ViewQuery,
 } from '@kennote/shared-types';
 import { findSchemaFormulaCycles, richTextToPlainText } from '@kennote/shared-types';
+import type { PagePermission } from '@kennote/shared-types';
 import { db, withTransaction, type Queryable } from '../../db/client.js';
 import { sql, type Sql } from '../../db/sql.js';
-import { AppError, pageNotFound, workspaceNotFound } from '../../lib/errors.js';
+import { AppError, workspaceNotFound } from '../../lib/errors.js';
 import { getMemberRole } from '../workspaces/repo.js';
+import { buildPermissionIndex, canSee } from '../permissions/bulk.js';
+import { requirePagePermission } from '../permissions/service.js';
 import * as pagesRepo from '../pages/repo.js';
 import { generateKeyBetween } from '../../lib/fractional.js';
 import {
@@ -136,10 +139,56 @@ export function validateSchema(schema: CollectionSchema): CollectionSchema {
 
 /* ── 讀取 ─────────────────────────────────────────────── */
 
-async function loadCollection(collectionId: string, userId: string) {
-  const row = await repo.findCollectionForUser(collectionId, userId);
+/**
+ * ⭐ 第八輪 BUG-40：**資料庫的權限就是它載體頁的權限**。
+ *
+ * 原本這裡是一支「只 JOIN workspace_members 的 collection 查詢」—— 跟 `findPageInUserWorkspace()` 一樣
+ * 只 JOIN `workspace_members`，回答的是「你是不是這個工作區的人」。
+ * 於是 `WORKSPACE_ROLE_BASELINE.guest === 'none'` 的 guest 可以
+ * **讀整個資料庫、改儲存格、改 schema、刪視圖、匯出 CSV** ——
+ * 第五輪 BUG-27 / 第六輪 BUG-29 / 第七輪 BUG-35 的同一個誤用，第四個現場。
+ *
+ * 現在一律走 `requirePagePermission(collection.page_id, need)`：
+ * read 才讀得到、edit 才寫得進去，guest / comment 一律拒寫。
+ * `PAGE_NOT_FOUND` 轉成 `COLLECTION_NOT_FOUND`（都是 404，但訊息對得上端點）。
+ */
+async function loadCollection(
+  collectionId: string,
+  userId: string,
+  need: PagePermission = 'read',
+) {
+  const row = await repo.findCollectionById(collectionId);
   if (!row) throw new AppError('COLLECTION_NOT_FOUND');
+  try {
+    await requirePagePermission(userId, row.page_id, need);
+  } catch (err) {
+    // 看不見載體頁 = 看不見資料庫，不洩漏存在性
+    if (err instanceof AppError && err.code === 'PAGE_NOT_FOUND') {
+      throw new AppError('COLLECTION_NOT_FOUND');
+    }
+    throw err;
+  }
   return row;
+}
+
+/**
+ * relation 的**目標**資料庫也要問權限：不然只要對自己的資料庫有 edit，
+ * 就能把 relation 指到看不見的資料庫，再靠 rollup / CSV 匯出把對方的標題讀出來。
+ */
+async function assertRelationTargetsReadable(
+  userId: string,
+  schema: CollectionSchema,
+  selfCollectionId: string,
+): Promise<void> {
+  const targets = new Set<string>();
+  for (const def of Object.values(schema)) {
+    if (def?.type !== 'relation') continue;
+    const target = (def as { collectionId?: string | null }).collectionId;
+    if (target && target !== selfCollectionId) targets.add(target);
+  }
+  for (const target of targets) {
+    await loadCollection(target, userId, 'read');
+  }
 }
 
 /** 工作區的資料庫清單（relation 的「目標資料庫」下拉） */
@@ -147,13 +196,19 @@ export async function listDatabases(
   workspaceId: string,
   userId: string,
 ): Promise<Array<{ id: string; pageId: string; name: RichText; isInline: boolean }>> {
+  const role = await getMemberRole(workspaceId, userId);
+  if (!role) throw workspaceNotFound();
   const rows = await repo.listCollectionsForUser(workspaceId, userId);
-  return rows.map((r) => ({
-    id: r.id,
-    pageId: r.page_id,
-    name: r.name ?? [],
-    isInline: r.is_inline,
-  }));
+  // 第八輪：清單也要逐頁過濾（原本只有成員身分 → guest 看得到每個資料庫的名字）
+  const index = await buildPermissionIndex(workspaceId, userId, role);
+  return rows
+    .filter((r) => canSee(index, r.page_id))
+    .map((r) => ({
+      id: r.id,
+      pageId: r.page_id,
+      name: r.name ?? [],
+      isInline: r.is_inline,
+    }));
 }
 
 export async function getDatabase(collectionId: string, userId: string): Promise<DatabaseSnapshot> {
@@ -292,8 +347,8 @@ export async function createDatabase(
   return withTransaction(async (tx) => {
     const parentId = input.parentId ?? null;
     if (parentId) {
-      const parent = await pagesRepo.findPageForUser(parentId, userId, tx);
-      if (!parent) throw pageNotFound();
+      // 第八輪：在別人的頁面底下長出新資料庫是**寫入**，要 edit（原本只驗成員身分）
+      await requirePagePermission(userId, parentId, 'edit', tx);
     }
     const sortKey = await pagesRepo.computeSortKey(input.workspaceId, parentId, undefined, tx);
     const page = await pagesRepo.insertPage(tx, {
@@ -340,8 +395,9 @@ export async function patchSchema(
   userId: string,
   schema: CollectionSchema,
 ): Promise<Collection> {
-  await loadCollection(collectionId, userId);
+  await loadCollection(collectionId, userId, 'edit');
   const validated = validateSchema(schema);
+  await assertRelationTargetsReadable(userId, validated, collectionId);
   const updated = await repo.updateCollectionSchema(db, collectionId, validated);
   if (!updated) throw new AppError('COLLECTION_NOT_FOUND');
   return repo.toCollection(updated);
@@ -519,8 +575,15 @@ export async function applySchemaOps(
   userId: string,
   ops: SchemaOp[],
 ): Promise<PatchSchemaResult> {
-  const collection = await loadCollection(collectionId, userId);
+  const collection = await loadCollection(collectionId, userId, 'edit');
   const original = (collection.schema ?? {}) as CollectionSchema;
+  // 第八輪：relation 指到的目標資料庫，自己要看得見才能指過去
+  for (const op of ops) {
+    const def = (op as { definition?: FieldDefinition }).definition;
+    if (def?.type === 'relation') {
+      await assertRelationTargetsReadable(userId, { probe: def }, collectionId);
+    }
+  }
 
   return withTransaction(async (tx) => {
     let schema: CollectionSchema = { ...original };
@@ -1177,7 +1240,7 @@ export async function createRow(
     group?: { property: string; key: string | null };
   },
 ): Promise<DatabaseRow> {
-  const collection = await loadCollection(collectionId, userId);
+  const collection = await loadCollection(collectionId, userId, 'edit');
   const schema = (collection.schema ?? {}) as CollectionSchema;
   const properties = normalizeRowProperties(schema, input.properties);
 
@@ -1237,7 +1300,7 @@ export async function patchRow(
   userId: string,
   input: { title?: RichText; icon?: string | null; cover?: string | null; properties?: RowProperties },
 ): Promise<DatabaseRow> {
-  const collection = await loadCollection(collectionId, userId);
+  const collection = await loadCollection(collectionId, userId, 'edit');
   const schema = (collection.schema ?? {}) as CollectionSchema;
   const existing = await repo.findRow(rowId, collectionId);
   if (!existing) throw new AppError('ROW_NOT_FOUND');
@@ -1282,7 +1345,7 @@ export async function deleteRow(
   rowId: string,
   userId: string,
 ): Promise<void> {
-  const collection = await loadCollection(collectionId, userId);
+  const collection = await loadCollection(collectionId, userId, 'edit');
   const existing = await repo.findRow(rowId, collectionId);
   if (!existing) throw new AppError('ROW_NOT_FOUND');
 
@@ -1319,7 +1382,7 @@ export async function reorderRow(
   userId: string,
   afterId: string | null,
 ): Promise<DatabaseRow> {
-  const collection = await loadCollection(collectionId, userId);
+  const collection = await loadCollection(collectionId, userId, 'edit');
   const schema = (collection.schema ?? {}) as CollectionSchema;
   const existing = await repo.findRow(rowId, collectionId);
   if (!existing) throw new AppError('ROW_NOT_FOUND');
@@ -1360,7 +1423,7 @@ export async function duplicateRow(
   rowId: string,
   userId: string,
 ): Promise<DatabaseRow> {
-  const collection = await loadCollection(collectionId, userId);
+  const collection = await loadCollection(collectionId, userId, 'edit');
   const schema = (collection.schema ?? {}) as CollectionSchema;
   const existing = await repo.findRow(rowId, collectionId);
   if (!existing) throw new AppError('ROW_NOT_FOUND');
@@ -1394,7 +1457,7 @@ export async function createView(
   userId: string,
   input: CreateViewRequest,
 ): Promise<CollectionView> {
-  const collection = await loadCollection(collectionId, userId);
+  const collection = await loadCollection(collectionId, userId, 'edit');
   const schema = (collection.schema ?? {}) as CollectionSchema;
   if (input.query) validateViewQuery(schema, input.query);
   const view = await repo.insertView(db, {
@@ -1425,7 +1488,7 @@ export async function patchView(
   userId: string,
   input: PatchViewRequest,
 ): Promise<CollectionView> {
-  const collection = await loadCollection(collectionId, userId);
+  const collection = await loadCollection(collectionId, userId, 'edit');
   const existing = await repo.findView(viewId, collectionId);
   if (!existing) throw new AppError('VIEW_NOT_FOUND');
   if (input.query) validateViewQuery((collection.schema ?? {}) as CollectionSchema, input.query);
@@ -1439,7 +1502,7 @@ export async function deleteView(
   viewId: string,
   userId: string,
 ): Promise<void> {
-  await loadCollection(collectionId, userId);
+  await loadCollection(collectionId, userId, 'edit');
   if ((await repo.countViews(collectionId)) <= 1) {
     throw new AppError('CONFLICT', '至少要保留一個檢視');
   }
@@ -1452,7 +1515,7 @@ export async function duplicateView(
   viewId: string,
   userId: string,
 ): Promise<CollectionView> {
-  const collection = await loadCollection(collectionId, userId);
+  const collection = await loadCollection(collectionId, userId, 'edit');
   const existing = await repo.findView(viewId, collectionId);
   if (!existing) throw new AppError('VIEW_NOT_FOUND');
   const view = await repo.insertView(db, {

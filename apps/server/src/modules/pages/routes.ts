@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireUser } from '../../plugins/auth.js';
 import { applyTransaction, listTransactionsSince } from '../blocks/apply-transaction.js';
-import { findPageForUser } from './repo.js';
+import { findPageInUserWorkspace } from './repo.js';
 import {
   addFavorite,
   listFavorites,
@@ -77,10 +77,10 @@ export async function pageRoutes(app: FastifyInstance): Promise<void> {
   app.post('/:id/favorite', writeLimit, async (req, reply) => {
     const user = requireUser(req);
     const { id } = idParams.parse(req.params);
-    // 第七輪：`findPageForUser()` 只看「是不是工作區成員」，
+    // 第七輪：`findPageInUserWorkspace()` 只看「是不是工作區成員」，
     // 沒有 read 權限的人不該把別人的頁面加進收藏（加得進去 = 標題洩漏）
     await requirePagePermission(user.id, id, 'read');
-    const page = await findPageForUser(id, user.id);
+    const page = await findPageInUserWorkspace(id, user.id);
     if (!page) throw pageNotFound();
     await addFavorite(id, page.workspace_id, user.id);
     return reply.send({ data: { ok: true } });
@@ -172,7 +172,14 @@ export async function pageRoutes(app: FastifyInstance): Promise<void> {
         limit: z.coerce.number().int().positive().max(500).default(200),
       })
       .parse(req.query);
-    const page = await findPageForUser(id, user.id);
+    /*
+     * 第八輪 BUG-41：這裡原本只有 `findPageInUserWorkspace()`（= 只驗工作區成員身分），
+     * 所以第七輪 BUG-35 把 `/pages/:id` 與 `/snapshot` 鎖上之後，
+     * **整份內容還是從 op log 流出去** —— `block.update` 的 patch 裡就是原文。
+     * 斷線補傳是讀取動作，要 `read`。
+     */
+    await requirePagePermission(user.id, id, 'read');
+    const page = await findPageInUserWorkspace(id, user.id);
     if (!page) throw pageNotFound();
     const results = await listTransactionsSince(id, since, limit);
     return reply.send({ data: { pageId: id, seq: Number(page.seq), results } });
