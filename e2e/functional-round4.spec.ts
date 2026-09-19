@@ -414,7 +414,7 @@ test.describe('功能 QA 第四輪回歸（編輯器）', () => {
    *
    * 伺服器那一半修好之後，把 `test.fixme` 拿掉它就會是綠的。
    */
-  test.fixme('BUG-18 Ctrl+Z / Ctrl+Shift+Z 跨 block 可以來回還原', async ({ page }) => {
+  test('BUG-18 Ctrl+Z / Ctrl+Shift+Z 跨 block 可以來回還原', async ({ page }) => {
     const p = await newPage(page, 'R4-undo-' + Date.now());
     await openPage(page, p.id);
     await caretAtFreshTail(page);

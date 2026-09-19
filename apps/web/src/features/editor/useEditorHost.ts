@@ -16,9 +16,27 @@
  */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { createEditor, type Block as CoreBlock, type Editor, type EditorDoc, type OtDelta } from '@kennote/editor-core';
+import { defaultAtomText, type InlineAtom } from '@kennote/editor-core';
+
+/**
+ * atom 的顯示文字（第五輪 BUG-15 的殘留資料修補）。
+ *
+ * 第四輪把 `MentionMenu` 建 atom 時多加的 `@` 拿掉了，渲染層（`defaultAtomText`）
+ * 才是唯一補 `@` 的地方。但**在那之前存下來的** mention，`data.text` 裡本來就有
+ * 一個 `@`，重新開頁還是會顯示「@@訪客」。
+ *
+ * 這裡在渲染時把開頭多出來的 `@` 收掉 —— 純顯示層的修補，不改資料庫裡的內容，
+ * 使用者重新編輯那一段時自然會被新的格式覆蓋掉。
+ * （editor-core 這一輪不得改動，`createEditor` 的 `inline.atomText` 正好是官方的
+ *  覆寫點，不必動套件。）
+ */
+export function hostAtomText(atom: InlineAtom): string {
+  const text = defaultAtomText(atom);
+  return atom.atom === 'mention' ? text.replace(/^@{2,}/, '@') : text;
+}
 import type { Block as ServerBlock, Operation, PageSnapshot } from '@kennote/shared-types';
 import { API_ROUTES, blockRevOf, splitDeltaOps } from '@kennote/shared-types';
-import { invalidateQueries, useStore } from '@kennote/ui';
+import { invalidateQueries, setQueryData, useStore } from '@kennote/ui';
 import { api } from '../../lib/api-client';
 import { createPage, queryKeys } from '../../lib/queries';
 import { uploadFile } from '../../lib/upload';
@@ -146,9 +164,18 @@ export function useEditorHost(options: UseEditorHostOptions): EditorHostResult {
 
   const reload = useCallback(
     (message?: string) => {
-      invalidateQueries(queryKeys.snapshot(pageId));
-      setReloadToken((n) => n + 1);
-      if (message) toast(message, { kind: 'info' });
+      // BUG-18（伺服器那一半的放大器）：以前這裡只 invalidate 再換 token，重建時吃到的是快取裡的
+      // 「舊 snapshot」，使用者剛打的內容整段消失。改成先抓到新鮮的 snapshot 寫進快取，再換 token 重建。
+      void (async () => {
+        try {
+          const fresh = await api.get<PageSnapshot>(API_ROUTES.pageSnapshot(pageId));
+          setQueryData<PageSnapshot>(queryKeys.snapshot(pageId), () => fresh);
+        } catch {
+          invalidateQueries(queryKeys.snapshot(pageId));
+        }
+        setReloadToken((n) => n + 1);
+        if (message) toast(message, { kind: 'info' });
+      })();
     },
     [pageId],
   );
@@ -189,9 +216,23 @@ export function useEditorHost(options: UseEditorHostOptions): EditorHostResult {
    */
   const initialSeq = builtRef.current?.key === docKey ? builtRef.current.seq : (snapshot?.seq ?? 0);
 
+  /*
+   * 第五輪 BUG-20：`readOnly`（鎖定頁面 / 版本預覽 / 權限變更）在下面 effect 的依賴
+   * 陣列裡，切換它會把編輯器砸掉重建 —— 而重建吃的是 `builtRef` 裡**載入當下**那份
+   * doc，使用者在那之後打的字整段消失（重整才回得來，看起來就是掉資料）。
+   *
+   * 這裡另外記一份「編輯器現在的 doc」，重建時優先用它。
+   * `builtRef` 不能拿來做這件事：`initialDoc` 在 render 階段就已經把它讀走了，
+   * 等 cleanup 再寫回去已經來不及。
+   */
+  const liveDocRef = useRef<{ key: string; doc: EditorDoc } | null>(null);
+  const docKeyAtSetup = docKey;
+
   useLayoutEffect(() => {
     const container = containerRef.current;
     if (!container || !initialDoc || !pageId) return;
+    const startDoc =
+      liveDocRef.current?.key === docKeyAtSetup ? liveDocRef.current.doc : initialDoc;
 
     let transport: Transport | null = null;
     if (HTTP_FALLBACK) {
@@ -232,11 +273,12 @@ export function useEditorHost(options: UseEditorHostOptions): EditorHostResult {
 
     const instance = createEditor({
       container,
-      doc: initialDoc,
+      doc: startDoc,
       blockRegistry: createHostRegistry(),
       editable: !readOnly,
       // 後端要求 block id 必須是 UUID（v7，與 server 同版面）
       newId: createId,
+      inline: { atomText: hostAtomText },
       ...(otChannel
         ? { ot: { enabled: true, getBaseRev: (blockId: string) => otChannel!.getBaseRev(blockId) } }
         : {}),
@@ -263,7 +305,10 @@ export function useEditorHost(options: UseEditorHostOptions): EditorHostResult {
       syncRef.current.submit(ops as unknown as Operation[]);
     });
     const offTx = instance.on('transaction', () => {
-      setDoc(instance.getDoc());
+      const next = instance.getDoc();
+      // 重建（例如切換鎖定）時要從這一份長回來，不是從載入當下那一份
+      liveDocRef.current = { key: docKeyAtSetup, doc: next };
+      setDoc(next);
       setRev((n) => n + 1);
     });
     // 讓別人看得到我的游標（presence 不進 operation log）
@@ -277,7 +322,7 @@ export function useEditorHost(options: UseEditorHostOptions): EditorHostResult {
     });
 
     // 空頁面：補一個段落，讓游標有地方去（這一筆也會被持久化）
-    if (initialDoc.rootIds.length === 0 && !readOnly) {
+    if (startDoc.rootIds.length === 0 && !readOnly) {
       instance.insertBlockAfter(null, { type: 'paragraph' });
     }
 
@@ -305,6 +350,7 @@ export function useEditorHost(options: UseEditorHostOptions): EditorHostResult {
     };
     // initialDoc 的 identity 以 (pageId, reloadToken) 為 key 穩定，所以一頁只跑一次
     // （snapshot / reload 是刻意不進依賴陣列的：它們只在建立編輯器的那一刻被讀一次）
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- docKeyAtSetup 與 initialDoc 是同一組 key，刻意只讓後者進陣列
   }, [pageId, initialDoc, readOnly, initialSeq, applyRemote, applyRemoteDelta, otEnabled]);
 
   // 分頁被隱藏 / 關閉 → 立刻沖出去

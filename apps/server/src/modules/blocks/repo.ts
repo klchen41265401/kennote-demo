@@ -90,9 +90,21 @@ export async function insertBlock(
     VALUES (${input.id}, ${input.workspaceId}, ${input.pageId}, ${input.parentId},
             ${input.type}, ${JSON.stringify(input.props)}::jsonb,
             ${JSON.stringify(input.content)}::jsonb, ${input.actorId}, ${input.actorId})
+    ON CONFLICT (id) DO UPDATE SET
+      -- undo 後 redo：同一個 id 先被軟刪除再被 insert 回來 → 復活而不是撞主鍵（BUG-18 伺服器那一半）
+      deleted_at = NULL,
+      page_id    = EXCLUDED.page_id,
+      parent_id  = EXCLUDED.parent_id,
+      type       = EXCLUDED.type,
+      props      = EXCLUDED.props,
+      content    = EXCLUDED.content,
+      updated_by = EXCLUDED.updated_by,
+      updated_at = now(),
+      version    = blocks.version + 1
+    WHERE blocks.deleted_at IS NOT NULL
     RETURNING ${BLOCK_COLUMNS}
   `);
-  if (!row) throw new Error('建立 block 失敗');
+  if (!row) throw new Error('建立 block 失敗：同一個 id 已存在且未被刪除');
   return row;
 }
 
