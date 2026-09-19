@@ -73,6 +73,12 @@ interface TextEditorInputProps {
 /**
  * 就地輸入：Enter / 失焦送出，Escape 取消。
  * 刻意不做「每次按鍵都送 API」—— 那會在多人協作時產生大量無意義的 operation。
+ *
+ * 多行欄位（text）照 Notion：**Enter 送出**、Shift+Enter 才換行。
+ * 原本是反過來的（Enter 換行、Ctrl/Cmd+Enter 才送出），結果使用者打完字按 Enter
+ * 只會塞一個 `
+` 進去、編輯器還賴著不關，存下來的值變成 `hello
+`。
  */
 export function TextEditorInput({
   initial,
@@ -109,7 +115,7 @@ export function TextEditorInput({
       onClose();
       return;
     }
-    if (e.key === 'Enter' && (!multiline || e.metaKey || e.ctrlKey)) {
+    if (e.key === 'Enter' && (!multiline || !e.shiftKey || e.metaKey || e.ctrlKey)) {
       e.preventDefault();
       commitAndClose();
     }
