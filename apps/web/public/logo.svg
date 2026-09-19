@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 64" role="img" aria-label="kennote">
+  <rect width="64" height="64" rx="14" fill="#2c2c2b"/>
+  <path d="M20 16v32M20 33l14-17M26 26.5 45 48"
+        fill="none" stroke="#ffffff" stroke-width="6"
+        stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="76" y="43" font-family="ui-sans-serif, 'Segoe UI', sans-serif"
+        font-size="26" font-weight="600" fill="#2c2c2b">kennote</text>
+</svg>

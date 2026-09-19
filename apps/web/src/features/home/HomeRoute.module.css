@@ -1,0 +1,141 @@
+/** 首頁（01-home-*.png）：問候語 + 最近造訪卡片橫列 + 即將到來 + 精選範本。 */
+
+.scroll {
+  height: 100%;
+  overflow-y: auto;
+}
+
+.inner {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 72px 48px 96px;
+}
+
+.greeting {
+  margin: 0 0 40px;
+  font-size: 30px;
+  line-height: 39px;
+  font-weight: 600;
+  text-align: center;
+  color: var(--kn-color-text);
+}
+
+.sectionHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 28px 0 12px;
+  color: var(--kn-color-text-secondary);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.cards {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  padding-bottom: 6px;
+  scrollbar-width: thin;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  flex: 0 0 168px;
+  height: 130px;
+  padding: 12px;
+  border: 1px solid var(--kn-color-border);
+  border-radius: 10px;
+  background: var(--kn-color-bg);
+  color: var(--kn-color-text);
+  text-align: left;
+  transition: background var(--kn-motion-fast) var(--kn-motion-ease);
+}
+.card:hover {
+  background: var(--kn-color-surface-hover);
+}
+
+.cardIcon {
+  font-size: 22px;
+  line-height: 1;
+  color: var(--kn-color-text-tertiary);
+}
+
+.cardTitle {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.cardMeta {
+  color: var(--kn-color-text-tertiary);
+  font-size: 12px;
+}
+
+.upcoming {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 110px;
+  border: 1px dashed var(--kn-color-border);
+  border-radius: 10px;
+  color: var(--kn-color-text-tertiary);
+  font-size: 14px;
+}
+
+.templates {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.template {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--kn-color-border);
+  border-radius: 10px;
+  background: var(--kn-color-bg);
+  color: var(--kn-color-text);
+  text-align: left;
+}
+.template:hover {
+  background: var(--kn-color-surface-hover);
+}
+
+.templateIcon {
+  font-size: 20px;
+  line-height: 1.2;
+}
+
+.templateName {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.templateDesc {
+  color: var(--kn-color-text-tertiary);
+  font-size: 12px;
+}
+
+.empty {
+  padding: 24px 0;
+  color: var(--kn-color-text-tertiary);
+  font-size: 14px;
+}
+
+@media (max-width: 767px) {
+  .inner {
+    padding: 32px 16px 64px;
+  }
+  .greeting {
+    font-size: 24px;
+    line-height: 32px;
+    text-align: left;
+  }
+}

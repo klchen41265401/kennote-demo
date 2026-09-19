@@ -1,0 +1,254 @@
+/**
+ * TopBar。量自 reference/notion-capture/dom/03-topbar.html：
+ *   height 44、padding-inline 12px 10px、字 14/1.2、按鈕 28×28、圓角 6。
+ */
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex: 0 0 auto;
+  height: var(--kn-size-topbar);
+  padding: 0 10px 0 12px;
+  background: var(--kn-color-bg);
+  user-select: none;
+  overflow: hidden;
+}
+
+.left {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  height: 100%;
+  font-size: 14px;
+  line-height: 1.2;
+  overflow: hidden;
+}
+
+.right {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: 0 0 auto;
+  height: 100%;
+  padding-left: 10px;
+}
+
+.iconButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--kn-color-text-secondary);
+  transition: background var(--kn-motion-fast) var(--kn-motion-ease);
+}
+.iconButton:hover {
+  background: var(--kn-color-surface-hover);
+  color: var(--kn-color-text);
+}
+.iconButtonActive {
+  background: var(--kn-color-surface-active);
+  color: var(--kn-color-text);
+}
+.starOn {
+  color: #f5a623;
+}
+
+.shareButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--kn-color-text-secondary);
+  font-size: 14px;
+  font-weight: 500;
+}
+.shareButton:hover {
+  background: var(--kn-color-surface-hover);
+  color: var(--kn-color-text);
+}
+
+.edited {
+  display: flex;
+  align-items: center;
+  white-space: nowrap;
+  padding: 0 6px;
+  color: var(--kn-color-text-tertiary);
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 400;
+}
+.edited:hover {
+  color: var(--kn-color-text-secondary);
+}
+
+/* ── 麵包屑 ── */
+.crumbs {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.crumb {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 260px;
+  height: 24px;
+  padding: 0 5px 0 3px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--kn-color-text);
+  font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.crumb:hover {
+  background: var(--kn-color-surface-hover);
+}
+.crumbLabel {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.crumbIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  font-size: 15px;
+  line-height: 1;
+  border-radius: 0.25em;
+}
+.crumbCurrent {
+  font-weight: 500;
+}
+.sep {
+  flex: 0 0 auto;
+  padding: 0 1px;
+  color: var(--kn-color-text-tertiary);
+  font-size: 14px;
+}
+
+.scope {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 24px;
+  margin-left: 4px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--kn-color-text-tertiary);
+  font-size: 14px;
+}
+.scope:hover {
+  background: var(--kn-color-surface-hover);
+}
+
+/* hover 預覽卡 */
+.preview {
+  width: 260px;
+  padding: 4px 2px;
+}
+.previewTitle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--kn-color-text);
+}
+.previewMeta {
+  padding-top: 4px;
+  font-size: 12px;
+  color: var(--kn-color-text-tertiary);
+}
+
+/* ── ⋯ 選單裡的字型選擇 ── */
+.fontRow {
+  display: flex;
+  gap: 4px;
+  padding: 8px 6px 10px;
+}
+.fontOption {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--kn-color-text-secondary);
+}
+.fontOption:hover {
+  background: var(--kn-color-surface-hover);
+}
+.fontSample {
+  font-size: 22px;
+  line-height: 1.1;
+  color: var(--kn-color-text);
+}
+.fontOptionActive .fontSample,
+.fontOptionActive {
+  color: var(--kn-color-accent);
+}
+.fontLabel {
+  font-size: 12px;
+}
+.fontSerif {
+  font-family: var(--kn-font-serif);
+}
+.fontMono {
+  font-family: var(--kn-font-mono);
+}
+
+.menuWide {
+  width: 280px;
+}
+
+/* 桌機：正常顯示；手機：整組收進 ⋯（見下方 media query） */
+.compactHide {
+  display: inline-flex;
+  align-items: center;
+}
+
+@media (max-width: 767px) {
+  .topbar {
+    height: var(--kn-size-topbar-compact);
+    padding: 0 6px 0 8px;
+  }
+  .edited {
+    display: none;
+  }
+  .crumb {
+    max-width: none;
+  }
+  /* 手機：動作全部收進 ⋯（UI-SPEC §10），麵包屑才有空間顯示標題 */
+  .compactHide {
+    display: none;
+  }
+  .scope {
+    display: none;
+  }
+  .right {
+    padding-left: 0;
+  }
+}

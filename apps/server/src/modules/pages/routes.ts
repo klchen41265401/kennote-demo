@@ -3,6 +3,12 @@ import { z } from 'zod';
 import { requireUser } from '../../plugins/auth.js';
 import { applyTransaction, listTransactionsSince } from '../blocks/apply-transaction.js';
 import { findPageForUser } from './repo.js';
+import {
+  addFavorite,
+  listFavorites,
+  listRecent,
+  removeFavorite,
+} from './favorites.js';
 import { pageNotFound } from '../../lib/errors.js';
 import * as service from './service.js';
 
@@ -36,6 +42,45 @@ const writeLimit = { config: { rateLimit: { max: 120, timeWindow: '1 minute' } }
 
 export async function pageRoutes(app: FastifyInstance): Promise<void> {
   app.addHook('preHandler', app.requireAuth);
+
+  /* ── 我的最愛 / 最近造訪（M3 App shell）────────────────
+     注意：這兩條必須宣告在 '/:id' 之前也無妨 —— fastify 的 radix router
+     一律讓靜態片段優先於參數片段，'/favorites' 不會被 '/:id' 吃掉。 */
+
+  app.get('/favorites', async (req, reply) => {
+    const user = requireUser(req);
+    const { workspaceId } = z
+      .object({ workspaceId: z.string().uuid() })
+      .parse(req.query);
+    return reply.send({ data: await listFavorites(workspaceId, user.id) });
+  });
+
+  app.get('/recent', async (req, reply) => {
+    const user = requireUser(req);
+    const { workspaceId, limit } = z
+      .object({
+        workspaceId: z.string().uuid(),
+        limit: z.coerce.number().int().positive().max(50).default(10),
+      })
+      .parse(req.query);
+    return reply.send({ data: await listRecent(workspaceId, user.id, limit) });
+  });
+
+  app.post('/:id/favorite', writeLimit, async (req, reply) => {
+    const user = requireUser(req);
+    const { id } = idParams.parse(req.params);
+    const page = await findPageForUser(id, user.id);
+    if (!page) throw pageNotFound();
+    await addFavorite(id, page.workspace_id, user.id);
+    return reply.send({ data: { ok: true } });
+  });
+
+  app.delete('/:id/favorite', writeLimit, async (req, reply) => {
+    const user = requireUser(req);
+    const { id } = idParams.parse(req.params);
+    await removeFavorite(id, user.id);
+    return reply.send({ data: { ok: true } });
+  });
 
   app.post('/', writeLimit, async (req, reply) => {
     const user = requireUser(req);

@@ -1,4 +1,5 @@
 @import './tokens.css';
+@import './shell.css';
 
 *,
 *::before,
@@ -45,13 +46,16 @@ a {
   outline-offset: 1px;
 }
 
+/* contenteditable 的 focus ring 由 shell.css 關掉（Notion 沒有藍框） */
+
+
 /* 滾動條（深色也要好看） */
 ::-webkit-scrollbar {
   width: 10px;
   height: 10px;
 }
 ::-webkit-scrollbar-thumb {
-  background: var(--kn-color-border);
+  background: var(--kn-color-border-strong);
   border-radius: var(--kn-radius-full);
   border: 2px solid transparent;
   background-clip: content-box;

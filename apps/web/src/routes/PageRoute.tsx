@@ -1,89 +1,172 @@
 /**
- * 頁面畫面：PageHeader（封面 / 圖示 / 標題）+ Editor（block 編輯區）。
+ * 頁面畫面：TopBar + PageHeader（封面 / 圖示 / 標題）+ Editor（block 編輯區）。
  *
- * ⚠️ 給 App shell 代理：
- *   - `<PageHeader>` 已經自給自足（只需要 page + workspaceId），可以直接搬到 shell 裡。
- *   - `<Editor>` 的 props 見 features/editor/README.md 的「對外介面」。
- *   - 所有 block 變更都走 `POST /api/pages/:id/transactions`（debounce 300ms），
- *     **不要**在元件裡直接呼叫任何 block 寫入 API（04 §7.3 / 00-README 風險二）。
+ * ⚠️ `<PageHeader>` 與 `<Editor>` 的用法保持原樣（features/editor/README.md）。
+ * 兩者都用 `max-width: var(--kn-editor-content-width)` + `margin: 0 auto`，
+ * 變數已提到 `:root`（styles/tokens.css），所以標題與 block 的左緣天生對齊。
+ * 版面（全寬 / 小字 / 字型）由外層 `.kn-page-layout` 的 data-* 屬性驅動（styles/shell.css）。
  */
-import { useCallback, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Navigate, useNavigate, useParams } from 'react-router-dom';
+import { Skeleton } from '@kennote/ui';
 import { Editor } from '../features/editor/Editor';
 import { PageHeader } from '../features/editor/PageHeader';
 import type { TransportState } from '../features/editor/transport';
-import { usePageSnapshot, useWorkspaceTree } from '../lib/queries';
-import { useCurrentWorkspace } from '../stores/auth';
+import { TopBar } from '../features/shell/TopBar';
+import { ancestorChain } from '../features/page-tree/tree';
+import {
+  usePageSnapshot,
+  usePagePermission,
+  useFavorites,
+  useWorkspaceTree,
+} from '../lib/queries';
+import { useWorkspace } from '../stores/workspace';
+import { usePageLayout } from '../stores/pages';
+import { expandAncestors, useBreakpoint, useUi } from '../stores/ui';
+import shell from '../features/shell/Shell.module.css';
 import styles from './PageRoute.module.css';
 
 const SAVE_LABEL: Record<TransportState['status'], string> = {
-  idle: '已儲存',
+  idle: '',
   pending: '編輯中…',
   saving: '儲存中…',
   error: '儲存失敗',
   offline: '離線，稍後重試',
 };
 
-export function PageRoute() {
+export function PageRoute(): JSX.Element {
   const { pageId } = useParams<{ pageId: string }>();
   const navigate = useNavigate();
-  const workspace = useCurrentWorkspace();
+  const workspace = useWorkspace();
+  const ui = useUi();
+  const bp = useBreakpoint();
   const tree = useWorkspaceTree(workspace?.id ?? null);
+  const favorites = useFavorites(workspace?.id ?? null);
 
   // 沒指定 pageId 時，自動落在第一頁
   const effectivePageId = pageId ?? tree.data?.[0]?.id ?? null;
   const snapshot = usePageSnapshot(effectivePageId);
   const [transport, setTransport] = useState<TransportState | null>(null);
+  const layout = usePageLayout(effectivePageId);
+  const permission = usePagePermission(effectivePageId);
 
   const page = effectivePageId ? snapshot.data?.recordMap.page[effectivePageId]?.value : undefined;
 
-  const goToPage = useCallback(
-    (id: string) => {
-      navigate(`/page/${id}`);
-    },
-    [navigate],
+  const nodes = useMemo(() => tree.data ?? [], [tree.data]);
+  const chain = useMemo(
+    () => (effectivePageId ? ancestorChain(nodes, effectivePageId) : []),
+    [nodes, effectivePageId],
   );
 
+  // 進到一個頁面時，把側邊欄的祖先鏈展開（01 §8 搜尋導覽）
+  useEffect(() => {
+    if (chain.length > 1) expandAncestors(chain.slice(0, -1).map((n) => n.id));
+  }, [chain]);
+
+  const goToPage = useCallback((id: string) => navigate(`/page/${id}`), [navigate]);
+
   const focusFirstBlock = useCallback(() => {
-    const first = document.querySelector<HTMLElement>('.kn-editor .kn-block-content[contenteditable="true"]');
-    first?.focus();
+    document
+      .querySelector<HTMLElement>('.kn-editor .kn-block-content[contenteditable="true"]')
+      ?.focus();
   }, []);
+
+  const favorite = (favorites.data ?? []).some((f) => f.id === effectivePageId);
+  const readOnly = layout.locked || ui.historyPreviewSeq !== null || permission.canEdit === false;
+
+  const topbar = (
+    <TopBar
+      workspaceId={workspace?.id ?? ''}
+      pageId={effectivePageId}
+      chain={chain}
+      updatedAt={page?.updatedAt ?? null}
+      favorite={favorite}
+      onFavoriteChanged={() => void favorites.refetch()}
+      onTreeChanged={() => void tree.refetch()}
+      {...(transport && SAVE_LABEL[transport.status] ? { saveLabel: SAVE_LABEL[transport.status] } : {})}
+      showSidebarToggle={ui.sidebarCollapsed || bp !== 'desktop'}
+    />
+  );
 
   if (!effectivePageId) {
     return (
-      <div className={styles.placeholderScreen}>
-        <p>
-          左邊還沒有頁面，按側邊欄的 <strong>+</strong> 建立第一頁。
-        </p>
-      </div>
+      <>
+        {topbar}
+        <div className={shell.stateScreen}>
+          <p className={shell.stateTitle}>還沒有頁面</p>
+          <p className={shell.stateHint}>
+            按側邊欄的 <strong>＋</strong> 建立第一頁。
+          </p>
+        </div>
+      </>
     );
   }
 
   if (snapshot.isLoading && !snapshot.data) {
-    return <div className={styles.placeholderScreen}>載入頁面中…</div>;
+    return (
+      <>
+        {topbar}
+        <div className={shell.content}>
+          <div className={shell.skeletonPage} aria-busy="true" aria-live="polite">
+            <Skeleton shape="rect" height={40} width="60%" />
+            <Skeleton shape="text" lines={3} />
+            <Skeleton shape="text" lines={4} />
+          </div>
+        </div>
+      </>
+    );
   }
 
   if (snapshot.isError || !page) {
-    return <div className={styles.placeholderScreen}>找不到這個頁面，可能已被刪除。</div>;
+    return (
+      <>
+        {topbar}
+        <div className={shell.stateScreen}>
+          <p className={shell.stateTitle}>找不到這個頁面</p>
+          <p className={shell.stateHint}>它可能已被刪除，或你沒有存取權限。</p>
+        </div>
+      </>
+    );
   }
 
+  // 整頁資料庫走 DatabaseRoute（避免 PageRoute 直接 import features/database）
+  if (page.isDatabase) return <Navigate to={`/database/${page.id}`} replace />;
+
   return (
-    <article className={styles.page}>
-      <div className={styles.savedHint} aria-live="polite">
-        {SAVE_LABEL[transport?.status ?? 'idle']}
+    <>
+      {topbar}
+      <div className={shell.content}>
+        <article
+          className={`${styles.page} kn-page-layout`}
+          data-full-width={layout.fullWidth ? 'true' : 'false'}
+          data-small-text={layout.smallText ? 'true' : 'false'}
+          data-font={layout.font}
+        >
+          {ui.historyPreviewSeq !== null && (
+            <div className={styles.previewBanner} role="status">
+              正在檢視歷史版本（seq {ui.historyPreviewSeq}）—— 編輯已停用。
+            </div>
+          )}
+
+          <PageHeader
+            page={page}
+            workspaceId={workspace?.id ?? null}
+            readOnly={readOnly}
+            onLeaveTitle={focusFirstBlock}
+          />
+
+          {/* ⭐ editor-core 的掛載點就在 <Editor> 裡面（features/editor/Editor.tsx） */}
+          <Editor
+            key={page.id}
+            pageId={page.id}
+            workspaceId={workspace?.id ?? null}
+            snapshot={snapshot.data}
+            readOnly={readOnly}
+            onNavigateToPage={goToPage}
+            onTransportState={setTransport}
+          />
+        </article>
       </div>
-
-      <PageHeader page={page} workspaceId={workspace?.id ?? null} onLeaveTitle={focusFirstBlock} />
-
-      {/* ⭐ editor-core 的掛載點就在 <Editor> 裡面（features/editor/Editor.tsx） */}
-      <Editor
-        key={page.id}
-        pageId={page.id}
-        workspaceId={workspace?.id ?? null}
-        snapshot={snapshot.data}
-        onNavigateToPage={goToPage}
-        onTransportState={setTransport}
-      />
-    </article>
+    </>
   );
 }

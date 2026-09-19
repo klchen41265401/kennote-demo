@@ -1,0 +1,122 @@
+.wrap {
+  display: flex;
+  flex-direction: column;
+  width: 380px;
+  max-height: min(460px, 60vh);
+}
+
+.searchRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--kn-color-divider);
+}
+
+.input {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--kn-color-text);
+  font-size: 14px;
+}
+
+.input:focus,
+.input:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
+.list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 4px;
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  border-radius: 6px;
+}
+.item:hover {
+  background: var(--kn-color-surface-hover);
+}
+
+.itemMain {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 32px;
+  padding: 4px 8px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+
+.itemIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  flex: 0 0 auto;
+  color: var(--kn-color-text-tertiary);
+}
+
+.itemBody {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.itemTitle {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+}
+
+.itemMeta {
+  display: block;
+  color: var(--kn-color-text-tertiary);
+  font-size: 12px;
+}
+
+.action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  flex: 0 0 auto;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--kn-color-text-secondary);
+}
+.action:hover {
+  background: var(--kn-color-surface-active);
+}
+.danger:hover {
+  color: var(--kn-color-danger);
+}
+
+.empty {
+  padding: 28px 8px;
+  text-align: center;
+  color: var(--kn-color-text-tertiary);
+  font-size: 14px;
+}
+
+.footer {
+  padding: 8px 12px;
+  border-top: 1px solid var(--kn-color-divider);
+  color: var(--kn-color-text-tertiary);
+  font-size: 12px;
+}

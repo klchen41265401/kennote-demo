@@ -1,199 +1,448 @@
+/**
+ * 側邊欄。數值量自 reference/notion-capture/03*-sidebar-*.png 與
+ * dom/02-sidebar.html（寬 270、列高 28+2、字 14、icon 欄 20+8）。
+ */
+
 .sidebar {
   display: flex;
   flex-direction: column;
-  width: var(--kn-size-sidebar);
-  min-width: var(--kn-size-sidebar-min);
   height: 100%;
-  background: var(--kn-color-bg-subtle);
-  border-right: 1px solid var(--kn-color-divider);
+  min-height: 0;
+  background: var(--kn-color-sidebar-bg);
+  color: var(--kn-color-sidebar-text);
+  font-size: 14px;
+  line-height: 20px;
+  user-select: none;
   overflow: hidden;
 }
 
-.header {
-  padding: var(--kn-space-3);
-}
-
-.workspace {
+/* ── 頂端圖示列（首頁 pill + 留言 / 收件匣 / 更新 + 搜尋）── */
+.topRow {
   display: flex;
   align-items: center;
-  gap: var(--kn-space-3);
-  padding: var(--kn-space-2) var(--kn-space-3);
-  border-radius: var(--kn-radius-md);
+  gap: 2px;
+  height: 48px;
+  flex: 0 0 auto;
+  padding: 8px;
 }
 
-.workspace:hover {
-  background: var(--kn-color-surface-hover);
+.homePill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px 0 8px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--kn-color-sidebar-hover);
+  color: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: background var(--kn-motion-fast) var(--kn-motion-ease);
+}
+.homePill:hover {
+  background: var(--kn-color-sidebar-active);
+}
+.homePill.homePillQuiet {
+  background: transparent;
+}
+.homePill.homePillQuiet:hover {
+  background: var(--kn-color-sidebar-hover);
 }
 
-.avatar {
-  display: grid;
-  place-items: center;
-  flex: none;
-  width: 22px;
-  height: 22px;
-  border-radius: var(--kn-radius-sm);
-  background: var(--kn-color-text);
-  color: var(--kn-color-text-inverse);
-  font-size: var(--kn-font-size-xs);
-  font-weight: var(--kn-font-weight-semibold);
+.topIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--kn-color-sidebar-muted);
+}
+.topIcon:hover {
+  background: var(--kn-color-sidebar-hover);
+  color: var(--kn-color-sidebar-text);
 }
 
-.workspaceMeta {
+.spacer {
+  flex: 1 1 auto;
+}
+
+/* 收合鈕：Notion 是滑到側邊欄上才浮出（觸控裝置沒有 hover，常駐顯示） */
+.collapseButton {
+  opacity: 0;
+  transition: opacity var(--kn-motion-fast) var(--kn-motion-ease);
+}
+.sidebar:hover .collapseButton,
+.collapseButton:focus-visible {
+  opacity: 1;
+}
+@media (hover: none) {
+  .collapseButton {
+    opacity: 1;
+  }
+}
+
+.badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  border-radius: 7px;
+  background: #e03e3e;
+  color: #fff;
+  font-size: 10px;
+  line-height: 14px;
+  font-weight: 600;
+  text-align: center;
+}
+
+/* ── 工作區切換器 ── */
+.workspaceRow {
   display: flex;
-  flex-direction: column;
-  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  width: calc(100% - 16px);
+  margin: 0 8px 4px;
+  height: 30px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+.workspaceRow:hover {
+  background: var(--kn-color-sidebar-hover);
+}
+
+.workspaceAvatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+  border-radius: 4px;
+  background: var(--kn-color-accent);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .workspaceName {
-  font-size: var(--kn-font-size-sm);
-  font-weight: var(--kn-font-weight-medium);
-  white-space: nowrap;
+  flex: 1 1 auto;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+  font-weight: 500;
 }
 
-.userEmail {
-  color: var(--kn-color-text-tertiary);
-  font-size: var(--kn-font-size-xs);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.workspaceChevron {
+  flex: 0 0 auto;
+  color: var(--kn-color-sidebar-muted);
+  opacity: 0;
+}
+.workspaceRow:hover .workspaceChevron {
+  opacity: 1;
+}
+
+/* ── 捲動區 ── */
+.scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-bottom: 12px;
+  scrollbar-width: thin;
+}
+.scroll::-webkit-scrollbar {
+  width: 8px;
+}
+.scroll::-webkit-scrollbar-thumb {
+  background: rgba(55, 53, 47, 0.2);
+  border-radius: 4px;
+  border: 2px solid transparent;
+  background-clip: content-box;
 }
 
 .section {
-  flex: 1;
-  min-height: 0;
-  padding: var(--kn-space-2) var(--kn-space-3);
-  overflow-y: auto;
+  margin-bottom: 14px;
 }
 
 .sectionHeader {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: var(--kn-space-2) var(--kn-space-3);
+  height: 26px;
+  padding: 0 8px 0 14px;
+  color: var(--kn-color-sidebar-muted);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
 }
-
-.sectionTitle {
-  color: var(--kn-color-text-tertiary);
-  font-size: var(--kn-font-size-xs);
-  font-weight: var(--kn-font-weight-semibold);
-  letter-spacing: 0.04em;
-}
-
-.iconButton {
-  display: grid;
-  place-items: center;
-  width: 20px;
-  height: 20px;
-  background: none;
-  border: none;
-  border-radius: var(--kn-radius-sm);
-  color: var(--kn-color-text-secondary);
-  font-size: var(--kn-font-size-md);
-  line-height: 1;
-}
-
-.iconButton:hover:not(:disabled) {
-  background: var(--kn-color-surface-hover);
-  color: var(--kn-color-text);
-}
-
-.list {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.item {
-  display: flex;
+.sectionHeaderButton {
+  display: inline-flex;
   align-items: center;
-  border-radius: var(--kn-radius-md);
+  height: 22px;
+  padding: 0 4px;
+  margin-left: -4px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
 }
-
-.item:hover {
-  background: var(--kn-color-surface-hover);
+.sectionHeaderButton:hover {
+  background: var(--kn-color-sidebar-hover);
 }
-
-.item:hover .deleteButton {
+.sectionActions {
+  margin-left: auto;
+  display: flex;
+  gap: 2px;
+  opacity: 0;
+}
+.section:hover .sectionActions,
+.sectionActions:focus-within {
   opacity: 1;
 }
 
-.link {
+/* ── 頁面列（實測：高 30、圓角 6、字 14/21、pitch 31）── */
+.row {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: var(--kn-space-2);
-  flex: 1;
+  height: 30px;
+  margin: 0 8px 1px;
+  padding-right: 4px;
+  border-radius: 6px;
+  color: var(--kn-color-sidebar-text);
+  cursor: pointer;
+  transition: background var(--kn-motion-fast) var(--kn-motion-ease);
+}
+.row:hover {
+  background: var(--kn-color-sidebar-hover);
+}
+.rowActive {
+  background: var(--kn-color-sidebar-active);
+  font-weight: 500;
+}
+.rowDragging {
+  opacity: 0.4;
+}
+
+ /* icon 與展開箭頭共用同一個 20px 欄位（Notion 是原地替換，不是兩欄） */
+.iconSlot {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+  margin-right: 8px;
+}
+
+.twisty {
+  position: absolute;
+  inset: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--kn-color-sidebar-muted);
+  opacity: 0;
+  z-index: 1;
+}
+.row:hover .twisty {
+  opacity: 1;
+  background: var(--kn-color-sidebar-bg);
+}
+.twisty:hover {
+  background: var(--kn-color-sidebar-active);
+}
+.twistyOpen svg {
+  transform: rotate(90deg);
+}
+
+.rowIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  font-size: 15px;
+  line-height: 1;
+  color: var(--kn-color-sidebar-muted);
+}
+.row:hover .twisty + .rowIcon {
+  opacity: 0;
+}
+
+.rowLabel {
+  flex: 1 1 auto;
   min-width: 0;
-  padding: var(--kn-space-2) var(--kn-space-3);
-  border-radius: var(--kn-radius-md);
-  color: var(--kn-color-text-secondary);
-  font-size: var(--kn-font-size-sm);
-  text-decoration: none;
-}
-
-.linkActive {
-  background: var(--kn-color-surface-active);
-  color: var(--kn-color-text);
-  font-weight: var(--kn-font-weight-medium);
-}
-
-.icon {
-  flex: none;
-  font-size: var(--kn-font-size-sm);
-}
-
-.label {
-  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+  line-height: 21px;
 }
 
-.deleteButton {
-  flex: none;
-  width: 22px;
-  height: 22px;
-  margin-right: var(--kn-space-2);
-  background: none;
-  border: none;
-  border-radius: var(--kn-radius-sm);
-  color: var(--kn-color-text-tertiary);
-  font-size: var(--kn-font-size-md);
-  line-height: 1;
-  opacity: 0;
-  transition: opacity var(--kn-motion-fast) var(--kn-motion-ease);
-}
-
-.deleteButton:hover {
-  background: var(--kn-color-danger-subtle);
-  color: var(--kn-color-danger);
-}
-
-.empty {
-  margin: var(--kn-space-3);
-  color: var(--kn-color-text-tertiary);
-  font-size: var(--kn-font-size-xs);
-  line-height: var(--kn-line-height-relaxed);
-}
-
-.footer {
+.rowActions {
   display: flex;
-  gap: var(--kn-space-2);
-  padding: var(--kn-space-3);
-  border-top: 1px solid var(--kn-color-divider);
+  align-items: center;
+  gap: 1px;
+  flex: 0 0 auto;
+  opacity: 0;
+}
+.row:hover .rowActions,
+.rowActions:focus-within,
+.rowActionsOpen {
+  opacity: 1;
 }
 
-.footerButton {
-  flex: 1;
-  padding: var(--kn-space-2);
-  background: none;
+.rowAction {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--kn-color-sidebar-muted);
+}
+.rowAction:hover {
+  background: var(--kn-color-sidebar-active);
+  color: var(--kn-color-sidebar-text);
+}
+
+.emptyChild {
+  height: 28px;
+  display: flex;
+  align-items: center;
+  margin: 0 8px 2px;
+  color: var(--kn-color-sidebar-muted);
+  font-size: 14px;
+}
+
+.more {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 28px;
+  width: calc(100% - 16px);
+  margin: 0 8px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--kn-color-sidebar-muted);
+  font-size: 14px;
+  text-align: left;
+}
+.more:hover {
+  background: var(--kn-color-sidebar-hover);
+}
+
+.emptyHint {
+  padding: 2px 14px 6px;
+  color: var(--kn-color-sidebar-muted);
+  font-size: 13px;
+}
+
+/* ── 底部 ── */
+.footer {
+  flex: 0 0 auto;
+  padding: 4px 8px 10px;
+  border-top: 1px solid transparent;
+}
+
+/* Popover / Menu 會把 trigger 包在 inline-flex 的 span 裡，這裡把它撐成整列 */
+.footer > span {
+  display: block;
+  width: 100%;
+}
+
+.footerRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: 28px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--kn-color-sidebar-muted);
+  font-size: 14px;
+  text-align: left;
+}
+.footerRow:hover {
+  background: var(--kn-color-sidebar-hover);
+  color: var(--kn-color-sidebar-text);
+}
+
+.aiRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 4px 0;
+}
+
+.aiPill {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex: 1 1 auto;
+  height: 38px;
   border: 1px solid var(--kn-color-border);
-  border-radius: var(--kn-radius-md);
-  color: var(--kn-color-text-secondary);
-  font-size: var(--kn-font-size-xs);
+  border-radius: 999px;
+  background: var(--kn-color-bg);
+  color: var(--kn-color-text);
+  font-size: 14px;
+  font-weight: 500;
+  box-shadow: 0 1px 2px rgba(15, 15, 15, 0.06);
+}
+.aiPill:hover {
+  background: var(--kn-color-surface-hover);
+}
+.aiKbd {
+  color: var(--kn-color-text-tertiary);
+  font-size: 12px;
+  font-weight: 500;
 }
 
-.footerButton:hover {
-  background: var(--kn-color-surface-hover);
+.newPageCircle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 auto;
+  border: 1px solid var(--kn-color-border);
+  border-radius: 999px;
+  background: var(--kn-color-bg);
   color: var(--kn-color-text);
+  box-shadow: 0 1px 2px rgba(15, 15, 15, 0.06);
+}
+.newPageCircle:hover {
+  background: var(--kn-color-surface-hover);
+}
+
+/* ── 拖曳提示 ── */
+.dropForbidden {
+  cursor: not-allowed;
 }

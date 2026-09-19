@@ -11,3 +11,5 @@ test-results/
 .pnpm-store/
 reference/shots/
 reference/tools/node_modules/
+e2e/test-results/
+e2e/node_modules/

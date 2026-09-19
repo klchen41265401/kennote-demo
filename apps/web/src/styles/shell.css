@@ -1,0 +1,119 @@
+/**
+ * App shell 的**全域**樣式（元件層一律 CSS Modules，這裡只放跨模組的少數規則）。
+ * 由 global.css import，所以順序永遠在 tokens.css 之後。
+ */
+
+/* ── 1. contenteditable 不要藍色 focus 外框 ──────────────────
+   Notion 的 block 聚焦時沒有 outline（游標本身就是狀態指示）。
+   瀏覽器預設會替 contenteditable 畫 focus ring，實測很明顯，必須關掉。
+   仍保留 :focus-visible 給鍵盤使用者的**按鈕 / 連結**（見 global.css）。 */
+[contenteditable]:focus,
+[contenteditable]:focus-visible,
+[role='textbox']:focus,
+[role='textbox']:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
+/* ── 2. 頁面內容欄 ─────────────────────────────────────────
+   `<PageHeader>` 與 `<Editor>` 都用 `max-width: var(--kn-editor-content-width)`
+   + `margin: 0 auto`。變數已提到 :root（tokens.css），所以兩者天生對齊；
+   下面只處理「全寬 / 小字型 / 字型」三種頁面版面覆寫。 */
+
+.kn-page-layout[data-full-width='true'] .kn-editor-shell,
+.kn-page-layout[data-full-width='true'] .kn-page-header-body,
+.kn-page-layout[data-full-width='true'] .kn-editor-host {
+  --kn-editor-content-width: var(--kn-size-content-width-wide);
+}
+
+.kn-page-layout[data-small-text='true'] .kn-editor-shell {
+  font-size: 14px;
+}
+.kn-page-layout[data-small-text='true'] .kn-page-title {
+  font-size: 32px;
+}
+
+.kn-page-layout[data-font='serif'] .kn-editor-shell,
+.kn-page-layout[data-font='serif'] .kn-page-header-body {
+  font-family: var(--kn-font-serif);
+}
+.kn-page-layout[data-font='mono'] .kn-editor-shell,
+.kn-page-layout[data-font='mono'] .kn-page-header-body {
+  font-family: var(--kn-font-mono);
+}
+
+/* 封面高度：UI-SPEC §3.2 量到 30vh（900px 視窗 → 271px） */
+.kn-page-layout .kn-cover {
+  height: var(--kn-size-cover);
+}
+
+/* ── 3. 側邊欄右緣：inset box-shadow，不是 border（UI-SPEC §11.3）── */
+.kn-sidebar-edge {
+  box-shadow: var(--kn-shadow-sidebar-edge);
+}
+
+/* ── 4. 頂欄右側動作：滑鼠閒置時淡出（UI-SPEC §3.1）──────────
+   用 :hover / :focus-within 判斷「滑鼠在視窗裡」。
+   觸控裝置沒有 hover，直接常駐顯示。 */
+@media (hover: hover) {
+  .kn-topbar-actions {
+    opacity: 0.35;
+    transition: opacity var(--kn-motion-slow) var(--kn-motion-ease);
+  }
+  .kn-shell:hover .kn-topbar-actions,
+  .kn-topbar-actions:focus-within,
+  .kn-topbar-actions[data-force-visible='true'] {
+    opacity: 1;
+  }
+}
+
+/* ── 5. 清單縮排：實測 32px，不是 24px（UI-SPEC §11.5）── */
+.kn-editor-shell {
+  --kn-editor-indent: var(--kn-size-list-indent);
+}
+
+/* ── 6. 載入骨架 ─────────────────────────────────────────── */
+@keyframes kn-shimmer {
+  0% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.55;
+  }
+}
+.kn-skeleton-line {
+  height: 16px;
+  border-radius: 4px;
+  background: var(--kn-color-bg-sunken);
+  animation: kn-shimmer 1.4s ease-in-out infinite;
+}
+
+/* ── 6.5 RWD：手機的內容欄左右留白 16px，且任何情況下都不能有水平捲動 ── */
+html,
+body {
+  overflow-x: hidden;
+}
+
+@media (max-width: 767px) {
+  .kn-page-layout .kn-editor-host,
+  .kn-page-layout .kn-page-header-body {
+    padding-left: var(--kn-size-content-gutter-compact);
+    padding-right: var(--kn-size-content-gutter-compact);
+  }
+  .kn-page-layout .kn-page-title,
+  .kn-page-layout .kn-page-header-body h1 {
+    font-size: 30px;
+    line-height: 39px;
+  }
+  .kn-page-layout .kn-page-icon {
+    font-size: 56px;
+  }
+}
+
+/* ── 7. 拖曳中禁止文字選取（@kennote/ui 會加 html.kn-dragging）── */
+html.kn-dragging * {
+  cursor: grabbing !important;
+}

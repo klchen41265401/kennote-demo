@@ -1,0 +1,218 @@
+/** App shell 版面（02 §2、§3.2–3.3、§3.6）。尺寸量自 dom/01-app-shell.html。 */
+
+.shell {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  background: var(--kn-color-bg);
+  overflow: hidden;
+}
+
+/* ── 側邊欄容器 ── */
+.sidebarSlot {
+  position: relative;
+  flex: 0 0 auto;
+  height: 100%;
+  min-height: 0;
+  background: var(--kn-color-sidebar-bg);
+  /* 右緣是 inset box-shadow 而不是 border —— 收合動畫時不會跳動（UI-SPEC §11.3） */
+  box-shadow: var(--kn-shadow-sidebar-edge);
+  transition: width var(--kn-motion-normal) var(--kn-motion-ease);
+}
+.sidebarSlotCollapsed {
+  width: 0 !important;
+  overflow: visible;
+}
+
+/* 收合後左緣的感應帶 */
+.peekZone {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 10px;
+  height: 100%;
+  z-index: 40;
+}
+
+/* 收合後浮出的抽屜 */
+.peekDrawer {
+  position: fixed;
+  left: 8px;
+  top: 8px;
+  bottom: 8px;
+  width: 270px;
+  z-index: 50;
+  border-radius: 8px;
+  box-shadow: var(--kn-shadow-lg);
+  overflow: hidden;
+  background: var(--kn-color-sidebar-bg);
+  animation: peekIn var(--kn-motion-normal) var(--kn-motion-ease);
+}
+
+@keyframes peekIn {
+  from {
+    opacity: 0;
+    transform: translateX(-12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* 平板 / 手機：覆蓋式抽屜 */
+.drawerBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 49;
+  background: rgba(15, 15, 15, 0.4);
+  animation: fadeIn var(--kn-motion-fast) var(--kn-motion-ease);
+}
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.drawer {
+  position: fixed;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: min(320px, 86vw);
+  z-index: 50;
+  background: var(--kn-color-sidebar-bg);
+  box-shadow: var(--kn-shadow-lg);
+  animation: slideIn var(--kn-motion-normal) var(--kn-motion-ease);
+}
+@keyframes slideIn {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: none;
+  }
+}
+
+/* ── 主欄 ── */
+.main {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+  position: relative;
+  background: var(--kn-color-bg);
+  overflow: hidden;
+}
+
+.content {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  position: relative;
+}
+
+/* ── 右側面板 ── */
+.rightSlot {
+  flex: 0 0 auto;
+  height: 100%;
+  min-height: 0;
+  border-left: 1px solid var(--kn-color-divider);
+  background: var(--kn-color-bg);
+  overflow: hidden;
+}
+
+.rightPanel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.rightHeader {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 44px;
+  flex: 0 0 auto;
+  padding: 0 8px 0 12px;
+  border-bottom: 1px solid var(--kn-color-divider);
+}
+
+.rightTabs {
+  display: flex;
+  gap: 2px;
+  flex: 1 1 auto;
+}
+
+.rightTab {
+  height: 28px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--kn-color-text-secondary);
+  font-size: 14px;
+  font-weight: 500;
+}
+.rightTab:hover {
+  background: var(--kn-color-surface-hover);
+}
+.rightTabActive {
+  background: var(--kn-color-surface-active);
+  color: var(--kn-color-text);
+}
+
+.rightBody {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* ── 一般狀態畫面 ── */
+.stateScreen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  height: 100%;
+  padding: 48px 24px;
+  color: var(--kn-color-text-secondary);
+  text-align: center;
+}
+.stateTitle {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--kn-color-text);
+}
+.stateHint {
+  font-size: 14px;
+}
+
+.skeletonPage {
+  max-width: var(--kn-size-content-width);
+  margin: 0 auto;
+  padding: 96px var(--kn-size-content-gutter) 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+@media (max-width: 767px) {
+  .skeletonPage {
+    padding: 32px 16px 0;
+  }
+  /* 手機：抽屜幾乎全寬，內容欄左右 16px */
+  .drawer {
+    width: min(320px, 92vw);
+  }
+  .rightSlot {
+    display: none;
+  }
+}

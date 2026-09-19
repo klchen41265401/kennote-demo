@@ -2,9 +2,10 @@
  * 設計 token —— 一律原生 CSS 變數（02 §6 / 00-README 決策 #10）。
  * 不用 Tailwind、不用任何 UI 元件庫；元件樣式一律 CSS Modules。
  *
- * ⚠️ 這份是「合理的 Notion 風格預設值」，之後會被 UI 代理替換成正式色票。
- * 替換時**只能改值，不要改變數名稱** —— 名稱是各層元件的契約。
+ * ⚠️ 只能改「值」，不要改變數名稱 —— 名稱是各層元件的契約。
  *
+ * 數值來源：`reference/notion-capture/tokens.md` / `UI-SPEC.md`
+ * （Notion 桌面版 7.34.0、zh-TW、1440×900 實測，不是估的）。
  * 命名規則：--kn-<類別>-<語意>[-<狀態>]
  *   類別：color / space / radius / font / size / shadow / z / motion
  */
@@ -12,56 +13,60 @@
 :root {
   color-scheme: light;
 
-  /* ── 色彩：表面 ── */
-  --kn-color-bg: #ffffff;
-  --kn-color-bg-subtle: #f7f7f5;
-  --kn-color-bg-sunken: #efeeec;
-  --kn-color-surface: #ffffff;
-  --kn-color-surface-hover: rgba(55, 53, 47, 0.06);
+  /* ── 色彩：表面（tokens.md §3.1 / §3.2）── */
+  --kn-color-bg: #ffffff; /* --c-bacPri */
+  --kn-color-bg-subtle: #f9f8f7; /* --c-bacSec：側邊欄 / callout */
+  --kn-color-bg-sunken: #f0efed; /* --c-bacTer */
+  --kn-color-surface: #ffffff; /* --c-bacEle / --c-popBac */
+  --kn-color-surface-hover: rgba(42, 28, 0, 0.07); /* --ca-graBacSecTra */
   --kn-color-surface-active: rgba(55, 53, 47, 0.1);
-  --kn-color-overlay: rgba(15, 15, 15, 0.4);
+  --kn-color-overlay: rgba(15, 15, 15, 0.6); /* --ca-oveSmo */
 
   /* ── 色彩：文字 ── */
-  --kn-color-text: #37352f;
-  --kn-color-text-secondary: #787774;
-  --kn-color-text-tertiary: #9b9a97;
-  --kn-color-text-inverse: #ffffff;
+  --kn-color-text: #2c2c2b; /* --c-texPri */
+  --kn-color-text-secondary: #7d7a75; /* --c-texSec */
+  --kn-color-text-tertiary: #a19e99; /* --c-texTer */
+  --kn-color-text-disabled: #bcbab6; /* --c-texDis */
+  --kn-color-text-inverse: #f0efed; /* --c-texInvPri */
   --kn-color-text-on-accent: #ffffff;
 
   /* ── 色彩：線條 ── */
-  --kn-color-border: rgba(55, 53, 47, 0.16);
-  --kn-color-border-strong: rgba(55, 53, 47, 0.28);
-  --kn-color-divider: rgba(55, 53, 47, 0.09);
+  --kn-color-border: #e6e5e3; /* --c-borPri */
+  --kn-color-border-subtle: #f0efed; /* --c-borSec */
+  --kn-color-border-strong: #d4d3cf; /* --c-borStr */
+  --kn-color-divider: rgba(28, 19, 1, 0.11); /* 分隔線 bar */
 
   /* ── 色彩：強調與狀態 ── */
-  --kn-color-accent: #2383e2;
-  --kn-color-accent-hover: #1a6fc4;
-  --kn-color-accent-subtle: rgba(35, 131, 226, 0.12);
+  --kn-color-accent: #2783de; /* --c-bluBacAccPri */
+  --kn-color-accent-hover: #0077d4; /* --c-bluButHovBac */
+  --kn-color-accent-active: #006bc7; /* --c-bluButPreBac */
+  --kn-color-accent-subtle: rgba(35, 131, 226, 0.14); /* --ca-pilHovBacBlu */
+  --kn-color-accent-faint: rgba(35, 131, 226, 0.05);
   --kn-color-focus-ring: rgba(35, 131, 226, 0.45);
-  --kn-color-danger: #e03e3e;
-  --kn-color-danger-subtle: rgba(224, 62, 62, 0.12);
-  --kn-color-success: #0f7b6c;
-  --kn-color-warning: #cb912f;
+  --kn-color-danger: #cf5148;
+  --kn-color-danger-subtle: rgba(207, 81, 72, 0.12);
+  --kn-color-success: #50946e;
+  --kn-color-warning: #cb9434;
 
-  /* ── 色彩：block 調色盤（03 §6.2 的 block_color）── */
-  --kn-color-block-gray: #787774;
-  --kn-color-block-brown: #976d57;
-  --kn-color-block-orange: #cc772f;
-  --kn-color-block-yellow: #c29343;
-  --kn-color-block-green: #548164;
-  --kn-color-block-blue: #477da5;
-  --kn-color-block-purple: #8a67ab;
-  --kn-color-block-pink: #b35488;
-  --kn-color-block-red: #c4554d;
-  --kn-color-block-gray-bg: rgba(84, 72, 49, 0.08);
-  --kn-color-block-brown-bg: rgba(210, 162, 141, 0.2);
-  --kn-color-block-orange-bg: rgba(224, 124, 57, 0.16);
-  --kn-color-block-yellow-bg: rgba(236, 191, 66, 0.2);
-  --kn-color-block-green-bg: rgba(123, 183, 129, 0.2);
-  --kn-color-block-blue-bg: rgba(93, 165, 206, 0.2);
-  --kn-color-block-purple-bg: rgba(168, 129, 197, 0.2);
-  --kn-color-block-pink-bg: rgba(225, 136, 179, 0.2);
-  --kn-color-block-red-bg: rgba(244, 171, 159, 0.25);
+  /* ── 色彩：block 調色盤（tokens.md §3.3 / §3.4 實測值）── */
+  --kn-color-block-gray: rgb(125, 122, 117);
+  --kn-color-block-brown: rgb(159, 118, 90);
+  --kn-color-block-orange: rgb(210, 123, 45);
+  --kn-color-block-yellow: rgb(203, 148, 52);
+  --kn-color-block-green: rgb(80, 148, 110);
+  --kn-color-block-blue: rgb(56, 125, 201);
+  --kn-color-block-purple: rgb(154, 107, 180);
+  --kn-color-block-pink: rgb(193, 76, 138);
+  --kn-color-block-red: rgb(207, 81, 72);
+  --kn-color-block-gray-bg: rgb(240, 239, 237);
+  --kn-color-block-brown-bg: rgb(245, 237, 233);
+  --kn-color-block-orange-bg: rgb(251, 235, 222);
+  --kn-color-block-yellow-bg: rgb(249, 243, 220);
+  --kn-color-block-green-bg: rgb(232, 241, 236);
+  --kn-color-block-blue-bg: rgb(229, 242, 252);
+  --kn-color-block-purple-bg: rgb(243, 235, 249);
+  --kn-color-block-pink-bg: rgb(250, 233, 241);
+  --kn-color-block-red-bg: rgb(252, 233, 231);
 
   /* ── 間距（4px 基準）── */
   --kn-space-0: 0;
@@ -75,21 +80,21 @@
   --kn-space-8: 48px;
   --kn-space-9: 64px;
 
-  /* ── 圓角 ── */
+  /* ── 圓角（tokens.md §5）── */
   --kn-radius-sm: 3px;
-  --kn-radius-md: 5px;
-  --kn-radius-lg: 8px;
+  --kn-radius-md: 6px; /* 側邊欄列 / block hover 列 / 按鈕 */
+  --kn-radius-lg: 10px; /* 浮層 / menu / code block / callout */
   --kn-radius-xl: 12px;
   --kn-radius-full: 999px;
 
-  /* ── 字體 ── */
+  /* ── 字體（tokens.md §1：繁中 fallback 必須照抄）── */
   --kn-font-sans:
-    ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans TC',
-    'PingFang TC', 'Microsoft JhengHei', 'Helvetica Neue', Arial, sans-serif;
+    ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI Variable Display', 'Segoe UI',
+    Helvetica, 'PingFang TC', 'Microsoft JhengHei', 'Noto Sans TC', 'Apple Color Emoji', Arial,
+    sans-serif, 'Segoe UI Emoji', 'Segoe UI Symbol';
   --kn-font-serif: ui-serif, Georgia, 'Noto Serif TC', 'Songti TC', serif;
   --kn-font-mono:
-    ui-monospace, SFMono-Regular, 'JetBrains Mono', Menlo, Consolas, 'Noto Sans Mono CJK TC',
-    monospace;
+    ui-monospace, SFMono-Regular, Menlo, Consolas, 'Noto Sans Mono CJK TC', monospace;
 
   --kn-font-size-xs: 12px;
   --kn-font-size-sm: 14px;
@@ -108,22 +113,56 @@
   --kn-font-weight-semibold: 600;
   --kn-font-weight-bold: 700;
 
-  /* ── 版面尺寸 ── */
-  --kn-size-sidebar: 260px;
-  --kn-size-sidebar-min: 180px;
-  --kn-size-sidebar-max: 480px;
-  --kn-size-topbar: 45px;
-  --kn-size-content-width: 708px;
-  --kn-size-content-width-wide: 1200px;
+  /* ── 版面尺寸（UI-SPEC §1 / tokens.md §2，1440×900 實測）── */
+  --kn-size-sidebar: 270px;
+  --kn-size-sidebar-min: 200px;
+  --kn-size-sidebar-max: 420px;
+  --kn-size-topbar: 44px;
+  --kn-size-topbar-compact: 40px;
+  /** 內容欄：文字實寬 708 + 左右各 6px 內距 = 720 */
+  --kn-size-content-width: 720px;
+  --kn-size-content-width-wide: 963px; /* 單一 block 的上限（「全寬」模式） */
+  --kn-size-content-gutter: 96px;
+  --kn-size-content-gutter-compact: 16px;
   --kn-size-control: 28px;
+  --kn-size-row: 30px; /* 側邊欄列高 */
+  --kn-size-rightpanel: 380px;
+  --kn-size-rightpanel-min: 300px;
+  --kn-size-rightpanel-max: 520px;
+  --kn-size-cover: 30vh;
+  --kn-size-list-indent: 32px; /* 清單每層縮排（實測 32，不是 24） */
 
-  /* ── 陰影 ── */
-  --kn-shadow-sm: 0 1px 2px rgba(15, 15, 15, 0.08);
-  --kn-shadow-md: 0 4px 12px rgba(15, 15, 15, 0.12);
-  --kn-shadow-lg: 0 12px 32px rgba(15, 15, 15, 0.16);
+  /**
+   * 內容欄寬度。原本只宣告在 `.kn-editor-shell` 上，
+   * 導致 `<PageHeader>`（在 shell 之外）的 max-width 解析失敗 → 標題與 block 左緣對不齊。
+   * 提到 :root 之後兩者共用同一個置中欄。
+   */
+  --kn-editor-content-width: var(--kn-size-content-width);
+
+  /* ── 側邊欄專用 ── */
+  --kn-color-sidebar-bg: #f9f8f7;
+  --kn-color-sidebar-text: #2c2c2b;
+  --kn-color-sidebar-muted: #7d7a75;
+  --kn-color-sidebar-hover: rgba(42, 28, 0, 0.07);
+  --kn-color-sidebar-active: rgba(55, 53, 47, 0.1);
+  --kn-color-sidebar-border: #f0efed;
+  /** 右緣不是 border，是 inset box-shadow（收合動畫時不會跳動） */
+  --kn-shadow-sidebar-edge: rgb(240, 239, 237) -1px 0 0 0 inset;
+
+  /* ── 陰影（tokens.md §4，照抄 2–3 層疊加）── */
+  --kn-shadow-sm: 0px 2px 4px 0px rgba(0, 0, 0, 0.04), 0px 0px 0px 1px rgba(42, 28, 0, 0.07);
+  --kn-shadow-md:
+    0px 8px 12px 0px rgba(25, 25, 25, 0.027), 0px 2px 6px 0px rgba(25, 25, 25, 0.027),
+    0px 0px 0px 1px rgba(42, 28, 0, 0.07);
+  --kn-shadow-lg:
+    0px 20px 24px 0px rgba(25, 25, 25, 0.05), 0px 5px 8px 0px rgba(25, 25, 25, 0.027),
+    0px 0px 0px 1px rgba(42, 28, 0, 0.07);
+  --kn-shadow-screen:
+    0px 24px 48px 0px rgba(25, 25, 25, 0.24), 0px 4px 12px 0px rgba(25, 25, 25, 0.14),
+    0px 0px 0px 1px rgba(42, 28, 0, 0.07);
   --kn-shadow-popover:
-    rgba(15, 15, 15, 0.05) 0 0 0 1px, rgba(15, 15, 15, 0.1) 0 3px 6px,
-    rgba(15, 15, 15, 0.2) 0 9px 24px;
+    0px 8px 12px 0px rgba(25, 25, 25, 0.027), 0px 2px 6px 0px rgba(25, 25, 25, 0.027),
+    0px 0px 0px 1px rgba(42, 28, 0, 0.07);
 
   /* ── 層級（浮層體系，02 §4.7）── */
   --kn-z-base: 0;
@@ -134,69 +173,80 @@
   --kn-z-dialog: 500;
   --kn-z-toast: 600;
 
-  /* ── 動效 ── */
+  /* ── 動效（tokens.md §6）── */
   --kn-motion-fast: 90ms;
-  --kn-motion-normal: 150ms;
-  --kn-motion-slow: 240ms;
+  --kn-motion-normal: 200ms; /* 側邊欄 width 0.2s */
+  --kn-motion-slow: 700ms; /* 頂欄動作 opacity 0.7s */
   --kn-motion-ease: cubic-bezier(0.2, 0, 0.2, 1);
 }
 
-/* 深色主題：由 <html data-theme="dark"> 切換（02 §6） */
+/* 深色主題：由 <html data-theme="dark"> 切換（UI-SPEC §10.5） */
 :root[data-theme='dark'] {
   color-scheme: dark;
 
-  --kn-color-bg: #191919;
-  --kn-color-bg-subtle: #202020;
-  --kn-color-bg-sunken: #161616;
-  --kn-color-surface: #252525;
+  --kn-color-bg: rgb(25, 25, 25);
+  --kn-color-bg-subtle: rgb(32, 32, 32);
+  --kn-color-bg-sunken: rgb(20, 20, 20);
+  --kn-color-surface: rgb(37, 37, 37);
   --kn-color-surface-hover: rgba(255, 255, 255, 0.055);
   --kn-color-surface-active: rgba(255, 255, 255, 0.1);
-  --kn-color-overlay: rgba(0, 0, 0, 0.6);
+  --kn-color-overlay: rgba(15, 15, 15, 0.6);
 
-  --kn-color-text: #d4d4d4;
-  --kn-color-text-secondary: #9b9b9b;
-  --kn-color-text-tertiary: #6f6f6f;
-  --kn-color-text-inverse: #191919;
+  --kn-color-text: rgb(240, 239, 237);
+  --kn-color-text-secondary: rgba(255, 255, 255, 0.53);
+  --kn-color-text-tertiary: rgba(255, 255, 255, 0.36);
+  --kn-color-text-disabled: rgba(255, 255, 255, 0.25);
+  --kn-color-text-inverse: #2c2c2b;
   --kn-color-text-on-accent: #ffffff;
 
-  --kn-color-border: rgba(255, 255, 255, 0.13);
-  --kn-color-border-strong: rgba(255, 255, 255, 0.22);
-  --kn-color-divider: rgba(255, 255, 255, 0.08);
+  --kn-color-border: rgb(56, 56, 54);
+  --kn-color-border-subtle: rgb(44, 44, 43);
+  --kn-color-border-strong: rgb(72, 72, 70);
+  --kn-color-divider: rgba(255, 255, 235, 0.1);
 
-  --kn-color-accent: #2383e2;
+  --kn-color-accent: #2783de;
   --kn-color-accent-hover: #4a9bea;
+  --kn-color-accent-active: #0077d4;
   --kn-color-accent-subtle: rgba(35, 131, 226, 0.2);
+  --kn-color-accent-faint: rgba(35, 131, 226, 0.08);
   --kn-color-focus-ring: rgba(35, 131, 226, 0.6);
   --kn-color-danger: #ff7369;
   --kn-color-danger-subtle: rgba(255, 115, 105, 0.16);
   --kn-color-success: #4dab9a;
   --kn-color-warning: #ffdc49;
 
-  --kn-color-block-gray: #9b9b9b;
-  --kn-color-block-brown: #ba856f;
-  --kn-color-block-orange: #c77d48;
-  --kn-color-block-yellow: #ca9849;
-  --kn-color-block-green: #529e72;
-  --kn-color-block-blue: #5e87c9;
-  --kn-color-block-purple: #9d68d3;
-  --kn-color-block-pink: #d15796;
-  --kn-color-block-red: #df5452;
-  --kn-color-block-gray-bg: rgba(255, 255, 255, 0.06);
-  --kn-color-block-brown-bg: rgba(147, 114, 100, 0.25);
-  --kn-color-block-orange-bg: rgba(168, 129, 87, 0.25);
-  --kn-color-block-yellow-bg: rgba(151, 131, 101, 0.25);
-  --kn-color-block-green-bg: rgba(116, 155, 133, 0.25);
-  --kn-color-block-blue-bg: rgba(105, 140, 168, 0.25);
-  --kn-color-block-purple-bg: rgba(139, 117, 161, 0.25);
-  --kn-color-block-pink-bg: rgba(167, 111, 146, 0.25);
-  --kn-color-block-red-bg: rgba(186, 110, 105, 0.25);
+  /* 文字色在深色下維持同一組（只有「預設」換成 #f0efed），背景色整組換深色版 */
+  --kn-color-block-gray-bg: rgb(56, 56, 54);
+  --kn-color-block-brown-bg: rgb(69, 54, 45);
+  --kn-color-block-orange-bg: rgb(83, 54, 31);
+  --kn-color-block-yellow-bg: rgb(80, 68, 37);
+  --kn-color-block-green-bg: rgb(38, 61, 48);
+  --kn-color-block-blue-bg: rgb(35, 56, 80);
+  --kn-color-block-purple-bg: rgb(60, 45, 71);
+  --kn-color-block-pink-bg: rgb(78, 43, 60);
+  --kn-color-block-red-bg: rgb(80, 44, 41);
 
-  --kn-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
-  --kn-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5);
-  --kn-shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.6);
+  --kn-color-sidebar-bg: rgb(32, 32, 32);
+  --kn-color-sidebar-text: rgb(240, 239, 237);
+  --kn-color-sidebar-muted: rgba(255, 255, 255, 0.46);
+  --kn-color-sidebar-hover: rgba(255, 255, 255, 0.055);
+  --kn-color-sidebar-active: rgba(255, 255, 255, 0.1);
+  --kn-color-sidebar-border: rgb(44, 44, 43);
+  --kn-shadow-sidebar-edge: rgb(44, 44, 43) -1px 0 0 0 inset;
+
+  --kn-shadow-sm: 0px 2px 4px 0px rgba(0, 0, 0, 0.3), 0px 0px 0px 1px rgba(255, 255, 255, 0.06);
+  --kn-shadow-md:
+    0px 8px 12px 0px rgba(0, 0, 0, 0.35), 0px 2px 6px 0px rgba(0, 0, 0, 0.3),
+    0px 0px 0px 1px rgba(255, 255, 255, 0.06);
+  --kn-shadow-lg:
+    0px 20px 24px 0px rgba(0, 0, 0, 0.4), 0px 5px 8px 0px rgba(0, 0, 0, 0.3),
+    0px 0px 0px 1px rgba(255, 255, 255, 0.06);
+  --kn-shadow-screen:
+    0px 24px 48px 0px rgba(0, 0, 0, 0.5), 0px 4px 12px 0px rgba(0, 0, 0, 0.35),
+    0px 0px 0px 1px rgba(255, 255, 255, 0.06);
   --kn-shadow-popover:
-    rgba(255, 255, 255, 0.07) 0 0 0 1px, rgba(0, 0, 0, 0.5) 0 3px 6px,
-    rgba(0, 0, 0, 0.6) 0 9px 24px;
+    0px 8px 12px 0px rgba(0, 0, 0, 0.35), 0px 2px 6px 0px rgba(0, 0, 0, 0.3),
+    0px 0px 0px 1px rgba(255, 255, 255, 0.06);
 }
 
 /* 使用者沒有明確選過主題時，跟隨系統 */
@@ -204,22 +254,23 @@
   :root:not([data-theme='light']) {
     color-scheme: dark;
 
-    --kn-color-bg: #191919;
-    --kn-color-bg-subtle: #202020;
-    --kn-color-bg-sunken: #161616;
-    --kn-color-surface: #252525;
+    --kn-color-bg: rgb(25, 25, 25);
+    --kn-color-bg-subtle: rgb(32, 32, 32);
+    --kn-color-bg-sunken: rgb(20, 20, 20);
+    --kn-color-surface: rgb(37, 37, 37);
     --kn-color-surface-hover: rgba(255, 255, 255, 0.055);
     --kn-color-surface-active: rgba(255, 255, 255, 0.1);
-    --kn-color-overlay: rgba(0, 0, 0, 0.6);
 
-    --kn-color-text: #d4d4d4;
-    --kn-color-text-secondary: #9b9b9b;
-    --kn-color-text-tertiary: #6f6f6f;
-    --kn-color-text-inverse: #191919;
+    --kn-color-text: rgb(240, 239, 237);
+    --kn-color-text-secondary: rgba(255, 255, 255, 0.53);
+    --kn-color-text-tertiary: rgba(255, 255, 255, 0.36);
+    --kn-color-text-disabled: rgba(255, 255, 255, 0.25);
+    --kn-color-text-inverse: #2c2c2b;
 
-    --kn-color-border: rgba(255, 255, 255, 0.13);
-    --kn-color-border-strong: rgba(255, 255, 255, 0.22);
-    --kn-color-divider: rgba(255, 255, 255, 0.08);
+    --kn-color-border: rgb(56, 56, 54);
+    --kn-color-border-subtle: rgb(44, 44, 43);
+    --kn-color-border-strong: rgb(72, 72, 70);
+    --kn-color-divider: rgba(255, 255, 235, 0.1);
 
     --kn-color-accent-hover: #4a9bea;
     --kn-color-accent-subtle: rgba(35, 131, 226, 0.2);
@@ -228,12 +279,37 @@
     --kn-color-success: #4dab9a;
     --kn-color-warning: #ffdc49;
 
-    --kn-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
-    --kn-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5);
-    --kn-shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.6);
+    --kn-color-block-gray-bg: rgb(56, 56, 54);
+    --kn-color-block-brown-bg: rgb(69, 54, 45);
+    --kn-color-block-orange-bg: rgb(83, 54, 31);
+    --kn-color-block-yellow-bg: rgb(80, 68, 37);
+    --kn-color-block-green-bg: rgb(38, 61, 48);
+    --kn-color-block-blue-bg: rgb(35, 56, 80);
+    --kn-color-block-purple-bg: rgb(60, 45, 71);
+    --kn-color-block-pink-bg: rgb(78, 43, 60);
+    --kn-color-block-red-bg: rgb(80, 44, 41);
+
+    --kn-color-sidebar-bg: rgb(32, 32, 32);
+    --kn-color-sidebar-text: rgb(240, 239, 237);
+    --kn-color-sidebar-muted: rgba(255, 255, 255, 0.46);
+    --kn-color-sidebar-hover: rgba(255, 255, 255, 0.055);
+    --kn-color-sidebar-active: rgba(255, 255, 255, 0.1);
+    --kn-color-sidebar-border: rgb(44, 44, 43);
+    --kn-shadow-sidebar-edge: rgb(44, 44, 43) -1px 0 0 0 inset;
+
+    --kn-shadow-sm: 0px 2px 4px 0px rgba(0, 0, 0, 0.3), 0px 0px 0px 1px rgba(255, 255, 255, 0.06);
+    --kn-shadow-md:
+      0px 8px 12px 0px rgba(0, 0, 0, 0.35), 0px 2px 6px 0px rgba(0, 0, 0, 0.3),
+      0px 0px 0px 1px rgba(255, 255, 255, 0.06);
+    --kn-shadow-lg:
+      0px 20px 24px 0px rgba(0, 0, 0, 0.4), 0px 5px 8px 0px rgba(0, 0, 0, 0.3),
+      0px 0px 0px 1px rgba(255, 255, 255, 0.06);
+    --kn-shadow-screen:
+      0px 24px 48px 0px rgba(0, 0, 0, 0.5), 0px 4px 12px 0px rgba(0, 0, 0, 0.35),
+      0px 0px 0px 1px rgba(255, 255, 255, 0.06);
     --kn-shadow-popover:
-      rgba(255, 255, 255, 0.07) 0 0 0 1px, rgba(0, 0, 0, 0.5) 0 3px 6px,
-      rgba(0, 0, 0, 0.6) 0 9px 24px;
+      0px 8px 12px 0px rgba(0, 0, 0, 0.35), 0px 2px 6px 0px rgba(0, 0, 0, 0.3),
+      0px 0px 0px 1px rgba(255, 255, 255, 0.06);
   }
 }
 

@@ -1,85 +1,20 @@
+/** 頁面版面。封面要滿版，所以內容寬度由 PageHeader / Editor 共用的內容欄控制。 */
+
 .page {
-  /* 封面要滿版，所以內容寬度由 PageHeader / Editor 各自控制 */
   position: relative;
   width: 100%;
   padding-bottom: var(--kn-space-9);
 }
 
-.header {
-  margin-bottom: var(--kn-space-6);
-}
-
-.meta {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: var(--kn-space-3);
-}
-
-.icon {
-  font-size: var(--kn-font-size-3xl);
-  line-height: 1;
-}
-
-.savedHint {
-  position: absolute;
-  top: var(--kn-space-4);
-  right: var(--kn-space-6);
+.previewBanner {
+  position: sticky;
+  top: 0;
   z-index: var(--kn-z-sticky);
-  color: var(--kn-color-text-tertiary);
-  font-size: var(--kn-font-size-xs);
-}
-
-.title {
-  width: 100%;
-  padding: 0;
-  background: none;
-  border: none;
-  color: var(--kn-color-text);
-  font-size: var(--kn-font-size-3xl);
-  font-weight: var(--kn-font-weight-bold);
-  line-height: var(--kn-line-height-tight);
-}
-
-.title::placeholder {
-  color: var(--kn-color-text-tertiary);
-}
-
-.title:focus {
-  outline: none;
-}
-
-.editorHost {
-  min-height: 240px;
-}
-
-.placeholder {
-  padding: var(--kn-space-5);
-  background: var(--kn-color-bg-subtle);
-  border: 1px dashed var(--kn-color-border);
-  border-radius: var(--kn-radius-lg);
-  color: var(--kn-color-text-secondary);
-  font-size: var(--kn-font-size-sm);
-}
-
-.placeholderTitle {
-  margin: 0 0 var(--kn-space-3);
-  color: var(--kn-color-text);
-  font-weight: var(--kn-font-weight-medium);
-}
-
-.placeholderList {
-  margin: 0;
-  padding-left: var(--kn-space-5);
-  line-height: var(--kn-line-height-relaxed);
-}
-
-.placeholderList code {
-  padding: 1px var(--kn-space-2);
-  background: var(--kn-color-block-gray-bg);
-  border-radius: var(--kn-radius-sm);
-  font-family: var(--kn-font-mono);
-  font-size: var(--kn-font-size-xs);
+  padding: 8px 16px;
+  background: var(--kn-color-warning);
+  color: #1c1c1b;
+  font-size: 13px;
+  text-align: center;
 }
 
 .placeholderScreen {
@@ -91,4 +26,10 @@
   color: var(--kn-color-text-secondary);
   font-size: var(--kn-font-size-sm);
   text-align: center;
+}
+
+@media (max-width: 767px) {
+  .page {
+    --kn-size-content-gutter: var(--kn-size-content-gutter-compact);
+  }
 }

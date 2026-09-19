@@ -1,0 +1,66 @@
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--kn-space-2);
+  padding: 2px var(--kn-space-3);
+  border-radius: var(--kn-radius-full);
+  background: var(--kn-color-bg-subtle);
+  color: var(--kn-color-text-secondary);
+  font-size: var(--kn-font-size-xs);
+  white-space: nowrap;
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--kn-radius-full);
+  background: currentColor;
+  flex: none;
+}
+
+.ok {
+  color: var(--kn-color-success);
+}
+
+.busy {
+  color: var(--kn-color-warning);
+}
+
+.off {
+  color: var(--kn-color-danger);
+}
+
+.pending {
+  color: var(--kn-color-text-tertiary);
+}
+
+.toasts {
+  position: fixed;
+  right: var(--kn-space-5);
+  bottom: var(--kn-space-5);
+  z-index: var(--kn-z-toast);
+  display: flex;
+  flex-direction: column;
+  gap: var(--kn-space-2);
+  max-width: 320px;
+}
+
+.toast {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--kn-space-3) var(--kn-space-4);
+  border: 1px solid var(--kn-color-border);
+  border-left: 3px solid var(--kn-color-warning);
+  border-radius: var(--kn-radius-md);
+  background: var(--kn-color-surface);
+  box-shadow: var(--kn-shadow-md);
+  color: var(--kn-color-text);
+  font-size: var(--kn-font-size-sm);
+  text-align: left;
+}
+
+.toastHint {
+  color: var(--kn-color-text-tertiary);
+  font-size: var(--kn-font-size-xs);
+}
