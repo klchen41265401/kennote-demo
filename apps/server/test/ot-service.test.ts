@@ -11,7 +11,12 @@ import { applyDelta, transform } from '@kennote/editor-core';
 import type { OtDelta, RichText } from '@kennote/shared-types';
 import type { Sql } from '../src/db/sql.js';
 import type { Tx } from '../src/db/client.js';
-import { assertValidDelta, receiveDelta, recordContentUpdateAsDelta } from '../src/modules/blocks/ot-service.js';
+import {
+  assertValidDelta,
+  contentDeltaOf,
+  receiveDelta,
+  recordContentUpdateAsDelta,
+} from '../src/modules/blocks/ot-service.js';
 import { AppError } from '../src/lib/errors.js';
 
 const BLOCK = '018f0000-0000-7000-8000-0000000000b1';
@@ -243,6 +248,83 @@ describe('recordContentUpdateAsDelta（兩條通道共用一條 rev 線）', () 
     // 另一個人基於 rev 0 在句尾打字
     const result = await send(tx, { ops: [{ retain: 5 }, { insert: '!' }] }, 0);
     expect(text(result.content)).toBe('Xhello!');
+  });
+});
+
+/**
+ * BUG-4（`docs/qa/functional-round1.md`）的伺服器側：
+ * `block.update{content}` 與「baseRev 比它舊的 delta」交錯時會發生什麼事。
+ *
+ * 結論：伺服器這一層是**對的** —— 它照 OT 的規矩把舊 delta transform 到最新版本。
+ * 壞掉的是客戶端：那一筆 delta 在語意上早就被整段覆寫取代了，根本不該送出來。
+ * 這裡把兩種順序都測出來，修法（ADR 0006 §2.9）才有可比對的基準。
+ */
+describe('BUG-4：block.update{content} 與舊 baseRev delta 交錯', () => {
+  /** 複刻 apply-transaction.ts 的 block.update{content} 分支 */
+  async function contentUpdate(tx: FakeTx, after: RichText): Promise<number | null> {
+    const before = tx.content;
+    const rev = await recordContentUpdateAsDelta(tx, { blockId: BLOCK, before, after, actorId: USER });
+    tx.content = after;
+    return rev;
+  }
+
+  it('舊送法：整段覆寫之後才到的 stale delta 會把前綴留在伺服器上', async () => {
+    const tx = new FakeTx([]);
+    // 1) 打 '>'
+    await send(tx, { ops: [{ insert: '>' }] }, 0);
+    expect(text(tx.content)).toBe('>');
+    expect(tx.rev).toBe(1);
+
+    // 2) markdown 規則：block.update{blockType:'quote', content: []} 走 tx 通道
+    expect(await contentUpdate(tx, [])).toBe(2);
+    expect(text(tx.content)).toBe('');
+
+    // 3) 「打空白鍵」那一筆 delta 現在才被 OT buffer 沖出來（baseRev 1，已經過時）
+    const stale = await send(tx, { ops: [{ retain: 1 }, { insert: ' ' }] }, 1);
+    // 伺服器正確地 transform 了它，但它本來就不該存在 → 伺服器留下一個多餘的字
+    expect(text(stale.content)).toBe(' ');
+    expect(text(tx.content)).not.toBe('');
+  });
+
+  it('新送法：整段覆寫也走 delta 通道（compose 進 buffer）→ 伺服器內容 = 使用者所見', async () => {
+    const tx = new FakeTx([]);
+    // 1) 打 '>'
+    await send(tx, { ops: [{ insert: '>' }] }, 0);
+    // 2) 空白鍵的 delta 與 markdown 捷徑的整段覆寫在客戶端被 compose 成 `delete 1`
+    await send(tx, { ops: [{ delete: 1 }] }, 1);
+    expect(text(tx.content)).toBe('');
+    expect(tx.rev).toBe(2);
+    // 3) 接著打內文
+    await send(tx, { ops: [{ insert: 'quote' }] }, 2);
+    expect(text(tx.content)).toBe('quote');
+  });
+
+  it('別人的整段覆寫與我基於舊 rev 的 delta 交錯，仍然收斂（不會掉字）', async () => {
+    const tx = new FakeTx([{ text: 'hello' }]);
+    // 我基於 rev 0 在句尾打 '!'（還沒送到）
+    const mine: OtDelta = { ops: [{ retain: 5 }, { insert: '!' }] };
+    // 對方先用 tx 通道把內容整段換成 'HELLO'
+    expect(await contentUpdate(tx, [{ text: 'HELLO' }])).toBe(1);
+    // 我的 delta 現在才到（baseRev 0）→ 伺服器對 rev 1 的 delta 做 transform
+    const result = await send(tx, mine, 0);
+    expect(text(result.content)).toBe('HELLO!');
+    expect(tx.rev).toBe(2);
+  });
+
+  it('block.update{content} 廣播出去的 delta 套回舊內容 = 新內容（contentDeltaOf）', () => {
+    const before: RichText = [{ text: 'hello' }];
+    const after: RichText = [{ text: 'HELLO world' }];
+    const delta = contentDeltaOf(before, after);
+    expect(text(applyDelta(core(before), coreDelta(delta)) as unknown as RichText)).toBe('HELLO world');
+  });
+
+  it('整段覆寫沒有推進 rev（no-op）時，後續 delta 的 baseRev 不會錯位', async () => {
+    const tx = new FakeTx([{ text: 'hello' }]);
+    expect(await contentUpdate(tx, [{ text: 'hello' }])).toBeNull();
+    expect(tx.rev).toBe(0);
+    const result = await send(tx, { ops: [{ retain: 5 }, { insert: '!' }] }, 0);
+    expect(text(result.content)).toBe('hello!');
+    expect(result.rev).toBe(1);
   });
 });
 

@@ -17,7 +17,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { createEditor, type Block as CoreBlock, type Editor, type EditorDoc, type OtDelta } from '@kennote/editor-core';
 import type { Block as ServerBlock, Operation, PageSnapshot } from '@kennote/shared-types';
-import { API_ROUTES, blockRevOf } from '@kennote/shared-types';
+import { API_ROUTES, blockRevOf, splitDeltaOps } from '@kennote/shared-types';
 import { invalidateQueries, useStore } from '@kennote/ui';
 import { api } from '../../lib/api-client';
 import { createPage, queryKeys } from '../../lib/queries';
@@ -249,9 +249,15 @@ export function useEditorHost(options: UseEditorHostOptions): EditorHostResult {
         return;
       }
       if (otChannel) {
-        // text.delta → OT 通道（不進 debounce buffer）；其餘 → 原本的 tx 通道
-        const rest = otChannel.submitLocalOps(ops as unknown as Operation[]);
-        if (rest.length > 0) syncRef.current.submit(rest);
+        // text.delta → OT 通道（不進 debounce buffer）；其餘 → 原本的 tx 通道。
+        // ⭐ 必須**依原順序**分流（ADR 0006 §2.9）：同一批裡可能有
+        // `block.insert` / `block.update{blockType}` 排在 `text.delta` 前面，
+        // 先把它們放進 tx buffer，`submitDelta()` 才能在送 delta 之前把它們沖出去
+        // （否則 delta 會先到伺服器 → BLOCK_NOT_FOUND / 套在舊內容上）。
+        for (const group of splitDeltaOps(ops as unknown as Operation[])) {
+          const rest = otChannel.submitLocalOps(group.ops);
+          if (rest.length > 0) syncRef.current.submit(rest);
+        }
         return;
       }
       syncRef.current.submit(ops as unknown as Operation[]);

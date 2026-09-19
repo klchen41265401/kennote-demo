@@ -200,3 +200,91 @@ describe('兩個 client + 伺服器：兩人的字都保留（M6 驗收標準）
     expect(a.doc()).toBe('我覺得 kennote 很好用');
   });
 });
+
+/**
+ * BUG-4（`docs/qa/functional-round1.md`）：markdown 捷徑的「整段覆寫」發生時，
+ * OT buffer 裡還躺著一筆沒送出的 delta（空白鍵那一下）。
+ *
+ * 修法（ADR 0006 §2.9）：整段覆寫本身也要以 delta 的形式進同一條 rev 線 ——
+ * 於是它會被 `compose` 進 buffer，把那一筆「不該存在的歷史」就地抵銷掉。
+ */
+describe('buffer 裡有 delta 時發生整段覆寫（BUG-4）', () => {
+  it('本地整段覆寫會 compose 進 buffer，伺服器最終內容 = 使用者所見', () => {
+    const h = harness('', 0);
+    let server = fromPlainText(''); // 伺服器端的內容（rev 0）
+    const serverApply = (d: OtDelta): void => {
+      server = apply(server, d);
+    };
+
+    h.local(insertAt(0, '>')); // 打 ">"  → 立刻送出（outstanding）
+    h.local(insertAt(1, ' ')); // 打空白  → 進 buffer
+    h.local({ ops: [{ delete: 2 }] }); // markdown 捷徑：整段覆寫成空內容
+    expect(h.doc()).toBe('');
+    expect(h.client.state).toBe('awaitingWithBuffer');
+
+    // 伺服器收到第一筆 → rev 1
+    serverApply(h.sent[0]!.delta);
+    expect(toPlainText(server)).toBe('>');
+    h.client.applyAck(1); // ack → buffer 變成新的 outstanding 並送出
+
+    expect(h.sent).toHaveLength(2);
+    expect(h.sent[1]!.baseRev).toBe(1);
+    serverApply(h.sent[1]!.delta);
+    h.client.applyAck(2);
+
+    // ⭐ 驗收：伺服器內容 === 使用者看到的內容（不會多出一個前綴 '>'）
+    expect(toPlainText(server)).toBe('');
+    expect(h.doc()).toBe('');
+
+    // 接著繼續打字，兩邊仍然一致
+    h.local(insertAt(0, 'quote'));
+    serverApply(h.sent[2]!.delta);
+    h.client.applyAck(3);
+    expect(toPlainText(server)).toBe('quote');
+    expect(h.doc()).toBe('quote');
+  });
+
+  it('別人的整段覆寫（伺服器轉成 delta 廣播）會同時 transform outstanding 與 buffer', () => {
+    const h = harness('abc', 0);
+    h.local(insertAt(3, 'd')); // outstanding
+    h.local(insertAt(4, 'e')); // buffer
+    expect(h.client.state).toBe('awaitingWithBuffer');
+
+    // 對方把整段換成 "XY"（伺服器用 deltaFromDiff 壓成 delta 後廣播）
+    h.client.applyRemote({ ops: [{ delete: 3 }, { insert: 'XY' }] }, 1);
+
+    // 本地文件變成「對方的新內容 + 我還沒被確認的字」
+    expect(h.doc()).toBe('XYde');
+    // 我手上的兩筆都被推到覆寫之後的座標系上，不會再套在已被刪掉的位置
+    expect(normalizeDelta(h.client.outstanding!)).toEqual({ ops: [{ retain: 2 }, { insert: 'd' }] });
+    expect(normalizeDelta(h.client.buffer!)).toEqual({ ops: [{ retain: 3 }, { insert: 'e' }] });
+    expect(h.client.rev).toBe(1);
+  });
+
+  it('dropBuffer：作廢還沒送出的 buffer，狀態退回 AwaitingConfirm', () => {
+    const h = harness();
+    h.local(insertAt(3, 'd'));
+    h.local(insertAt(4, 'e'));
+    expect(h.client.state).toBe('awaitingWithBuffer');
+
+    const dropped = h.client.dropBuffer();
+    expect(normalizeDelta(dropped!)).toEqual({ ops: [{ retain: 4 }, { insert: 'e' }] });
+    expect(h.client.buffer).toBeNull();
+    expect(h.client.state).toBe('awaitingConfirm');
+
+    // ack 之後不會再送出任何東西（buffer 已經作廢）
+    h.client.applyAck(1);
+    expect(h.sent).toHaveLength(1);
+    expect(h.client.state).toBe('synchronized');
+  });
+
+  it('observeRev：另一條通道推進 rev 之後，下一筆 delta 用新的 baseRev', () => {
+    const h = harness('abc', 3);
+    h.client.observeRev(5); // block.update{content} 被伺服器記成 rev 5
+    expect(h.client.rev).toBe(5);
+    h.client.observeRev(4); // 不會倒退
+    expect(h.client.rev).toBe(5);
+    h.local(insertAt(3, 'd'));
+    expect(h.sent[0]!.baseRev).toBe(5);
+  });
+});

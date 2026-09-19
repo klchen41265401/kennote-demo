@@ -189,6 +189,56 @@ describe('三個 client 透過同一個假伺服器收斂', () => {
   });
 });
 
+/**
+ * ADR 0006 §2.9：整段覆寫與 OT buffer 的互動（BUG-4）。
+ */
+describe('整段覆寫與 OT buffer', () => {
+  it('submitLocalOps 看到帶 content 的 block.update → 作廢該 block 的 buffer', () => {
+    const h = harness('hello');
+    h.local({ ops: [{ retain: 5 }, { insert: 'a' }] }); // outstanding（已送出）
+    h.local({ ops: [{ retain: 6 }, { insert: 'b' }] }); // buffer（還沒送出）
+    expect(h.channel.getState(BLOCK)).toBe('awaitingWithBuffer');
+
+    const rest = h.channel.submitLocalOps([
+      { type: 'block.update', blockId: BLOCK, patch: { blockType: 'quote', content: [] } },
+    ]);
+    // block.update 原樣交還給 tx 通道，但 buffer 已經被丟掉
+    expect(rest).toHaveLength(1);
+    expect(h.channel.getState(BLOCK)).toBe('awaitingConfirm');
+
+    // ack 回來也不會再把那筆作廢的 buffer 送出去
+    h.channel.handleAck(remoteOp({ ops: [{ retain: 5 }, { insert: 'a' }] }, 1), h.sent[0]!.txId);
+    expect(h.sent).toHaveLength(1);
+    expect(h.channel.getState(BLOCK)).toBe('synchronized');
+  });
+
+  it('不帶 content 的 block.update 不會動到 buffer', () => {
+    const h = harness('hello');
+    h.local({ ops: [{ retain: 5 }, { insert: 'a' }] });
+    h.local({ ops: [{ retain: 6 }, { insert: 'b' }] });
+    h.channel.submitLocalOps([
+      { type: 'block.update', blockId: BLOCK, patch: { props: { color: 'red' } } },
+    ]);
+    expect(h.channel.getState(BLOCK)).toBe('awaitingWithBuffer');
+  });
+
+  it('別人的 tx 推進了 rev（ack 的 txId 不是我們的）→ 只對齊 rev，不動狀態機', () => {
+    const h = harness('hello', 0);
+    h.local({ ops: [{ retain: 5 }, { insert: 'a' }] });
+    expect(h.channel.getState(BLOCK)).toBe('awaitingConfirm');
+
+    // 同一批裡的 block.update{content} 被伺服器轉成 delta 並回 ack（不同的 txId）
+    h.channel.handleAck(remoteOp({ ops: [{ insert: 'Z' }] }, 1), 'tx-from-another-op');
+    expect(h.channel.getState(BLOCK)).toBe('awaitingConfirm'); // 狀態機沒被動到
+    expect(h.channel.getBaseRev(BLOCK)).toBe(1); // rev 跟上了
+
+    // 我們自己那一筆的 ack（rev 2）不會再被判成 stale
+    h.channel.handleAck(remoteOp({ ops: [{ retain: 5 }, { insert: 'a' }] }, 2), h.sent[0]!.txId);
+    expect(h.channel.getState(BLOCK)).toBe('synchronized');
+    expect(h.desyncs).toEqual([]);
+  });
+});
+
 describe('resolveOtEnabled', () => {
   beforeEach(() => resetOtFlagCache());
 

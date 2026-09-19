@@ -59,10 +59,10 @@
 | 選取後浮動工具列 | ✅ | `kn-popover--bubble` 出現，含型別下拉 / 顏色 / 連結 |
 | `/` 選單 | ✅ | 分組完整（建議 / 基本區塊 / 媒體 / 資料庫 …），快捷提示 `#`、`-`、`1.`、`[]`、`>`、```` ``` ```` 都在 |
 | Markdown 捷徑 `# `、`- `、`1. `、`[] `、`> ` | ✅（畫面上） | 型別正確轉成 `heading1 / bulletedList / numberedList / todo / quote` |
-| **Markdown 捷徑存到後端的內容** | ❌ **BUG-4**（未修） | 重整後變成 `一級標題#`、`bullet-`、`numbered1.`、`todo[]`、`quote>` —— 前綴字元被搬到字尾 |
+| **Markdown 捷徑存到後端的內容** | ❌→✅ **BUG-4**（已修，**前端改動需 deploy**） | 修正前重整後變成 `一級標題#`、`bullet-`、`numbered1.`、`todo[]`、`quote>` —— 前綴字元被搬到字尾 |
 | `Ctrl+Z` / `Ctrl+Y` | ✅ | |
 | 改完標題後內文保留 | ❌→✅ **BUG-2**（已修） | 修正前**整段內文會在 1 秒內被清空** |
-| 重整後內容保留 | ⚠️ 部分 | 一般輸入沒問題；用 Markdown 捷徑建立的 block 會帶 BUG-4 的殘留字元 |
+| 重整後內容保留 | ✅ | BUG-4 修好之後，Markdown 捷徑建立的 block 也一字不差 |
 | `@` 提及 / `[[` 頁面連結 / 拖曳把手 / block 選單 / 圖片拖放 / Escape 批次刪除 / 雙分頁即時同步 | ⚪ 未走查 | 時間不足 |
 
 ### 1.4 頁面
@@ -185,7 +185,7 @@ parent 不在這一批裡的當根，資料成環也不掉列。
 
 ---
 
-### BUG-4｜Markdown 捷徑的前綴字元存到後端會跑到字尾（**未修**）· 嚴重度：**高**
+### BUG-4｜Markdown 捷徑的前綴字元存到後端會跑到字尾（已修，**前端待 deploy**）· 嚴重度：**高**
 
 **重現**
 
@@ -224,13 +224,38 @@ rev 線一錯就再也對不回來，前綴字元被留在字尾。
 想讓它排在後續 delta 前面。實測**沒有修好**（因為第 3 筆 delta 是被 OT 狀態機 buffer 的，
 flush tx 通道救不了它），而且會讓本機編輯器在某些時序下把內容清空 —— 已經回退，沒有留在 code 裡。
 
-**建議的正確修法（下一輪）**
+**實際的修法（2026-09-20 第二輪，ADR 0006 §2.9）**
 
-`block.update` 覆蓋某個 block 的 content 時，必須同時**作廢該 block 在 OT 客戶端的
-buffer / outstanding delta 並重設 rev**：在 `OtPageChannel` 上開一個
-`resetBlock(blockId)`（`abortPending()` + 等伺服器回來的 `contentRev` 再 `resetRev()`），
-由 `submitLocalOps()` 在看到 `block.update{content}` 時呼叫；
-或乾脆讓兩條通道共用同一個有序佇列。這牽涉 OT 狀態機的語意，應該獨立一輪做並補 `ot-client.test.ts`。
+比「作廢 buffer」更乾淨的做法：**不要讓 content 走 tx 通道**。
+`Editor.toWireOps()`（editor-core）在 OT 模式下把每一筆「覆寫既有 block content」的
+`block.update` 拆成：
+
+```
+block.update { blockType, props }   → tx 通道（LWW）
+text.delta   { …diff… }             → OT 通道（同一條 rev 線）
+```
+
+與伺服器廣播時的拆法完全對稱（§2.6 的 `splitDeltaOps`）。
+於是「打空白鍵」那一筆 `retain 1, insert " "` 與「整段覆寫」的 `delete 2`
+在三狀態機裡被 `compose` 成 `delete 1` —— 不該存在的歷史就地被抵銷。
+宿主（`useEditorHost.ts`）改成用 `splitDeltaOps(ops)` **依原順序**一組一組分流，
+確保排在 delta 前面的 `block.insert` / `block.update{blockType}` 先進 tx buffer。
+
+另外兩道防線：`OtPageChannel.dropPendingBuffer()`（真的還有 content 走 tx 時作廢 buffer）、
+`OtClient.observeRev()`（別條通道推進 rev 時只對齊 rev，不動狀態機）。
+
+**伺服器一行都沒改** —— §2.6 的行為本來就是對的，壞的是客戶端送出的東西。
+
+**回歸測試**：`packages/editor-core/test/ot/wire-ops.test.ts`（12 條）、
+`packages/editor-core/test/ot/client.test.ts`（+4 條）、
+`apps/web/src/lib/ot-markdown-shortcut.test.ts`（2 條，真 Editor + 假 WS + MiniServer）、
+`apps/web/src/lib/ot-client.test.ts`（+3 條）、
+`apps/server/test/ot-service.test.ts`（+5 條）、
+`e2e/realtime.spec.ts`（2 條）。
+
+**線上實測**（本機 vite `:5199` + 遠端 `100.74.148.92:8090`）：
+`> quote` / `# 標題` / `- bullet` / `1. item` / `[] todo` / ```` ``` ```` 各打一次，
+重整後六種型別與內容全對，沒有殘留前綴。
 
 ---
 
@@ -252,8 +277,18 @@ buffer / outstanding delta 並重設 rev**：在 `OtPageChannel` 上開一個
 | `apps/server/src/modules/pages/service.ts` | BUG-3：`orderParentsFirst()`，複本的 pages / blocks 父先於子 |
 | `apps/server/test/pages-order-parents-first.test.ts` | 新增：BUG-3 的單元測試 |
 | `e2e/functional-round1.spec.ts` | 新增：BUG-1 / BUG-2 / BUG-3 的 e2e 回歸 |
+| `packages/editor-core/src/core.ts` | BUG-4：`toWireOps()` 把「覆寫 content 的 block.update」拆成 `block.update{blockType,props}` + `text.delta` |
+| `packages/editor-core/src/ot/client.ts` | BUG-4：新增 `observeRev()` / `dropBuffer()` |
+| `apps/web/src/lib/ot-client.ts` | BUG-4：`dropPendingBuffer()`；非本人 ack 只對齊 rev |
+| `apps/web/src/features/editor/useEditorHost.ts` | BUG-4：`splitDeltaOps()` 依原順序分流兩條通道 |
+| `apps/web/src/features/editor/Editor.tsx` | presence 的 block 外框 + 名牌（`decoratePresence` 原本寫好了卻沒人呼叫） |
+| `packages/editor-core/test/ot/wire-ops.test.ts` | 新增：BUG-4 的線路形狀測試 |
+| `apps/web/src/lib/ot-markdown-shortcut.test.ts` | 新增：真 Editor + 假 WS + MiniServer 重現 BUG-4 訊框順序 |
+| `e2e/realtime.spec.ts` | 新增：Markdown 捷徑重整 + 雙分頁即時同步 + presence |
 
-**沒有碰**任何 `.css`、`features/database/**`、`e2e/compare.spec.ts`、`packages/editor-core`，也沒有加套件、沒有 commit。
+**沒有碰**任何 `.css`、`features/database/**`、`e2e/compare.spec.ts`，也沒有加套件、沒有 commit。
+（BUG-4 那一輪有動 `packages/editor-core`：`core.ts` 的 `toWireOps()` 與 `ot/client.ts`，
+OT property test / fuzz test 全部重跑過。）
 
 ### 驗收
 
@@ -274,7 +309,8 @@ pnpm --filter @kennote/server test ✅ 23 檔 / 352 條（3 檔 skip：需要 DA
 2. 編輯器：`/` 選單各分組實際插入（圖片 URL / 書籤 / 表格 / 多欄 / 程式碼語言 / 折疊 / 標註 / 按鈕 / 目錄）、
    貼上（純文字 / 多行 / Markdown）、複製貼上 block、拖曳把手排序、block 選單、
    `@` 提及、`[[` 頁面連結、圖片檔案拖放、Escape 批次刪除
-3. **雙分頁即時同步**（雙向、同段落雙打、presence 頭像與游標名牌）—— 這一項和 BUG-4 同一條管線，建議一起做
+3. ~~**雙分頁即時同步**（雙向、同段落雙打、presence 頭像與游標名牌）~~
+   → 已隨 BUG-4 一起走完，回歸測試在 `e2e/realtime.spec.ts`
 4. 匯出 Markdown / HTML / CSV、匯入 Markdown
 5. **整個第 5 項：資料庫**（六種視圖、欄位型別、formula 循環引用、relation / rollup、
    篩選 AND/OR、多欄排序、分組、看板 / 日曆 / 時程表拖曳、peek、CSV 匯出、1000 列效能）

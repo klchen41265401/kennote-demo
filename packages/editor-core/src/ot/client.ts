@@ -91,6 +91,29 @@ export class OtClient {
     this._rev = rev;
   }
 
+  /**
+   * 另一條通道推進了這個 block 的 rev（ADR 0006 §2.6：`block.update{content}`
+   * 在伺服器端也會寫進 `block_deltas` 並 `rev + 1`）。
+   *
+   * 只把 rev 往前對齊，**不碰狀態機**：那一筆內容變更本來就已經在本地文件裡，
+   * 不需要再 apply；但下一筆 delta 的 baseRev 必須是新的 rev，否則伺服器會
+   * 拿它去和「其實已經包含在我這份內容裡」的 delta 做 transform，offset 就歪了。
+   */
+  observeRev(rev: number): void {
+    if (rev > this._rev) this._rev = rev;
+  }
+
+  /**
+   * 丟掉還沒送出去的 buffer（整段覆寫把它變成不存在的歷史時用）。
+   * 回傳被丟掉的那一份，宿主可以拿去對帳。
+   */
+  dropBuffer(): OtDelta | null {
+    const dropped = this._buffer;
+    this._buffer = null;
+    if (this._state === 'awaitingWithBuffer') this.setState('awaitingConfirm');
+    return dropped;
+  }
+
   private setState(next: OtClientState): void {
     if (this._state === next) return;
     this._state = next;

@@ -18,6 +18,14 @@ import { OtClient, type OtDelta } from '@kennote/editor-core';
 import type { Operation } from '@kennote/shared-types';
 import { isTextDeltaOperation, type TextDeltaOperation } from '@kennote/shared-types';
 
+/** `block.update` 有沒有覆寫 content（不管有沒有順便改型別 / props）。 */
+function isContentOverwrite(op: Operation): op is Operation & { blockId: string } {
+  return (
+    op.type === 'block.update' &&
+    (op as { patch?: { content?: unknown } }).patch?.content !== undefined
+  );
+}
+
 export interface OtChannelTransport {
   /** 送出一筆 delta，回傳這筆的 txId（用來對 ack / 拒絕）。 */
   submitDelta(blockId: string, delta: OtDelta, baseRev: number): string;
@@ -108,14 +116,33 @@ export class OtPageChannel {
     this.entryFor(op.blockId).client.applyLocal(op.delta);
   }
 
-  /** 從編輯器的 `localOps` 一次吃一整批（非 text.delta 的交給呼叫端走 tx 通道）。 */
+  /**
+   * 從編輯器的 `localOps` 一次吃一整批（非 text.delta 的交給呼叫端走 tx 通道）。
+   *
+   * ⚠️ 呼叫端必須**依原順序**一組一組餵進來（`splitDeltaOps`），
+   * 否則排在 delta 前面的 `block.insert` / `block.update{blockType}` 會晚於 delta 送出。
+   */
   submitLocalOps(ops: Operation[]): Operation[] {
     const rest: Operation[] = [];
     for (const op of ops) {
-      if (isTextDeltaOperation(op)) this.submitLocal(op);
-      else rest.push(op);
+      if (isTextDeltaOperation(op)) {
+        this.submitLocal(op);
+        continue;
+      }
+      // 還是有整段覆寫走了 tx 通道（例如那個 block 不在本地 doc 裡）→
+      // 這個 block 在 OT buffer 裡還沒送出的 delta 已經描述著**不存在的歷史**，丟掉它。
+      if (isContentOverwrite(op)) this.dropPendingBuffer(op.blockId);
+      rest.push(op);
     }
     return rest;
+  }
+
+  /**
+   * 丟掉某個 block 還沒送出的 buffer（ADR 0006 §2.9 的 (a) 路線）。
+   * outstanding 已經在線上了，交給伺服器序列化；buffer 還在我們手上，必須作廢。
+   */
+  dropPendingBuffer(blockId: string): void {
+    this.blocks.get(blockId)?.client.dropBuffer();
   }
 
   /** 伺服器確認了我們送出的 delta（`TransactionResult.ops` 裡的 text.delta）。 */
@@ -124,7 +151,13 @@ export class OtPageChannel {
     if (!entry) return;
     if (entry.ackedTxIds.has(txId)) return; // WS + HTTP 都回了一次
     entry.ackedTxIds.add(txId);
-    if (entry.pendingTxId && entry.pendingTxId !== txId) return;
+    if (entry.pendingTxId && entry.pendingTxId !== txId) {
+      // 不是我們這條 delta 的 ack —— 伺服器把同一頁另一筆 `block.update{content}`
+      // 轉成了 delta（ADR 0006 §2.6）。那段內容本來就已經在本地文件裡，不必 apply，
+      // 但 rev 一定要跟上，否則下一筆 delta 的 baseRev 會落後一格（BUG-4 的 rev 錯位）。
+      entry.client.observeRev(op.rev ?? entry.client.rev);
+      return;
+    }
     entry.pendingTxId = null;
     // rev 沒推進（delta 被 transform 成 no-op）→ 只要確認 outstanding 即可
     entry.client.applyAck(op.rev ?? entry.client.rev + 1);

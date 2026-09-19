@@ -51,6 +51,7 @@ import { ToastHost, toast } from './ui/toast';
 import { EmojiPicker } from '../../components/EmojiPicker';
 import { isImageFile, isVideoFile } from '../../lib/upload';
 import { useWorkspaceTree } from '../../lib/queries';
+import { usePresence } from '../../lib/presence';
 import { api } from '../../lib/api-client';
 import '../../styles/editor.css';
 
@@ -630,6 +631,17 @@ export function Editor({
     target.setAttribute('data-slash-hint', 'true');
     return () => target.removeAttribute('data-slash-hint');
   }, [slashState]);
+
+  /**
+   * Presence：別人所在 block 的淡色外框 + 名牌（`lib/README-sync.md` §5）。
+   *
+   * `decorate()` 直接改 DOM（加 class / 補一個 `span.kn-presence-label`），
+   * 所以掛在 `kn-editor-host` **外面**那一層 —— editor-core 的 mutation guard
+   * 只盯著它自己的子樹，名牌加在 block 的最外層元素上不會被判成非法變更。
+   * peers 或文件結構一變就重畫（presence 變動頻繁，重畫比 diff 划算）。
+   */
+  const { decorate } = usePresence(pageId);
+  useEffect(() => decorate(wrapperRef.current), [decorate, host?.rev]);
 
   const empty = useMemo(() => {
     if (!host) return false;

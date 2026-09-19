@@ -139,6 +139,8 @@ useEffect(() => editor.on('selectionChange', (sel) =>
   sync.updatePresence(sel?.blockId ?? null, sel ? [sel.start, sel.end] : null)), [editor]);
 
 // 他人所在 block 的淡色外框 + 名牌
+// （`features/editor/Editor.tsx` 掛在 `.kn-editor-shell` 上，
+//   文件結構一變就重畫：`useEffect(() => decorate(wrapperRef.current), [decorate, host?.rev])`）
 useEffect(() => decorate(hostRef.current), [decorate]);
 ```
 
@@ -231,9 +233,12 @@ const detach = getSyncClient().attachDeltaChannel(pageId, {
 
 // 3) 編輯器用 OT 模式建立，localOps 先過 delta 通道
 const editor = createEditor({ ..., ot: { enabled: true, getBaseRev: (id) => channel.getBaseRev(id) } });
+// ⭐ 依原順序一組一組分流（ADR 0006 §2.9）
 editor.on('localOps', (ops) => {
-  const rest = channel.submitLocalOps(ops);   // text.delta 被吃掉
-  if (rest.length > 0) sync.submit(rest);     // 其餘走原本的 tx 通道
+  for (const group of splitDeltaOps(ops)) {
+    const rest = channel.submitLocalOps(group.ops);  // text.delta 被吃掉
+    if (rest.length > 0) sync.submit(rest);          // 其餘走原本的 tx 通道
+  }
 });
 ```
 
@@ -248,6 +253,13 @@ editor.on('localOps', (ops) => {
    但格式與 atom 會降級 —— 開啟 `FEATURE_OT` 之後請使用者重新整理分頁。
 3. **順序一致性**：同一個 block 上 delta 與 `block.update` 的相對順序由伺服器決定，
    `splitDeltaOps()` 保證分流之後順序不變，宿主照收到的順序套用就好。
+4. **送出去的 `block.update` 永遠不可以帶 `content`**（ADR 0006 §2.9，QA BUG-4）。
+   editor-core 在 OT 模式下已經幫你把它拆成
+   `block.update{blockType, props}` + `text.delta`，宿主要做的只有
+   「**依原順序**用 `splitDeltaOps(ops)` 分流」——
+   一批全丟給 OT 通道、`rest` 最後才 `sync.submit()` 會讓 delta 先到伺服器
+   （`BLOCK_NOT_FOUND`，或套在還沒換型別的內容上）。
+   實際症狀：`> quote` 重整後變成 `quote>`。
 
 ---
 

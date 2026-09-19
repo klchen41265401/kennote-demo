@@ -285,7 +285,11 @@ export class Editor {
 
     this.emit('transaction', current, this.doc);
     if (current.source !== 'remote') {
-      this.emit('localOps', deltas ? this.toWireOps(current.ops, deltas) : current.ops, current);
+      // ⭐ OT 模式：**任何**覆寫既有 block content 的 op 都要換成 text.delta（ADR 0006 §2.9）。
+      // 不是只有「content-only」的那種 —— markdown 捷徑 / setBlockType / Enter 分割
+      // 都是「換型別或結構 + 整段覆寫 content」，它們若帶著 content 走 tx 通道，
+      // 就會和 OT 通道裡還沒送出的 delta 撞在一起（BUG-4：`> quote` 重整後變 `quote>`）。
+      this.emit('localOps', this.ot.enabled ? this.toWireOps(current.ops, prevDoc) : current.ops, current);
     }
     for (const plugin of this.plugins) plugin.onTransaction?.(current, this.pluginContext());
     return true;
@@ -470,33 +474,54 @@ export class Editor {
     return ops.length > 0 ? ops : null;
   }
 
-  /** 把「只改 content」的 block.update 換成 text.delta（送往同步層的形狀）。 */
-  private toWireOps(ops: Operation[], deltas: HistoryDelta[]): Operation[] {
-    if (deltas.length === 0) return ops;
-    const byBlock = new Map<string, HistoryDelta[]>();
-    for (const d of deltas) {
-      const list = byBlock.get(d.blockId);
-      if (list) list.push(d);
-      else byBlock.set(d.blockId, [d]);
-    }
+  /**
+   * 送往同步層的形狀（ADR 0006 §2.9）：**任何**覆寫既有 block content 的
+   * `block.update` 都被拆成 `block.update{blockType, props}`（tx 通道，LWW）
+   * + `text.delta`（OT 通道，同一條 rev 線）。與伺服器廣播時的拆法完全對稱。
+   */
+  private toWireOps(ops: Operation[], prevDoc: EditorDoc): Operation[] {
+    const running = new Map<string, RichText>();
     const out: Operation[] = [];
+    let changed = false;
     for (const op of ops) {
-      if (!isContentOnlyUpdate(op)) {
+      if (op.type === 'block.insert') {
+        // 同一批裡「先 insert 再 update content」時，delta 的基準是剛插入的內容
+        running.set(op.blockId, normalize(op.content ?? []));
         out.push(op);
         continue;
       }
-      const pending = byBlock.get(op.blockId);
-      const next = pending?.shift();
-      if (!next) {
+      if (op.type !== 'block.update' || op.patch.content === undefined) {
         out.push(op);
         continue;
       }
-      if (isNoop(next.forward)) continue;
-      out.push(
-        textDeltaOperation(op.blockId, next.forward, this.ot.getBaseRev?.(op.blockId) ?? 0),
-      );
+      const before = running.get(op.blockId) ?? prevDoc.blocks[op.blockId]?.content;
+      if (before === undefined) {
+        // 這個 block 不在我們手上（同批剛被刪 / 資料不一致）→ 原樣送，交給 LWW
+        out.push(op);
+        continue;
+      }
+      const after = normalize(op.patch.content);
+      running.set(op.blockId, after);
+      changed = true;
+
+      // 型別 / props 仍然是 LWW 的 block.update；content 交給 OT 的 rev 線。
+      // 這與伺服器廣播時的拆法完全對稱（ADR 0006 §2.6 的 `splitDeltaOps`）。
+      const rest: Extract<Operation, { type: 'block.update' }>['patch'] = {};
+      if (op.patch.blockType !== undefined) rest.blockType = op.patch.blockType;
+      if (op.patch.props !== undefined) rest.props = op.patch.props;
+      if (Object.keys(rest).length > 0) {
+        out.push({
+          type: 'block.update',
+          blockId: op.blockId,
+          patch: rest,
+          ...(op.baseVersion !== undefined ? { baseVersion: op.baseVersion } : {}),
+        });
+      }
+      const forward = deltaFromDiff(normalize(before), after);
+      if (isNoop(forward)) continue;
+      out.push(textDeltaOperation(op.blockId, forward, this.ot.getBaseRev?.(op.blockId) ?? 0));
     }
-    return out;
+    return changed ? out : ops;
   }
 
   focusBlock(blockId: string, offset = 0): void {
