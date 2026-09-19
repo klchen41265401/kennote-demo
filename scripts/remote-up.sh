@@ -9,6 +9,9 @@ if [ ! -f .env ]; then
   sed -i "s#^JWT_SECRET=.*#JWT_SECRET=${SECRET}#" .env
   sed -i "s#^POSTGRES_PASSWORD=.*#POSTGRES_PASSWORD=${PGPW}#" .env
   sed -i "s#^NODE_ENV=.*#NODE_ENV=production#" .env
+  sed -i "s#^PUBLIC_BASE_URL=.*#PUBLIC_BASE_URL=http://100.74.148.92:8090#" .env
+  sed -i "s#^CORS_ORIGINS=.*#CORS_ORIGINS=#" .env
+  sed -i "s#^LOG_LEVEL=.*#LOG_LEVEL=info#" .env
   echo "[remote-up] 已從 .env.example 產生 .env（JWT_SECRET / POSTGRES_PASSWORD 隨機）"
 fi
 COMPOSE="docker compose -f docker-compose.prod.yml --env-file .env"
