@@ -86,7 +86,7 @@ export function GalleryView(props: ViewProps) {
         {!readOnly ? (
           <button type="button" className={styles.newCard} onClick={() => void props.createRow()}>
             <UiIcon name="plus" size={16} />
-            新增
+            新頁面
           </button>
         ) : null}
       </div>

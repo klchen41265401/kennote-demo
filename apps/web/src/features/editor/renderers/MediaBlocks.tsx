@@ -513,13 +513,19 @@ export function BookmarkBlock({ block, host }: BlockRendererProps) {
       rel="noopener noreferrer"
       onPointerDown={(e) => e.stopPropagation()}
     >
+      {/* Notion 的順序是：favicon（自成一行）→ 標題 → 描述 → 網址
+          （05-20-bookmark-light.png）；原本把 favicon 塞在網址前面。 */}
       <span className="kn-bookmark-body">
+        <span className="kn-bookmark-favicon" aria-hidden="true">
+          {meta.faviconUrl ? (
+            <img src={meta.faviconUrl} alt="" width={20} height={20} loading="lazy" />
+          ) : (
+            <Icon name="link" size={16} />
+          )}
+        </span>
         <span className="kn-bookmark-title">{meta.title ?? domain ?? props.url}</span>
         {meta.description ? <span className="kn-bookmark-desc">{meta.description}</span> : null}
-        <span className="kn-bookmark-url">
-          {meta.faviconUrl ? <img src={meta.faviconUrl} alt="" width={14} height={14} loading="lazy" /> : <Icon name="link" size={13} />}
-          {props.url}
-        </span>
+        <span className="kn-bookmark-url">{props.url}</span>
       </span>
       {meta.coverUrl ? (
         <span className="kn-bookmark-cover">

@@ -63,7 +63,13 @@ export type UiIconName =
   | 'group'
   | 'eye'
   | 'eyeOff'
-  | 'download';
+  | 'download'
+  // view tab 用（Notion 的 tab 是線條 icon，不是 ▦▥☰ 全形方塊字）
+  | 'table'
+  | 'board'
+  | 'list'
+  | 'gallery'
+  | 'calendar';
 
 const PATHS: Record<UiIconName, string> = {
   chevronDown: 'M3.5 6 8 10.5 12.5 6',
@@ -81,6 +87,11 @@ const PATHS: Record<UiIconName, string> = {
   eye: 'M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8zM8 10a2 2 0 100-4 2 2 0 000 4z',
   eyeOff: 'M3 3l10 10M6.5 6.6A2 2 0 008 10a2 2 0 001.4-.6M4 5.3C2.5 6.5 1.5 8 1.5 8S4 12.5 8 12.5c1 0 1.9-.3 2.7-.7',
   download: 'M8 3v7M5 7.5 8 10.5l3-3M3.5 12.5h9',
+  table: 'M2.5 3.5h11v9h-11zM2.5 6.5h11M6 6.5v6',
+  board: 'M2.5 3.5h3.5v9H2.5zM10 3.5h3.5v6H10z',
+  list: 'M3 4.5h10M3 8h10M3 11.5h10',
+  gallery: 'M3 3.5h4.5V8H3zM8.5 3.5H13V8H8.5zM3 9.5h4.5V13H3zM8.5 9.5H13V13H8.5z',
+  calendar: 'M2.5 4.5h11v9h-11zM2.5 7.5h11M5.5 2.8v2.6M10.5 2.8v2.6',
 };
 
 export function UiIcon({

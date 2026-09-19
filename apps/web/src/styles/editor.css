@@ -11,10 +11,20 @@
 
 .kn-editor-shell {
   --kn-editor-content-width: var(--kn-size-content-width);
-  --kn-editor-code-bg: #f7f6f3;
+  /* 以下數值全部來自 reference/notion-capture/_extra-light.json（實測，不是估的） */
+  --kn-editor-code-bg: rgba(66, 35, 3, 0.03);
+  --kn-editor-callout-bg: rgb(249, 248, 247);
+  --kn-editor-divider: rgba(28, 19, 1, 0.11);
+  --kn-editor-hairline: rgb(230, 229, 227);
+  /** 實測值：勾選後的填色是 rgb(39,131,222) = #2783de（不是常被引用的 #2383e2） */
+  --kn-editor-checkbox-blue: #2783de;
+  /** 未勾選的框線：light rgb(56,56,54)、dark rgb(230,229,227)，1px（不是 1.5px） */
+  --kn-editor-checkbox-border: rgb(56, 56, 54);
   --kn-editor-selection: rgba(35, 131, 226, 0.14);
-  --kn-editor-indent: 24px;
-  --kn-editor-block-gap: 1px;
+  /** 清單每層縮排：tokens.md §2 實測 32px（原本寫 24px，整條清單都會左移） */
+  --kn-editor-indent: var(--kn-size-list-indent);
+  /** 相鄰 block gap = 0，垂直節奏**全部**來自 wrapper 自己的 padding（tokens.md §2） */
+  --kn-editor-block-gap: 0px;
 
   position: relative;
   font-family: var(--kn-font-sans);
@@ -24,13 +34,21 @@
 }
 
 :root[data-theme='dark'] .kn-editor-shell {
-  --kn-editor-code-bg: #252525;
+  --kn-editor-code-bg: rgba(252, 252, 252, 0.03);
+  --kn-editor-callout-bg: rgb(56, 56, 54);
+  --kn-editor-divider: rgba(255, 255, 235, 0.1);
+  --kn-editor-hairline: rgb(56, 56, 54);
+  --kn-editor-checkbox-border: rgb(230, 229, 227);
   --kn-editor-selection: rgba(35, 131, 226, 0.2);
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) .kn-editor-shell {
-    --kn-editor-code-bg: #252525;
+    --kn-editor-code-bg: rgba(252, 252, 252, 0.03);
+    --kn-editor-callout-bg: rgb(56, 56, 54);
+    --kn-editor-divider: rgba(255, 255, 235, 0.1);
+    --kn-editor-hairline: rgb(56, 56, 54);
+    --kn-editor-checkbox-border: rgb(230, 229, 227);
     --kn-editor-selection: rgba(35, 131, 226, 0.2);
   }
 }
@@ -53,6 +71,11 @@
   margin: var(--kn-editor-block-gap) 0;
 }
 
+/**
+ * tokens.md §2「區塊垂直節奏」：相鄰 block 的 gap 量到 **0px**，
+ * 所有行距都來自 wrapper 自己的 `padding: 3px 2px`（文字葉節點再 +2px）。
+ * 所以這裡不能加 margin，否則每個 block 都會多出 1~2px，整頁累積成好幾十 px。
+ */
 .kn-editor .kn-block-main {
   padding: 3px 2px;
   border-radius: var(--kn-radius-sm);
@@ -72,51 +95,97 @@
   opacity: 1 !important;
 }
 
+/**
+ * `/` 之後還沒打字時的灰字提示（06-slash-menu-light.png）。
+ * 用 ::after 而不是真的插一個 <span>：pseudo element 不在 DOM tree 裡，
+ * contenteditable 的選取、editor-core 的 mutation guard 都碰不到它。
+ */
+.kn-block-content[data-slash-hint]::after {
+  content: '輸入以搜尋';
+  color: var(--kn-color-text-tertiary);
+  pointer-events: none;
+  user-select: none;
+}
+
 /* ── 標題（Notion 字級）───────────────────────────────── */
 
+/* 字級 / 行高：tokens.md §1 的實測值（30/39、24/31.2、20/26、16/24） */
 .kn-block--heading1 .kn-block-main {
+  padding-top: 30px;
+  padding-bottom: 2px;
   font-size: 30px;
   font-weight: var(--kn-font-weight-semibold);
-  line-height: 1.3;
-  margin-top: var(--kn-space-6);
-  margin-bottom: 1px;
+  line-height: 39px;
 }
 
 .kn-block--heading2 .kn-block-main {
+  padding-top: 21px;
+  padding-bottom: 2px;
   font-size: 24px;
   font-weight: var(--kn-font-weight-semibold);
-  line-height: 1.3;
-  margin-top: var(--kn-space-5);
+  line-height: 31.2px;
 }
 
 .kn-block--heading3 .kn-block-main {
+  padding-top: 15px;
+  padding-bottom: 2px;
   font-size: 20px;
   font-weight: var(--kn-font-weight-semibold);
-  line-height: 1.3;
-  margin-top: var(--kn-space-4);
+  line-height: 26px;
 }
 
 .kn-block--paragraph .kn-block-main {
   font-size: var(--kn-font-size-md);
-  line-height: var(--kn-line-height-normal);
+  line-height: 24px;
 }
 
 /* ── 清單 ───────────────────────────────────────────────── */
 
-.kn-list {
+/**
+ * ⭐ 這一組 flex 規則原本住在 `packages/editor-core/src/styles.css`，
+ * 但那支 CSS **從來沒有被 import 過**（只有 README 提到），
+ * 所以 todo / toggle / callout 的 icon 全部掉到自己一行去了。
+ * 依 editor.css 檔頭的分工（「這一份負責全部的外觀」），規則補在這裡。
+ */
+.kn-list,
+.kn-todo,
+.kn-toggle,
+.kn-callout,
+.kn-heading-toggle {
   display: flex;
   align-items: flex-start;
+  gap: 2px;
+}
+
+/**
+ * 清單 / 折疊：marker 欄 24px + gap 6px → 文字左緣落在「內容欄左緣 +30」。
+ * 這個 30 不是猜的，是拿 `05-07-bulleted-list-light.png` / `05-09-toggle-light.png`
+ * 逐像素掃出來的（bullet 在 +9~+15、文字在 +30）。
+ */
+.kn-list,
+.kn-toggle {
   gap: 6px;
 }
 
-.kn-list > .kn-block-content {
-  flex: 1 1 auto;
+/** 待辦：checkbox 左緣 +4、寬 16，右邊留 10 → 文字一樣落在 +30 */
+.kn-todo {
+  gap: 0;
 }
 
+.kn-list > .kn-block-content,
+.kn-todo > .kn-block-content,
+.kn-toggle > .kn-block-content,
+.kn-callout > .kn-block-content,
+.kn-heading-toggle > .kn-block-content {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/** 清單符號欄寬 24px（tokens.md §2） */
 .kn-list-marker {
   flex: 0 0 auto;
-  width: 18px;
-  min-height: 1.5em;
+  width: 24px;
+  min-height: 24px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -166,16 +235,21 @@
 
 /* ── todo ───────────────────────────────────────────────── */
 
+/** 待辦列高 28px、checkbox 16×16、圓角 1.5px（tokens.md §2 / §5） */
+.kn-block--todo .kn-block-main {
+  min-height: 28px;
+}
+
 .kn-todo-checkbox {
   flex: 0 0 auto;
   width: 16px;
   height: 16px;
-  margin-top: 4px;
+  margin: 4px 10px 0 4px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 1.5px solid var(--kn-color-border-strong);
-  border-radius: 3px;
+  border: 1px solid var(--kn-editor-checkbox-border);
+  border-radius: 1.5px;
   font-size: 0;
   cursor: pointer;
   transition: background var(--kn-motion-fast) var(--kn-motion-ease);
@@ -183,8 +257,8 @@
 
 .kn-block[data-checked='true'] .kn-todo-checkbox,
 .kn-todo[data-checked='true'] .kn-todo-checkbox {
-  background: var(--kn-color-accent);
-  border-color: var(--kn-color-accent);
+  background: var(--kn-editor-checkbox-blue);
+  border-color: var(--kn-editor-checkbox-blue);
 }
 
 .kn-todo[data-checked='true'] .kn-todo-checkbox::after {
@@ -196,9 +270,10 @@
   transform: translateY(-1px) rotate(45deg);
 }
 
+/** Notion 勾掉之後只把文字變灰（05-06-todo-checked-light.png），**沒有**刪除線 */
 .kn-todo[data-checked='true'] .kn-block-content {
   color: var(--kn-color-text-tertiary);
-  text-decoration: line-through;
+  text-decoration: none;
   opacity: 1;
 }
 
@@ -206,9 +281,11 @@
 
 .kn-toggle-arrow {
   flex: 0 0 auto;
-  width: 18px;
-  height: 18px;
-  margin-top: 3px;
+  width: 24px;
+  height: 24px;
+  font-size: 13px;
+  line-height: 24px;
+  margin-top: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -224,25 +301,39 @@
 
 /* ── 引言 / 標註框 ──────────────────────────────────────── */
 
-.kn-quote {
+/**
+ * ⚠️ 底下這幾條一定要帶 `.kn-editor` 前綴。
+ * 這些 wrapper 同時也是 `.kn-block-main`，而 `.kn-editor .kn-block-main`
+ * 的 specificity（0,2,0）比單一 class（0,1,0）高 —— 沒有前綴的話
+ * padding 會被壓成 3px 2px、border-radius 被壓成 3px，
+ * callout 的圓角與程式碼區塊的 24/22 內距就全都消失了。
+ */
+
+/** 引言左線：3px solid 主要文字色（_extra-*.json 的 quoteBar） */
+.kn-editor .kn-quote {
   border-left: 3px solid var(--kn-color-text);
-  padding-left: var(--kn-space-4);
-  margin: var(--kn-space-2) 0;
+  /* 逐像素量：Notion 的粗線在 +0~+2、文字在 +26（05-10-quote-light.png） */
+  padding-left: 21px;
+  /* block-main 有 2px 的左內距，粗線要再推回去才會落在內容欄左緣（05-10 量到 x=+0） */
+  margin: 0 0 0 2px;
 }
 
-.kn-callout {
-  gap: var(--kn-space-3);
-  padding: var(--kn-space-4);
-  border-radius: var(--kn-radius-md);
-  background: var(--kn-color-block-gray-bg);
+/** 標註：圓角 10px、內距 12px、底色 rgb(249,248,247) / dark rgb(56,56,54)（_extra-*.json） */
+.kn-editor .kn-callout {
+  gap: 8px;
+  padding: 12px;
+  border-radius: 10px;
+  background: var(--kn-editor-callout-bg);
 }
 
 .kn-callout-icon {
-  font-size: 18px;
-  line-height: 1.4;
+  flex: 0 0 auto;
+  width: 22px;
+  font-size: 16px;
+  line-height: 24px;
+  text-align: center;
   cursor: pointer;
   border-radius: var(--kn-radius-sm);
-  padding: 0 2px;
 }
 
 .kn-callout-icon:hover {
@@ -251,10 +342,12 @@
 
 /* ── 分隔線 ─────────────────────────────────────────────── */
 
+/** 分隔線：Notion 是一條 **1px 高的實心 bar**（704×1），不是 border（tokens.md §3.1） */
 .kn-divider hr {
   border: none;
-  border-top: 1px solid var(--kn-color-divider);
-  margin: var(--kn-space-4) 0;
+  height: 1px;
+  background: var(--kn-editor-divider);
+  margin: 8px 0;
 }
 
 /* ── block color（03 §6.2）──────────────────────────── */
@@ -329,15 +422,21 @@
 
 /* ── 程式碼區塊 ─────────────────────────────────────────── */
 
-.kn-code-block {
+/**
+ * 程式碼區塊：`background: var(--ca-graBacPriTra)`、圓角 **10px**、內距 **24px 22px**
+ * （tokens.md §3.1 的備註 + _extra-*.json 實測）。
+ * 字級 16px / 行高 24px —— Notion 外層繼承 UI 字體，等寬只套在 token span 上，
+ * 但視覺上整塊是等寬，所以這裡整塊用 mono。
+ */
+.kn-editor .kn-code-block {
   position: relative;
   background: var(--kn-editor-code-bg);
-  border-radius: var(--kn-radius-md);
-  padding: var(--kn-space-4) var(--kn-space-5);
-  margin: var(--kn-space-2) 0;
+  border-radius: 10px;
+  padding: 24px 22px;
+  margin: 4px 0;
   font-family: var(--kn-font-mono);
-  font-size: 14px;
-  line-height: 1.55;
+  font-size: 15px;
+  line-height: 24px;
   overflow-x: auto;
 }
 
@@ -363,7 +462,7 @@
 
 .kn-code-highlight {
   position: absolute;
-  inset: var(--kn-space-4) var(--kn-space-5);
+  inset: 24px 22px;
   z-index: 0;
   pointer-events: none;
   color: var(--kn-color-text);
@@ -713,41 +812,68 @@
 .kn-file-size { font-size: var(--kn-font-size-xs); color: var(--kn-color-text-tertiary); }
 .kn-file-download { color: var(--kn-color-text-secondary); display: inline-flex; }
 
-.kn-bookmark {
+/**
+ * 書籤卡：邊框 rgb(230,229,227) / dark rgb(56,56,54)（_extra-*.json 的 bookmark）。
+ * Notion 7.34 的版面是**縮圖在左、文字在右**（05-20-bookmark-light.png），
+ * DOM 順序是「先 body 後 cover」，所以用 row-reverse 翻過來。
+ */
+.kn-editor .kn-bookmark {
+  min-height: 160px;
   display: flex;
+  flex-direction: row-reverse;
   align-items: stretch;
-  justify-content: space-between;
-  gap: var(--kn-space-4);
-  border: 1px solid var(--kn-color-border);
-  border-radius: var(--kn-radius-md);
-  padding: var(--kn-space-4);
+  justify-content: flex-end;
+  gap: 0;
+  border: 1px solid var(--kn-editor-hairline);
+  border-radius: 4px;
+  padding: 0;
   text-decoration: none;
   color: inherit;
   overflow: hidden;
 }
 
 .kn-bookmark:hover { background: var(--kn-color-surface-hover); }
-.kn-bookmark-body { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-.kn-bookmark-title { font-size: var(--kn-font-size-sm); font-weight: var(--kn-font-weight-medium); }
+.kn-bookmark-body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 14px 16px;
+}
+.kn-bookmark-title {
+  font-size: var(--kn-font-size-md);
+  font-weight: var(--kn-font-weight-semibold);
+  line-height: 22px;
+}
 .kn-bookmark-desc {
-  font-size: var(--kn-font-size-xs);
+  font-size: var(--kn-font-size-sm);
+  line-height: 20px;
   color: var(--kn-color-text-secondary);
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
-.kn-bookmark-url {
-  font-size: var(--kn-font-size-xs);
-  color: var(--kn-color-text-tertiary);
-  display: flex;
+.kn-bookmark-favicon {
+  display: inline-flex;
   align-items: center;
-  gap: 4px;
+  height: 20px;
+  margin-bottom: 6px;
+  color: var(--kn-color-text-secondary);
+}
+.kn-bookmark-url {
+  margin-top: auto;
+  padding-top: 12px;
+  font-size: var(--kn-font-size-sm);
+  color: var(--kn-color-text-secondary);
+  display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.kn-bookmark-cover { flex: 0 0 140px; }
+/** Notion 的書籤縮圖固定 ~196px 寬、貼齊卡片左緣（05-20-bookmark-light.png） */
+.kn-bookmark-cover { flex: 0 0 196px; }
 .kn-bookmark-cover img { width: 100%; height: 100%; object-fit: cover; border-radius: var(--kn-radius-sm); }
 
 /* ── 子頁面 ─────────────────────────────────────────────── */
@@ -773,9 +899,15 @@
 
 /* ── 多欄版面 ───────────────────────────────────────────── */
 
+/**
+ * 多欄：`dom/21-column-list.html` 寫得很清楚 ——
+ * 分隔欄固定 `width: 46px`，每一欄是 `width: calc(50% - 23px)`，
+ * 欄**裡面**的 block 另有 `padding-inline: 6px` 與 `padding-block: 12px`。
+ */
 .kn-block--columnList > .kn-block-children {
+  --kn-column-gap: 46px;
   display: flex;
-  gap: var(--kn-space-5);
+  gap: var(--kn-column-gap);
   margin-left: 0;
 }
 
@@ -790,14 +922,17 @@
 
 .kn-block--column > .kn-block-children {
   margin-left: 0;
+  /* block-main 已經有 2px，補到 Notion 的 6px */
+  padding-inline: 4px;
+  padding-block: 12px;
 }
 
 .kn-column-main {
   position: absolute;
   top: 0;
   bottom: 0;
-  right: calc(var(--kn-space-5) / -2);
-  width: var(--kn-space-5);
+  right: -23px;
+  width: 46px;
 }
 
 .kn-column-resizer {
@@ -824,15 +959,17 @@
 
 .kn-table-wrap { overflow-x: auto; }
 
+/** 簡單表格：格線 rgb(230,229,227) / dark rgb(56,56,54)（_extra-*.json 的 tableBorder） */
 .kn-table {
   border-collapse: collapse;
   width: 100%;
-  font-size: var(--kn-font-size-sm);
+  font-size: var(--kn-font-size-md);
+  line-height: 24px;
 }
 
 .kn-table-cell {
-  border: 1px solid var(--kn-color-border);
-  padding: 6px 8px;
+  border: 1px solid var(--kn-editor-hairline);
+  padding: 7px 9px;
   min-width: 80px;
   vertical-align: top;
   outline: none;
@@ -840,8 +977,9 @@
 
 .kn-table-cell:focus { box-shadow: inset 0 0 0 2px var(--kn-color-accent); }
 
+/** Notion 的標題列只是「粗體 + 淡底」，不是深灰底（05-14-table-light.png） */
 .kn-table th.kn-table-cell {
-  background: var(--kn-color-bg-subtle);
+  background: var(--kn-editor-callout-bg);
   font-weight: var(--kn-font-weight-semibold);
   text-align: left;
 }
@@ -879,25 +1017,27 @@
 
 /* ── 目錄 / 公式 / 資料庫佔位 ───────────────────────────── */
 
-.kn-toc { display: flex; flex-direction: column; padding: var(--kn-space-2) 0; }
+/** 目錄：每一列高 30px、字級 16px、每層縮排 24px（05-16-toc-light.png 量到的） */
+.kn-toc { display: flex; flex-direction: column; padding: 4px 0; }
 
 .kn-toc-item {
   border: none;
   background: none;
   text-align: left;
   color: var(--kn-color-text);
-  padding: 2px 4px;
+  padding: 3px 2px;
   border-radius: var(--kn-radius-sm);
   cursor: pointer;
   text-decoration: underline;
   text-decoration-color: var(--kn-color-border);
   text-underline-offset: 3px;
-  font-size: var(--kn-font-size-sm);
+  font-size: var(--kn-font-size-md);
+  line-height: 24px;
 }
 
 .kn-toc-item:hover { background: var(--kn-color-surface-hover); }
-.kn-toc-item[data-level='2'] { padding-left: 24px; }
-.kn-toc-item[data-level='3'] { padding-left: 48px; }
+.kn-toc-item[data-level='2'] { padding-left: 26px; }
+.kn-toc-item[data-level='3'] { padding-left: 50px; }
 .kn-toc--empty { color: var(--kn-color-text-tertiary); font-size: var(--kn-font-size-sm); }
 
 .kn-equation {
@@ -1664,11 +1804,22 @@ body.kn-dragging { cursor: grabbing; user-select: none; }
 
 /* ── 同步區塊 ───────────────────────────────────────────── */
 
+/**
+ * 同步區塊：Notion 平常**完全看不出來**（05-17-synced-light.png 就是一行普通段落），
+ * 只有滑鼠移上去才會出現紅色外框；原本一直亮著一條藍邊 + 「同步區塊」徽章。
+ */
 .kn-block--syncedBlock {
-  border-left: 3px solid var(--kn-color-accent);
-  border-radius: 2px;
-  padding-left: var(--kn-space-3);
-  margin: var(--kn-space-2) 0;
+  position: relative;
+  border-radius: 3px;
+  margin: 0;
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+  transition: outline-color var(--kn-motion-fast) var(--kn-motion-ease);
+}
+
+.kn-block--syncedBlock:hover,
+.kn-block--syncedBlock:focus-within {
+  outline-color: rgba(235, 87, 87, 0.5);
 }
 
 .kn-synced-chrome {
@@ -1676,8 +1827,20 @@ body.kn-dragging { cursor: grabbing; user-select: none; }
   align-items: center;
   justify-content: space-between;
   gap: var(--kn-space-2);
+  height: 0;
+  overflow: hidden;
+  opacity: 0;
   font-size: var(--kn-font-size-xs);
   color: var(--kn-color-text-tertiary);
+  padding: 0;
+  transition: opacity var(--kn-motion-fast) var(--kn-motion-ease);
+}
+
+.kn-block--syncedBlock:hover .kn-synced-chrome,
+.kn-block--syncedBlock:focus-within .kn-synced-chrome {
+  height: auto;
+  overflow: visible;
+  opacity: 1;
   padding: 2px 0;
 }
 .kn-synced-badge { display: inline-flex; align-items: center; gap: 4px; }

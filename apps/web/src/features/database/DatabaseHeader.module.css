@@ -10,7 +10,7 @@
 }
 
 .headerInline {
-  padding: var(--kn-space-2) 0 0;
+  padding: 4px 0 0;
 }
 
 .title {
@@ -21,12 +21,27 @@
   line-height: 1.2;
 }
 
+/** 內嵌時 Notion 也會顯示標題（未命名時是淺灰 placeholder「新資料庫」） */
+.titleInline {
+  margin: 0 0 6px;
+  padding: 0 2px;
+  color: var(--kn-color-text);
+  font-size: 24px;
+  font-weight: var(--kn-font-weight-semibold);
+  line-height: 32px;
+}
+
+.titlePlaceholder {
+  color: var(--kn-color-text-disabled);
+}
+
 .bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--kn-space-4);
   min-height: 34px;
+  padding-bottom: 4px;
   border-bottom: 1px solid var(--kn-color-divider);
 }
 
@@ -37,17 +52,21 @@
   overflow-x: auto;
 }
 
+/**
+ * Notion 的 view tab 是**膠囊**（作用中＝淺灰底 + 圓角 6px），不是底線 tab
+ * ——見 07n-db-view-tabs-light.png。高度 28px、字級 14px、icon 16px。
+ */
 .tab,
 .tabActive {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 32px;
-  padding: 0 var(--kn-space-3);
+  height: 28px;
+  padding: 0 8px;
   border: 0;
-  border-bottom: 2px solid transparent;
+  border-radius: var(--kn-radius-md);
   background: transparent;
-  color: var(--kn-color-text-tertiary);
+  color: var(--kn-color-text-secondary);
   font: inherit;
   font-size: var(--kn-font-size-sm);
   white-space: nowrap;
@@ -55,17 +74,24 @@
 }
 
 .tab:hover {
-  color: var(--kn-color-text-secondary);
+  background: var(--kn-color-surface-hover);
+  color: var(--kn-color-text);
 }
 
 .tabActive {
-  border-bottom-color: var(--kn-color-text);
+  background: var(--kn-color-bg-sunken);
   color: var(--kn-color-text);
   font-weight: var(--kn-font-weight-medium);
 }
 
 .tabIcon {
-  font-size: 12px;
+  display: inline-flex;
+  color: var(--kn-color-text-tertiary);
+  font-size: 13px;
+}
+
+.tabActive .tabIcon {
+  color: var(--kn-color-text-secondary);
 }
 
 .tabAdd {
@@ -137,13 +163,22 @@
   outline: none;
 }
 
+/** 藍色「新建 ⌄」：分段按鈕，中間一條半透明白線（07n-db-view-tabs-light.png） */
+.newGroup {
+  display: inline-flex;
+  align-items: stretch;
+  height: 28px;
+  margin-left: 10px;
+  overflow: hidden;
+  border-radius: var(--kn-radius-md);
+  background: var(--kn-color-accent);
+}
+
 .newButton {
   height: 28px;
-  margin-left: var(--kn-space-2);
-  padding: 0 var(--kn-space-4);
+  padding: 0 12px;
   border: 0;
-  border-radius: var(--kn-radius-sm);
-  background: var(--kn-color-accent);
+  background: transparent;
   color: var(--kn-color-text-on-accent);
   font: inherit;
   font-size: var(--kn-font-size-sm);
@@ -151,8 +186,21 @@
   cursor: pointer;
 }
 
-.newButton:hover {
-  background: var(--kn-color-accent-hover);
+.newCaret {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  border: 0;
+  border-left: 1px solid rgba(255, 255, 255, 0.28);
+  background: transparent;
+  color: var(--kn-color-text-on-accent);
+  cursor: pointer;
+}
+
+.newButton:hover,
+.newCaret:hover {
+  background: rgba(0, 0, 0, 0.12);
 }
 
 .panelHint {

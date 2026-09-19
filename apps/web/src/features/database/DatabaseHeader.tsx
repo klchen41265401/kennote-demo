@@ -67,7 +67,15 @@ export function DatabaseHeader(props: DatabaseHeaderProps) {
 
   return (
     <header className={props.inline ? styles.headerInline : styles.header}>
-      {!props.inline ? <h2 className={styles.title}>{props.title}</h2> : null}
+      {/* Notion 內嵌資料庫**也會**顯示標題（未命名時是淺灰 placeholder），
+          原本 inline 模式整個不畫，跟 07-db-table-light.png 差一整列 */}
+      {props.inline ? (
+        <h2 className={`${styles.titleInline}${props.title ? '' : ` ${styles.titlePlaceholder}`}`}>
+          {props.title || '新資料庫'}
+        </h2>
+      ) : (
+        <h2 className={styles.title}>{props.title}</h2>
+      )}
 
       <div className={styles.bar}>
         <nav className={styles.tabs} aria-label="檢視">
@@ -82,7 +90,7 @@ export function DatabaseHeader(props: DatabaseHeaderProps) {
               }}
             >
               <span className={styles.tabIcon} aria-hidden="true">
-                {viewGlyph(v.type)}
+                <UiIcon name={viewGlyph(v.type)} size={15} />
               </span>
               {v.name}
             </button>
@@ -99,7 +107,32 @@ export function DatabaseHeader(props: DatabaseHeaderProps) {
           ) : null}
         </nav>
 
+        {/* 順序照 Notion：篩選 → 排序 → 搜尋 → 設定 → 藍色「新建」（UI-SPEC §8.1） */}
         <div className={styles.tools}>
+          {viewDef.supportsFiltering ? (
+            <button
+              type="button"
+              className={filterCount > 0 ? styles.toolButtonActive : styles.toolButton}
+              aria-label="篩選"
+              onClick={(e) => open('filter', e)}
+            >
+              <UiIcon name="filter" size={16} />
+              {filterCount > 0 ? <span className={styles.badge}>{filterCount}</span> : null}
+            </button>
+          ) : null}
+
+          {viewDef.supportsSorting ? (
+            <button
+              type="button"
+              className={sortCount > 0 ? styles.toolButtonActive : styles.toolButton}
+              aria-label="排序"
+              onClick={(e) => open('sort', e)}
+            >
+              <UiIcon name="sort" size={16} />
+              {sortCount > 0 ? <span className={styles.badge}>{sortCount}</span> : null}
+            </button>
+          ) : null}
+
           {searchOpen ? (
             <input
               className={styles.search}
@@ -120,41 +153,30 @@ export function DatabaseHeader(props: DatabaseHeaderProps) {
             </button>
           )}
 
-          {viewDef.supportsFiltering ? (
-            <button
-              type="button"
-              className={filterCount > 0 ? styles.toolButtonActive : styles.toolButton}
-              onClick={(e) => open('filter', e)}
-            >
-              <UiIcon name="filter" size={16} />
-              {filterCount > 0 ? <span className={styles.badge}>{filterCount}</span> : null}
-            </button>
-          ) : null}
-
-          {viewDef.supportsSorting ? (
-            <button
-              type="button"
-              className={sortCount > 0 ? styles.toolButtonActive : styles.toolButton}
-              onClick={(e) => open('sort', e)}
-            >
-              <UiIcon name="sort" size={16} />
-              {sortCount > 0 ? <span className={styles.badge}>{sortCount}</span> : null}
-            </button>
-          ) : null}
-
           <button
             type="button"
             className={styles.toolButton}
-            aria-label="更多設定"
+            aria-label="設定"
             onClick={(e) => open('more', e)}
           >
             <UiIcon name="more" size={16} />
           </button>
 
+          {/* Notion 是「新建 ⌄」的分段按鈕（07n-db-view-tabs-light.png），不是單純的「新增」 */}
           {!readOnly ? (
-            <button type="button" className={styles.newButton} onClick={props.onCreateRow}>
-              新增
-            </button>
+            <span className={styles.newGroup}>
+              <button type="button" className={styles.newButton} onClick={props.onCreateRow}>
+                新建
+              </button>
+              <button
+                type="button"
+                className={styles.newCaret}
+                aria-label="新建選項"
+                onClick={props.onCreateRow}
+              >
+                <UiIcon name="chevronDown" size={14} />
+              </button>
+            </span>
           ) : null}
         </div>
       </div>
@@ -359,13 +381,18 @@ export function DatabaseHeader(props: DatabaseHeaderProps) {
   );
 }
 
-function viewGlyph(type: ViewType): string {
-  const glyphs: Record<ViewType, string> = {
-    table: '▦',
-    board: '▥',
-    list: '☰',
-    gallery: '▣',
-    calendar: '▤',
-  };
-  return glyphs[type] ?? VIEW_TYPE_LABELS[type];
+/**
+ * Notion 的 view tab 用的是**線條 icon**（07n-db-view-tabs-light.png），
+ * 不是 ▦▥☰ 這種全形方塊字 —— 後者在不同字體下大小/基線會亂跳。
+ * packages/ui 的 icon 集本來就有 table/board/list/gallery/calendar 五個。
+ */
+function viewGlyph(type: ViewType): 'table' | 'board' | 'list' | 'gallery' | 'calendar' {
+  const names = {
+    table: 'table',
+    board: 'board',
+    list: 'list',
+    gallery: 'gallery',
+    calendar: 'calendar',
+  } as const;
+  return names[type] ?? 'table';
 }

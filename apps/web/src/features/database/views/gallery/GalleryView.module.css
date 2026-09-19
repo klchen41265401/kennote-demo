@@ -1,31 +1,37 @@
+/**
+ * Notion 圖庫（07g-db-gallery-light.png 實測）：
+ *   中尺寸卡片寬 **~342px**（720 內容欄剛好排 2 欄）、格間距 14、
+ *   卡片 1px 邊框 rgb(230,229,227) + 圓角 6、封面高 148、標題列高 44。
+ */
 .wrapper {
   flex: 1 1 auto;
   min-height: 0;
-  padding: var(--kn-space-3) var(--kn-space-5) var(--kn-space-8);
+  padding: 10px 0 24px;
   overflow-y: auto;
 }
 
 .grid {
   display: grid;
-  gap: var(--kn-space-4);
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 14px;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
 }
 
 .grid[data-size='small'] {
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
 }
 
 .grid[data-size='large'] {
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(460px, 1fr));
 }
 
 .card {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  border: 1px solid var(--kn-editor-hairline, rgb(230, 229, 227));
   border-radius: 6px;
-  background: var(--kn-color-surface);
-  box-shadow: var(--kn-shadow-sm), 0 0 0 1px var(--kn-color-divider);
+  background: var(--kn-color-bg);
+  box-shadow: 0 1px 2px rgba(15, 15, 15, 0.05);
   cursor: pointer;
 }
 
@@ -37,9 +43,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 140px;
+  height: 148px;
   overflow: hidden;
-  background: var(--kn-color-bg-sunken);
+  background: var(--kn-color-bg-subtle);
 }
 
 .cover[data-empty='true'] {
@@ -64,14 +70,16 @@
 }
 
 .cardBody {
-  padding: var(--kn-space-3);
+  padding: 10px 12px;
+  border-top: 1px solid var(--kn-editor-hairline, rgb(230, 229, 227));
 }
 
 .cardTitle {
-  margin: 0 0 var(--kn-space-2);
+  margin: 0;
   color: var(--kn-color-text);
   font-size: var(--kn-font-size-sm);
   font-weight: var(--kn-font-weight-medium);
+  line-height: 22px;
 }
 
 .cardProperty {

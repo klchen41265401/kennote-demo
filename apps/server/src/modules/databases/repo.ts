@@ -345,7 +345,7 @@ export async function queryRows(
   return conn.query<RowRecord>(sql`
     SELECT ${ROW_COLUMNS}${opts.sortKeys}
       FROM pages p
-     WHERE p.collection_id = ${collectionId} AND p.deleted_at IS NULL${whereExtra}
+     WHERE p.collection_id = ${collectionId} AND p.is_database = FALSE AND p.deleted_at IS NULL${whereExtra}
      ORDER BY ${opts.order}
      LIMIT ${opts.limit}
   `);
@@ -359,7 +359,7 @@ export async function countRows(
   const whereExtra = where ? sql` AND ${where}` : sql.empty;
   const row = await conn.queryOne<{ count: number }>(sql`
     SELECT count(*)::int AS count FROM pages p
-     WHERE p.collection_id = ${collectionId} AND p.deleted_at IS NULL${whereExtra}
+     WHERE p.collection_id = ${collectionId} AND p.is_database = FALSE AND p.deleted_at IS NULL${whereExtra}
   `);
   return row?.count ?? 0;
 }
@@ -386,7 +386,7 @@ export async function queryGroupedRows(
              row_number() OVER (PARTITION BY ${opts.groupKey} ORDER BY ${opts.order}) AS rn,
              count(*)     OVER (PARTITION BY ${opts.groupKey})::int AS group_total
         FROM pages p
-       WHERE p.collection_id = ${collectionId} AND p.deleted_at IS NULL${whereExtra}
+       WHERE p.collection_id = ${collectionId} AND p.is_database = FALSE AND p.deleted_at IS NULL${whereExtra}
     )
     SELECT * FROM ranked WHERE rn <= ${opts.perGroup}
   `);
@@ -404,7 +404,7 @@ export async function queryAggregations(
   const row = await conn.queryOne<Record<string, string | null>>(sql`
     SELECT ${sql.join(selects, ', ')}
       FROM pages p
-     WHERE p.collection_id = ${collectionId} AND p.deleted_at IS NULL${whereExtra}
+     WHERE p.collection_id = ${collectionId} AND p.is_database = FALSE AND p.deleted_at IS NULL${whereExtra}
   `);
   return row ?? {};
 }
@@ -479,7 +479,7 @@ export async function streamAllRows(
   return conn.query<RowRecord>(sql`
     SELECT ${ROW_COLUMNS}
       FROM pages p
-     WHERE p.collection_id = ${collectionId} AND p.deleted_at IS NULL${whereExtra}
+     WHERE p.collection_id = ${collectionId} AND p.is_database = FALSE AND p.deleted_at IS NULL${whereExtra}
      ORDER BY ${order}
      LIMIT ${limit}
   `);

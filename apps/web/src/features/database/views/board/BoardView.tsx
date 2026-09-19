@@ -169,7 +169,7 @@ function BoardColumn({ lane, width, groupProperty, readOnly, ...props }: ColumnP
               onClick={() => void props.createRow({ group: { property: groupProperty, key: lane.key } })}
             >
               <UiIcon name="plus" size={14} />
-              新增
+              新頁面
             </button>
           ) : null}
         </>

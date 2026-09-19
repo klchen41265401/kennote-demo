@@ -1,11 +1,16 @@
-/* Notion 看板：欄寬 260、卡片圓角 6、卡片陰影 */
+/**
+ * Notion 看板（07e-db-board-light.png 實測）：
+ *   泳道本身有淺灰底 rgb(249,248,247) + 圓角 6 + 內距 8，
+ *   卡片寬 **260**、白底、1px 邊框 rgb(230,229,227)、圓角 6、內距 8/10，
+ *   泳道之間 gap 8。原本泳道沒有底色，看起來是「浮在白紙上的卡片」。
+ */
 
 .board {
   display: flex;
-  gap: var(--kn-space-4);
+  gap: 8px;
   flex: 1 1 auto;
   min-height: 0;
-  padding: var(--kn-space-3) var(--kn-space-5) var(--kn-space-6);
+  padding: 10px 0 24px;
   overflow-x: auto;
 }
 
@@ -14,7 +19,9 @@
   flex-direction: column;
   flex: 0 0 auto;
   min-height: 0;
-  border-radius: var(--kn-radius-md);
+  padding: 8px;
+  border-radius: 6px;
+  background: var(--kn-color-bg-subtle);
   transition: background var(--kn-motion-fast) var(--kn-motion-ease);
 }
 
@@ -26,8 +33,8 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  height: 32px;
-  padding: 0 4px;
+  height: 28px;
+  padding: 0 2px;
 }
 
 .collapse {
@@ -78,18 +85,20 @@
 .cards {
   display: flex;
   flex-direction: column;
-  gap: var(--kn-space-2);
+  gap: 8px;
   flex: 1 1 auto;
   min-height: 40px;
   overflow-y: auto;
-  padding: var(--kn-space-1) 0;
+  padding: 6px 0 0;
 }
 
 .card {
-  padding: var(--kn-space-3);
+  min-height: 40px;
+  padding: 8px 10px;
+  border: 1px solid var(--kn-editor-hairline, rgb(230, 229, 227));
   border-radius: 6px;
-  background: var(--kn-color-surface);
-  box-shadow: var(--kn-shadow-sm), 0 0 0 1px var(--kn-color-divider);
+  background: var(--kn-color-bg);
+  box-shadow: 0 1px 2px rgba(15, 15, 15, 0.05);
   cursor: pointer;
 }
 
@@ -102,11 +111,11 @@
 }
 
 .cardTitle {
-  margin: 0 0 var(--kn-space-2);
+  margin: 0;
   color: var(--kn-color-text);
   font-size: var(--kn-font-size-sm);
   font-weight: var(--kn-font-weight-medium);
-  line-height: 1.4;
+  line-height: 22px;
 }
 
 .cardProperty {

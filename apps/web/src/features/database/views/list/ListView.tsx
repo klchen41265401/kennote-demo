@@ -58,7 +58,7 @@ export function ListView(props: ViewProps) {
           !readOnly ? (
             <button type="button" className={styles.newRow} onClick={() => void props.createRow()}>
               <UiIcon name="plus" size={14} />
-              新增
+              新頁面
             </button>
           ) : null
         }

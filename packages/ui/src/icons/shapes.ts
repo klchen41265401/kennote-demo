@@ -171,6 +171,11 @@ export const ICON_SHAPES = {
   sync: ['M15.8 8.2A6 6 0 0 0 5 6.4M4.2 11.8A6 6 0 0 0 15 13.6', 'M15.8 4.6v3.6h-3.6M4.2 15.4v-3.6h3.6'],
   reload: ['M16.2 10a6.2 6.2 0 1 1-1.9-4.4', 'M16.2 3.2v3.6h-3.6'],
   emoji: [{ circle: [10, 10, 7] }, 'M7.6 8.6h.01M12.4 8.6h.01M7.1 12a3.7 3.7 0 0 0 5.8 0'],
+  /** AI 星芒（側邊欄「新對話 Ctrl+O」用）：一大一小兩顆四角星 */
+  sparkle: [
+    { p: 'M8.3 3.2l1.25 3.3 3.3 1.25-3.3 1.25-1.25 3.3-1.25-3.3L3.75 7.75l3.3-1.25z', fill: true },
+    { p: 'M14.6 11.4l.72 1.88 1.88.72-1.88.72-.72 1.88-.72-1.88-1.88-.72 1.88-.72z', fill: true },
+  ],
 } as const satisfies Record<string, readonly IconShape[]>;
 
 export type IconName = keyof typeof ICON_SHAPES;

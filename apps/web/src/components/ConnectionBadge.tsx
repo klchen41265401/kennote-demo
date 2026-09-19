@@ -22,9 +22,17 @@ const LABELS: Record<string, { text: string; tone: 'ok' | 'busy' | 'off' }> = {
 
 const CONFLICT_TTL_MS = 8000;
 
+/**
+ * 正常同步時**不顯示**徽章 —— Notion 的頂欄沒有這顆綠點（04-topbar-light.png），
+ * 一直亮著反而是 kennote 獨有的雜訊。只有「需要使用者知道」的狀態才冒出來：
+ * 同步中 / 重新連線 / 離線 / 還有變更沒送出去。
+ */
+const QUIET_STATES = new Set(['ready']);
+
 export function ConnectionBadge(): JSX.Element {
   const { state, pending, conflicts } = useSyncState();
   const label = LABELS[state] ?? LABELS.idle!;
+  const hidden = QUIET_STATES.has(state) && pending === 0;
 
   useEffect(() => {
     if (conflicts.length === 0) return;
@@ -36,6 +44,7 @@ export function ConnectionBadge(): JSX.Element {
 
   return (
     <>
+      {hidden ? null : (
       <span
         className={`${styles.badge} ${styles[label.tone]}`}
         role="status"
@@ -50,6 +59,7 @@ export function ConnectionBadge(): JSX.Element {
         {label.text}
         {pending > 0 ? <span className={styles.pending}>變更已暫存 {pending}</span> : null}
       </span>
+      )}
 
       {conflicts.length > 0 ? (
         <div className={styles.toasts} role="alert">

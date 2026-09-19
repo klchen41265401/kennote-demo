@@ -1,9 +1,15 @@
+/**
+ * Notion 日曆（07h-db-calendar-light.png 實測）：
+ *   月格高 **124px**、格線 rgb(230,229,227) 完整包住整張表、
+ *   星期列 13px 灰字**置中**（不是靠右）、週末欄淺灰底、
+ *   今天是紅色圓點（不是主色藍）。
+ */
 .wrapper {
   display: flex;
   flex-direction: column;
   flex: 1 1 auto;
   min-height: 0;
-  padding: 0 var(--kn-space-5) var(--kn-space-5);
+  padding: 0 0 var(--kn-space-5);
 }
 
 .toolbar {
@@ -43,36 +49,43 @@
 .weekdays {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  border-bottom: 1px solid var(--kn-color-divider);
 }
 
 .weekdays span {
-  padding: var(--kn-space-2);
+  padding: 6px 4px;
   color: var(--kn-color-text-tertiary);
-  font-size: var(--kn-font-size-xs);
-  text-align: right;
+  font-size: 13px;
+  text-align: center;
 }
 
 .grid {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  grid-auto-rows: minmax(96px, 1fr);
+  grid-auto-rows: minmax(124px, 1fr);
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
+  border-top: 1px solid var(--kn-editor-hairline, rgb(230, 229, 227));
+  border-left: 1px solid var(--kn-editor-hairline, rgb(230, 229, 227));
 }
 
 .day {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  min-height: 96px;
-  padding: 2px;
-  border-right: 1px solid var(--kn-color-divider);
-  border-bottom: 1px solid var(--kn-color-divider);
+  min-height: 124px;
+  padding: 4px;
+  border-right: 1px solid var(--kn-editor-hairline, rgb(230, 229, 227));
+  border-bottom: 1px solid var(--kn-editor-hairline, rgb(230, 229, 227));
 }
 
-.dayOut {
+/** 上/下個月的日子只有數字變淺，**不會**整格變灰（Notion 是週末欄才有底色） */
+.dayOut .dayNumber {
+  color: var(--kn-color-text-disabled);
+}
+
+.day:nth-child(7n + 1),
+.day:nth-child(7n) {
   background: var(--kn-color-bg-subtle);
 }
 
@@ -83,6 +96,7 @@
 .dayHeader {
   display: flex;
   align-items: center;
+  flex-direction: row-reverse;
   justify-content: space-between;
 }
 
@@ -99,9 +113,11 @@
 }
 
 .dayNumberToday {
+  min-width: 22px;
   border-radius: var(--kn-radius-full);
-  background: var(--kn-color-accent);
-  color: var(--kn-color-text-on-accent);
+  background: #e03e3e;
+  color: #ffffff;
+  font-weight: var(--kn-font-weight-medium);
 }
 
 .dayAdd {

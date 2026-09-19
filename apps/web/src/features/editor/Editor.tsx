@@ -575,6 +575,26 @@ export function Editor({
     return rtLength(block.content) - 1 - [...slashState.query].length > 0;
   }, [host, slashState]);
 
+  /**
+   * `/` 打下去、還沒打搜尋字時，Notion 會在游標後面顯示灰字「輸入以搜尋」
+   * （06-slash-menu-light.png）。
+   *
+   * 不能插 DOM 節點 —— 那會被 editor-core 的 mutation guard 判成非法變更，
+   * 也會弄髒 model。所以只掛一個 `data-slash-hint` 屬性，字由 CSS 的
+   * `::after` 畫（pseudo element 不在 DOM tree 裡，contenteditable 碰不到）。
+   */
+  useEffect(() => {
+    const root = wrapperRef.current;
+    if (!root) return undefined;
+    if (!slashState || slashState.query !== '') return undefined;
+    const target = root.querySelector<HTMLElement>(
+      `[data-block-id="${slashState.blockId}"] [data-block-content]`,
+    );
+    if (!target) return undefined;
+    target.setAttribute('data-slash-hint', 'true');
+    return () => target.removeAttribute('data-slash-hint');
+  }, [slashState]);
+
   const empty = useMemo(() => {
     if (!host) return false;
     const ids = host.doc.rootIds;

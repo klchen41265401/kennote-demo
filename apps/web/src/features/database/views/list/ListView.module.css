@@ -1,9 +1,14 @@
+/**
+ * Notion 清單（07f-db-list-light.png 實測）：
+ *   列高 **32px**、**沒有**分隔線、只有 icon + 有底線的標題，
+ *   整列往內縮 6px 對齊內容欄。原本每列都畫一條線，看起來像表格。
+ */
 .wrapper {
   display: flex;
   flex-direction: column;
   flex: 1 1 auto;
   min-height: 0;
-  padding: 0 var(--kn-space-5);
+  padding: 6px 0 0;
 }
 
 .body {
@@ -14,10 +19,11 @@
 .row {
   display: flex;
   align-items: center;
-  gap: var(--kn-space-3);
-  height: 36px;
-  padding: 0 var(--kn-space-2);
-  border-bottom: 1px solid var(--kn-color-divider);
+  gap: 8px;
+  height: 32px;
+  padding: 0 6px;
+  border-bottom: 0;
+  border-radius: var(--kn-radius-sm);
   cursor: pointer;
 }
 
@@ -35,6 +41,9 @@
   overflow: hidden;
   color: var(--kn-color-text);
   font-size: var(--kn-font-size-sm);
+  text-decoration: underline;
+  text-decoration-color: var(--kn-color-border);
+  text-underline-offset: 3px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -56,8 +65,8 @@
   align-items: center;
   gap: 6px;
   width: 100%;
-  height: 36px;
-  padding: 0 var(--kn-space-2);
+  height: 32px;
+  padding: 0 6px;
   border: 0;
   background: transparent;
   color: var(--kn-color-text-tertiary);

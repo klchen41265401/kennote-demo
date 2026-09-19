@@ -426,7 +426,8 @@ export function Sidebar({ workspace }: SidebarProps): JSX.Element {
             className={styles.aiPill}
             onClick={() => toast.show({ title: 'kennote AI 尚未開放', description: '這是 P2 的功能。' })}
           >
-            <Icon name="sync" size={16} />
+            {/* Notion 這顆是 AI 星芒，不是同步箭頭（03e-sidebar-bottom-light.png） */}
+            <Icon name="sparkle" size={16} />
             新對話
             <span className={styles.aiKbd}>Ctrl+O</span>
           </button>

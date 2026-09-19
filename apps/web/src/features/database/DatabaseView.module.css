@@ -6,15 +6,18 @@
   background: var(--kn-color-bg);
 }
 
+/**
+ * 內嵌資料庫：Notion **沒有**外框也沒有圓角（07-db-table-light.png），
+ * 整塊直接貼在頁面上，唯一的分隔是工具列底下那條 1px 線。
+ * 原本的 border + radius 會讓它看起來像一張卡片，跟 Notion 差很多。
+ */
 .inline {
   display: flex;
   flex-direction: column;
-  min-height: 240px;
-  margin: var(--kn-space-4) 0;
-  overflow: hidden;
-  border: 1px solid var(--kn-color-divider);
-  border-radius: var(--kn-radius-md);
-  background: var(--kn-color-bg);
+  min-height: 0;
+  margin: 4px 0;
+  border: 0;
+  background: transparent;
 }
 
 .viewport {

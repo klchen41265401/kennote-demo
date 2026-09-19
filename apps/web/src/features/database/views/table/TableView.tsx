@@ -303,7 +303,7 @@ export function TableView(props: ViewProps) {
               {!readOnly ? (
                 <button type="button" className={styles.newRow} onClick={() => void props.createRow()}>
                   <UiIcon name="plus" size={14} />
-                  新增
+                  新頁面
                 </button>
               ) : null}
               {isFetching ? <div className={styles.loading}>載入中…</div> : null}

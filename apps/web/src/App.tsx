@@ -1,5 +1,6 @@
 import { BrowserRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { AppShell } from './features/shell/AppShell';
+import { registerDatabaseModule } from './features/database/register';
 import { ErrorBoundary } from './features/shell/ErrorBoundary';
 import { HomeRoute } from './features/home/HomeRoute';
 import { DatabaseRoute } from './routes/DatabaseRoute';
@@ -10,6 +11,9 @@ import { PageRoute } from './routes/PageRoute';
 import { ProtectedRoute } from './routes/ProtectedRoute';
 import { PublicPageRoute } from './routes/PublicPageRoute';
 import { RegisterRoute } from './routes/RegisterRoute';
+
+// 讓頁面裡的 collectionView block 真的畫出資料庫（見 features/database/register.tsx）
+registerDatabaseModule();
 
 export function App(): JSX.Element {
   return (
