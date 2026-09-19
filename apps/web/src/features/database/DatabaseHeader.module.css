@@ -43,7 +43,20 @@
   gap: var(--kn-space-4);
   min-height: 36px;
   padding-bottom: 4px;
-  border-bottom: 1px solid var(--kn-color-divider);
+  border-bottom: 1px solid var(--kn-db-bar-line, var(--kn-color-divider));
+}
+
+/* 第七輪（`colseg 07-db-table dark 600`）：Notion 深色的 view-tab 列下框線是
+   **rgb(44,43,42)**（跟資料庫格線同一色），kennote 吃 --kn-color-divider ＝ rgb(48,48,46)，
+   是整張深色表格裡唯一一條顏色不對的線。 */
+:global(:root[data-theme='dark']) .bar {
+  --kn-db-bar-line: rgb(44, 44, 43);
+}
+
+@media (prefers-color-scheme: dark) {
+  :global(:root:not([data-theme='light'])) .bar {
+    --kn-db-bar-line: rgb(44, 44, 43);
+  }
 }
 
 .tabs {

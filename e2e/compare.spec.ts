@@ -33,7 +33,14 @@ import { readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { seedReferencePage, type SeedResult } from './fixtures/reference-page';
-import { composeCompare, decodePng, diffStats, encodePng, type DiffStats } from './fixtures/png';
+import {
+  composeCompare,
+  decodePng,
+  diffStats,
+  encodePng,
+  type DiffStats,
+  type Raster,
+} from './fixtures/png';
 
 const EMAIL = process.env['E2E_EMAIL'] ?? 'e2e@kennote.local';
 const PASSWORD = process.env['E2E_PASSWORD'] ?? 'e2e-password-2026';
@@ -517,6 +524,33 @@ for (const theme of ['light', 'dark'] as Theme[]) {
   });
 }
 
+/* ── `-full` 的內容欄裁切（第七輪）──────────────────────────
+ *
+ * `-full` 是 1440×900 的整窗截圖，左邊 260~270px 是側邊欄、上面 44px 是頂欄。
+ * 第六輪量到：兩邊側邊欄的**頁面清單內容完全不同**（Notion：上線部署／測試與 QA…；
+ * kennote 多了「/database 暫實資料庫」等），那是**資料**不是樣式，
+ * 卻佔 18% 的面積、平均差 ~40 ⇒ 光這一塊就讓每一張 `-full` 憑空多 7~8 分，
+ * `-full` 的分數因此完全反映不出「內容本身」對得好不好。
+ *
+ * 第七輪起：`-full` 的比對只取**內容欄**。實測（`measure.mjs row 07-db-table-full light 500`）
+ * 兩邊的側邊欄都在 **x269** 結束、內容欄都從 **x270** 開始；頂欄高 **44**（`04-topbar` 的裁切）。
+ * ⚠️ 這只改「怎麼算分」，磁碟上的 `-full` 截圖仍然是完整的 1440×900，
+ *    所以並排圖看得到整窗、但數字只算內容欄。跨輪比較 `-full` 數字時要記得這個斷點。
+ */
+const FULL_CROP = { x: 270, y: 44, width: 1170, height: 856 };
+
+function cropRaster(img: Raster, box: { x: number; y: number; width: number; height: number }): Raster {
+  const width = Math.min(box.width, img.width - box.x);
+  const height = Math.min(box.height, img.height - box.y);
+  if (width <= 0 || height <= 0) return img;
+  const data = new Uint8Array(width * height * 4);
+  for (let y = 0; y < height; y += 1) {
+    const from = ((y + box.y) * img.width + box.x) * 4;
+    data.set(img.data.subarray(from, from + width * 4), y * width * 4);
+  }
+  return { width, height, data };
+}
+
 /* ── 3. 並排拼接 + README ────────────────────────────────── */
 
 test('並排比對圖與差異報告', async () => {
@@ -540,7 +574,11 @@ test('並排比對圖與差異報告', async () => {
       const kennote = decodePng(readFileSync(resolve(SHOT_DIR, file)));
       const canvas = composeCompare(notion, kennote, `${code} ${theme}`, theme === 'dark');
       writeFileSync(resolve(COMPARE_DIR, `${code}-${theme}.png`), encodePng(canvas));
-      rows.push({ code, theme, stats: diffStats(notion, kennote) });
+      // `-full` 只比內容欄：側邊欄的頁面清單是資料差，不該算進樣式分數（見 FULL_CROP）
+      const scored: [Raster, Raster] = code.endsWith('-full')
+        ? [cropRaster(notion, FULL_CROP), cropRaster(kennote, FULL_CROP)]
+        : [notion, kennote];
+      rows.push({ code, theme, stats: diffStats(scored[0], scored[1]) });
     } catch (error) {
       missing.push(`${file}：${(error as Error).message}`);
     }
@@ -610,6 +648,14 @@ function renderReadme(
     lines.push('', '## 沒有比對到的項目', '');
     for (const m of missing.sort()) lines.push(`- ${m}`);
   }
+
+  lines.push(
+    '',
+    '> ⚠️ **`-full` 的數字從第七輪起只算「內容欄」**（裁掉左側 270px 側邊欄與上方 44px 頂欄）。',
+    '> 兩邊側邊欄的頁面清單內容本來就不同（是資料不是樣式），卻佔 18% 面積、',
+    '> 讓每一張 `-full` 憑空多 7~8 分。並排圖仍然是完整的 1440×900，只有分數改成內容欄。',
+    '> **第六輪以前的 `-full` 數字不能跟第七輪以後直接比。**',
+  );
 
   lines.push(...KNOWN_GAPS);
 

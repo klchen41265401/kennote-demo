@@ -24,7 +24,10 @@
      ⚠ flex column + max-height 會把沒有 flex-shrink:0 的子層壓扁，量到的高度就不是這裡寫的 */
   flex: 0 0 auto;
   height: 45px;
-  padding: 0 8px 0 12px;
+  /* 第七輪：標題字身 Notion y34..44 / kennote y30..41（高 4px）。
+     border-box + align-items:center ⇒ 只補 padding-top 會讓內容往下移 padding/2，
+     所以要 8px 才是「標題往下 4px」。height 不變，下面的列不受影響。 */
+  padding: 8px 8px 0 12px;
 }
 
 .headerTitle {
@@ -56,15 +59,18 @@
   /* 名稱框 07m 實測 y63..92（border-box 30、填色 28） */
   flex: 0 0 auto;
   height: 34px;
-  margin: 2px 12px 8px;
+  /* 第七輪：第 1 列（版面配置）字身上緣 Notion y108 / kennote y114 ⇒ 整串列要往上 6px。
+     下留白 8 → 2 剛好是 −6，組 2 / 組 3 也跟著對齊。 */
+  margin: 2px 12px 2px;
 }
 
 .nameIcon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 30px;
+  /* 第七輪：Notion 名稱框填色 y64..91 ＝ **28**（kennote 量到 y62..91 ＝ 30） */
+  width: 28px;
+  height: 28px;
   border: 1px solid var(--kn-color-border);
   border-radius: 4px;
   color: var(--kn-color-text-secondary);
@@ -72,7 +78,7 @@
 
 .nameInput {
   flex: 1 1 auto;
-  height: 30px;
+  height: 28px;
   padding: 0 8px;
   border: 1px solid var(--kn-color-border);
   border-radius: 4px;
@@ -122,7 +128,8 @@
   height: 29px;
   /* 右內距 10 → 16：Notion 的右側值靠右內縮 22px（面板右緣 x305、字身最右 x283），
      kennote 原本只內縮 15 → 整張圖的最佳位移一直是 dx -6。 */
-  padding: 0 16px 0 14px;
+  /* 第七輪：第 1 列圖示 x Notion ≥40 / kennote 30 ⇒ 左內距 14 → 20（整張圖的 dx −6 的成因）。 */
+  padding: 0 16px 0 20px;
   border: 0;
   background: transparent;
   color: var(--kn-color-text);

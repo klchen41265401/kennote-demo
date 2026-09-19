@@ -356,9 +356,15 @@
 .pickerItem {
   display: flex;
   align-items: center;
-  gap: 8px;
+  /* 第七輪：左內距對齊後量到圖示 33..46(N) / 33..44(K)、文字 59(N) / 56(K)
+     ⇒ 圖示與標籤之間再補 3px（Notion 的型別圖示比 kennote 寬 2px）。 */
+  gap: 11px;
   height: 28px;
-  padding: 0 12px;
+  /* 第七輪：屬性列的圖示左緣 Notion x33 / kennote x27（面板左框線兩邊都在 x12~13）
+     ⇒ 左內距 12 → **18**。這就是 07k / 07l 一直卡在 `偏移 -6,+0` 的成因，
+     跟 07m 的 `.row` padding-left 14→20 是同一個原點問題。
+     搜尋框（兩邊都是 x25..292）已經對齊，不要一起改。 */
+  padding: 0 12px 0 18px;
   border: 0;
   background: transparent;
   color: var(--kn-color-text);
