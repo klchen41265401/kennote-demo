@@ -5,10 +5,12 @@
  */
 import type {
   CreatePageRequest,
+  FileMeta,
   Page,
   PageSnapshot,
   PageTreeNode,
   RichText,
+  SessionInfo,
   TrashedPage,
 } from '@kennote/shared-types';
 import { API_ROUTES, COLLAB_API_ROUTES } from '@kennote/shared-types';
@@ -285,4 +287,46 @@ export function usePagePermission(pageId: string | null): PagePermissionState {
     // 還沒問到之前回 null（＝不要搶著把編輯器變唯讀，避免閃爍）
     canEdit: permission === null ? null : permission === 'edit' || permission === 'full',
   };
+}
+
+/* ── 帳號設定（設定 Dialog 的「我的帳號」）───────────────── */
+
+export const accountQueryKeys = {
+  sessions: ['auth', 'sessions'] as const,
+};
+
+/** 登入中的裝置清單。一列 = 一次登入（一個 refresh token 家族） */
+export function useSessions(enabled = true) {
+  return useQuery<SessionInfo[]>({
+    key: accountQueryKeys.sessions,
+    enabled,
+    staleTime: 15_000,
+    fetcher: () => api.get<SessionInfo[]>(API_ROUTES.authSessions),
+  });
+}
+
+export async function revokeSession(sessionId: string): Promise<void> {
+  await api.delete(API_ROUTES.authSession(sessionId));
+  invalidateQueries(accountQueryKeys.sessions);
+}
+
+/**
+ * 頭像上傳：走既有的 POST /api/files/upload（需要 workspaceId，因為檔案掛在工作區底下），
+ * 回來的 url 再 PATCH 到 /api/auth/me。這裡只負責上傳那一半，
+ * 寫回帳號由 stores/auth 的 updateProfile 做（狀態要進 auth store）。
+ */
+export async function uploadAvatar(file: File, workspaceId: string): Promise<FileMeta> {
+  const form = new FormData();
+  form.append('workspaceId', workspaceId);
+  form.append('file', file, file.name);
+  return api.upload<FileMeta>(API_ROUTES.fileUpload, form);
+}
+
+/** 上傳前的本機檢查，省掉一次注定失敗的往返 */
+export const AVATAR_MAX_BYTES = 5 * 1024 * 1024;
+
+export function checkAvatarFile(file: File): string | null {
+  if (!file.type.startsWith('image/')) return '請選擇圖片檔';
+  if (file.size > AVATAR_MAX_BYTES) return '圖片請小於 5 MB';
+  return null;
 }

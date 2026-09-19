@@ -1,13 +1,18 @@
 /**
  * 認證商業邏輯。不碰 req/reply —— cookie 的設定/清除由 routes 負責。
  */
-import type { AuthUser, WorkspaceSummary } from '@kennote/shared-types';
+import type { AuthUser, SessionInfo, WorkspaceSummary } from '@kennote/shared-types';
 import { db, withTransaction } from '../../db/client.js';
 import { AppError } from '../../lib/errors.js';
 import { logger } from '../../lib/logger.js';
 import { createPage } from '../pages/service.js';
 import { createWorkspace, listWorkspacesForUser } from '../workspaces/repo.js';
-import { hashPassword, verifyPassword } from './password.js';
+import {
+  isGuestEmail,
+  planPasswordChange,
+  summarizeSessions,
+} from './account-rules.js';
+import { hashPassword, PASSWORD_MIN_LENGTH, verifyPassword } from './password.js';
 import * as repo from './repo.js';
 import { classifyRefresh, decisionErrorCode, shouldRevokeFamily } from './token-state.js';
 import {
@@ -206,4 +211,144 @@ export async function isSessionActive(sessionId: string): Promise<boolean> {
   const session = await repo.findSessionById(sessionId);
   if (!session) return false;
   return session.revokedAt === null;
+}
+
+/* ────────────────────────────────────────────────────────────
+ * 帳號設定（設定 Dialog 的「我的帳號」）
+ * ──────────────────────────────────────────────────────────── */
+
+function planFailure(reason: Exclude<ReturnType<typeof planPasswordChange>, { ok: true }>['reason']): AppError {
+  switch (reason) {
+    case 'CURRENT_REQUIRED':
+      return new AppError('VALIDATION_FAILED', '請輸入目前的密碼');
+    case 'TOO_SHORT':
+      return new AppError('VALIDATION_FAILED', `密碼至少 ${PASSWORD_MIN_LENGTH} 個字元`);
+    case 'TOO_LONG':
+      return new AppError('VALIDATION_FAILED', '密碼過長');
+    case 'SAME_AS_CURRENT':
+      return new AppError('VALIDATION_FAILED', '新密碼不能和目前的密碼相同');
+  }
+}
+
+/** 目前這條 access token 對應的 session 家族（改密碼時要留下來的那一台） */
+async function currentFamilyId(sessionId: string): Promise<string | null> {
+  const session = await repo.findSessionById(sessionId);
+  return session?.familyId ?? null;
+}
+
+/**
+ * 改密碼。成功之後**除了目前這一台以外**的 session 家族全部撤銷（04 §5.5）：
+ * 密碼被偷過的情境下，改密碼必須真的把別人踢掉，否則等於沒改。
+ *
+ * 訪客帳號（以及只有 OIDC、身上沒有本地密碼的帳號）不需要舊密碼 ——
+ * 那串密碼從來沒有人看過，要求輸入只會讓人永遠設不了密碼。
+ */
+export async function changePassword(
+  userId: string,
+  sessionId: string,
+  input: { currentPassword?: string | undefined; newPassword: string },
+): Promise<{ revokedSessions: number }> {
+  const user = await repo.findUserById(userId);
+  if (!user) throw new AppError('UNAUTHORIZED');
+  const identity = await repo.findLocalIdentityByUserId(userId);
+  const canSkipCurrent = isGuestEmail(user.email) || identity?.password_hash == null;
+
+  const plan = planPasswordChange({
+    isGuest: canSkipCurrent,
+    currentPassword: input.currentPassword,
+    newPassword: input.newPassword,
+  });
+  if (!plan.ok) throw planFailure(plan.reason);
+
+  if (plan.verifyCurrent && identity?.password_hash != null) {
+    const ok = await verifyPassword(identity.password_hash, input.currentPassword ?? '');
+    if (!ok) throw new AppError('INVALID_CREDENTIALS', '目前的密碼不正確');
+  }
+
+  const passwordHash = await hashPassword(input.newPassword);
+  const keepFamily = await currentFamilyId(sessionId);
+
+  const revokedSessions = await withTransaction(async (tx) => {
+    const updated = await repo.updateLocalPasswordHash(tx, userId, passwordHash);
+    if (!updated) {
+      // 沒有 local identity（純 OIDC 帳號）→ 補一筆，讓他之後也能用 email + 密碼登入
+      await repo.createLocalIdentity(tx, { userId, email: user.email, passwordHash });
+    }
+    return repo.revokeUserSessions(tx, userId, 'password_changed', keepFamily);
+  });
+
+  logger.info({ userId, revokedSessions }, '使用者變更密碼，其他裝置已登出');
+  return { revokedSessions };
+}
+
+/**
+ * 訪客帳號升級成正式帳號：設定 email + 密碼，資料（工作區、頁面）原封不動留著。
+ * 一樣會踢掉其他裝置 —— 升級前那些 session 拿的是「誰都能進」的訪客身分。
+ */
+export async function claimAccount(
+  userId: string,
+  sessionId: string,
+  input: { email: string; password: string; name?: string | undefined },
+): Promise<{ user: AuthUser; revokedSessions: number }> {
+  const user = await repo.findUserById(userId);
+  if (!user) throw new AppError('UNAUTHORIZED');
+  if (!isGuestEmail(user.email)) {
+    throw new AppError('CONFLICT', '這個帳號已經是正式帳號了');
+  }
+
+  const plan = planPasswordChange({ isGuest: true, newPassword: input.password });
+  if (!plan.ok) throw planFailure(plan.reason);
+
+  const email = input.email.trim().toLowerCase();
+  if (isGuestEmail(email)) throw new AppError('VALIDATION_FAILED', '請使用真實的電子郵件');
+  if (await repo.findUserByEmail(email)) throw new AppError('EMAIL_TAKEN');
+  const takenIdentity = await repo.findLocalIdentity(email);
+  if (takenIdentity && takenIdentity.user_id !== userId) throw new AppError('EMAIL_TAKEN');
+
+  const passwordHash = await hashPassword(input.password);
+  const keepFamily = await currentFamilyId(sessionId);
+  const name = input.name?.trim();
+
+  const result = await withTransaction(async (tx) => {
+    const row = await repo.claimGuestAccount(tx, {
+      userId,
+      email,
+      passwordHash,
+      ...(name ? { name } : {}),
+    });
+    const revoked = await repo.revokeUserSessions(tx, userId, 'account_claimed', keepFamily);
+    return { row, revoked };
+  });
+
+  logger.info({ userId }, '訪客帳號已升級為正式帳號');
+  // 名稱可能剛剛才改，重讀一次拿最新的列
+  const fresh = (await repo.findUserById(userId)) ?? result.row;
+  return { user: repo.toAuthUser(fresh), revokedSessions: result.revoked };
+}
+
+/** 登出所有裝置（含目前這一台）。前端收到之後自己導回登入頁 */
+export async function logoutAll(userId: string): Promise<{ revokedSessions: number }> {
+  const revokedSessions = await repo.revokeUserSessions(db, userId, 'logout_all');
+  logger.info({ userId, revokedSessions }, '使用者登出了所有裝置');
+  return { revokedSessions };
+}
+
+/** 裝置清單。一個 refresh token 家族 = 一次登入 = 使用者眼中的一台裝置 */
+export async function listSessions(userId: string, sessionId: string): Promise<SessionInfo[]> {
+  const [rows, family] = await Promise.all([
+    repo.listActiveSessionRows(userId),
+    currentFamilyId(sessionId),
+  ]);
+  return summarizeSessions(rows, family);
+}
+
+/** 撤銷單一裝置。:id 收 family_id（清單回的 id），也接受某一列 session 的 id */
+export async function revokeSessionFamily(
+  userId: string,
+  id: string,
+): Promise<{ revokedSessions: number }> {
+  const familyId = await repo.resolveSessionFamily(userId, id);
+  if (!familyId) throw new AppError('NOT_FOUND', '找不到這個工作階段');
+  const revokedSessions = await repo.revokeFamily(db, familyId, 'revoked_by_user');
+  return { revokedSessions };
 }

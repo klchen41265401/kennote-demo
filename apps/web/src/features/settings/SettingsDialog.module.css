@@ -169,6 +169,122 @@
   align-items: center;
 }
 
+/* ── 帳號分頁（AccountPanel）───────────────────────────── */
+
+/** 訪客升級提示卡。用 callout 的語彙：淺底 + 左側圖示 */
+.card {
+  display: flex;
+  gap: 12px;
+  margin-top: 20px;
+  padding: 16px;
+  border: 1px solid var(--kn-color-border-subtle);
+  border-radius: 8px;
+  background: var(--kn-color-bg-subtle);
+}
+
+.cardIcon {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  background: var(--kn-color-surface-active);
+  color: var(--kn-color-text-secondary);
+}
+
+.cardBody {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.cardTitle {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.cardText {
+  margin: 4px 0 0;
+  color: var(--kn-color-text-secondary);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.cardForm {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+.cardForm > * {
+  flex: 1 1 180px;
+  min-width: 0;
+}
+.cardForm > button {
+  flex: 0 0 auto;
+}
+
+/** 頭像：點一下開檔案選擇，也可以直接把圖片拖進來 */
+.avatarDrop {
+  position: relative;
+  display: inline-flex;
+  padding: 4px;
+  border: 1px dashed transparent;
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+}
+.avatarDrop:hover .avatarOverlay,
+.avatarDrop:focus-visible .avatarOverlay {
+  opacity: 1;
+}
+.avatarDropActive {
+  border-color: var(--kn-color-accent, var(--kn-color-text-tertiary));
+  background: var(--kn-color-surface-hover);
+}
+
+.avatarOverlay {
+  position: absolute;
+  inset: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: rgb(0 0 0 / 45%);
+  color: #fff;
+  opacity: 0;
+  transition: opacity 120ms ease;
+  pointer-events: none;
+}
+
+/** 展開式表單（改密碼 / 刪除帳號的二次確認） */
+.subForm {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 360px;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--kn-color-border-subtle);
+}
+
+.errorText {
+  margin-top: 8px;
+  color: var(--kn-color-danger);
+  font-size: 12px;
+}
+
+.badge {
+  margin-left: 8px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--kn-color-surface-active);
+  color: var(--kn-color-text-secondary);
+  font-size: 11px;
+  font-weight: 500;
+  vertical-align: middle;
+}
+
 @media (max-width: 767px) {
   .wrap {
     flex-direction: column;
@@ -187,5 +303,11 @@
   }
   .panel {
     padding: 24px 16px;
+  }
+  .cardForm > * {
+    flex: 1 1 100%;
+  }
+  .subForm {
+    max-width: none;
   }
 }

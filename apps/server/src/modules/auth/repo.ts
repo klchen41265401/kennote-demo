@@ -1,6 +1,7 @@
-import type { AuthUser } from '@kennote/shared-types';
+import type { AuthUser, UserPreferences } from '@kennote/shared-types';
 import { db, type Queryable } from '../../db/client.js';
 import { sql } from '../../db/sql.js';
+import type { SessionFamilyRow } from './account-rules.js';
 import type { SessionRecord } from './token-state.js';
 
 export interface UserRow {
@@ -11,6 +12,7 @@ export interface UserRow {
   avatar_url: string | null;
   locale: string;
   timezone: string;
+  preferences: UserPreferences | null;
   created_at: Date;
 }
 
@@ -24,11 +26,16 @@ export function toAuthUser(row: UserRow): AuthUser {
     timezone: row.timezone,
     emailVerified: row.email_verified_at !== null,
     createdAt: row.created_at.toISOString(),
+    // 0050 之前建立的列沒有 preferences；一律正規化成物件，前端不必再防一次
+    preferences:
+      row.preferences && typeof row.preferences === 'object' && !Array.isArray(row.preferences)
+        ? row.preferences
+        : {},
   };
 }
 
 const USER_COLUMNS = sql.raw(
-  'id, email::text AS email, email_verified_at, name, avatar_url, locale, timezone, created_at',
+  'id, email::text AS email, email_verified_at, name, avatar_url, locale, timezone, preferences, created_at',
 );
 
 export async function findUserById(id: string, conn: Queryable = db): Promise<UserRow | null> {
@@ -187,4 +194,147 @@ export async function revokeFamily(
      RETURNING id
   `);
   return rows.length;
+}
+
+/* ── 帳號設定（改密碼 / 訪客升級 / 裝置清單） ───────────── */
+
+/** 一個使用者目前還有效的 session 列（尚未撤銷、尚未過期） */
+export async function listActiveSessionRows(
+  userId: string,
+  conn: Queryable = db,
+): Promise<SessionFamilyRow[]> {
+  const rows = await conn.query<{
+    id: string;
+    family_id: string;
+    user_agent: string | null;
+    ip: string | null;
+    created_at: Date;
+    expires_at: Date;
+  }>(sql`
+    SELECT id, family_id, user_agent, ip::text AS ip, created_at, expires_at
+      FROM sessions
+     WHERE user_id = ${userId}
+       AND revoked_at IS NULL
+       AND expires_at > now()
+     ORDER BY created_at ASC
+  `);
+  return rows.map((r) => ({
+    id: r.id,
+    familyId: r.family_id,
+    userAgent: r.user_agent,
+    ip: r.ip,
+    createdAt: r.created_at,
+    expiresAt: r.expires_at,
+  }));
+}
+
+/**
+ * 把 `:id` 解析成 family_id。
+ * 前端拿到的清單用 family_id 當 id（一個家族 = 一台裝置），
+ * 但也接受某一列 session 的 id，免得呼叫端要先知道我們的分組方式。
+ */
+export async function resolveSessionFamily(
+  userId: string,
+  id: string,
+  conn: Queryable = db,
+): Promise<string | null> {
+  const row = await conn.queryOne<{ family_id: string }>(sql`
+    SELECT family_id FROM sessions
+     WHERE user_id = ${userId} AND (id = ${id}::uuid OR family_id = ${id}::uuid)
+     ORDER BY created_at ASC
+     LIMIT 1
+  `);
+  return row?.family_id ?? null;
+}
+
+/**
+ * 撤銷這個使用者的所有 session。
+ * exceptFamilyId 給值時保留那一個家族（改密碼「踢掉其他裝置但留著自己」用）。
+ */
+export async function revokeUserSessions(
+  conn: Queryable,
+  userId: string,
+  reason: string,
+  exceptFamilyId?: string | null,
+): Promise<number> {
+  const keep = exceptFamilyId
+    ? sql`AND family_id <> ${exceptFamilyId}::uuid`
+    : sql.empty;
+  const rows = await conn.query<{ id: string }>(sql`
+    UPDATE sessions SET revoked_at = now(), revoked_reason = ${reason}
+     WHERE user_id = ${userId} AND revoked_at IS NULL ${keep}
+     RETURNING id
+  `);
+  return rows.length;
+}
+
+/** 改密碼：只動 provider='local' 那一筆身分 */
+export async function updateLocalPasswordHash(
+  conn: Queryable,
+  userId: string,
+  passwordHash: string,
+): Promise<boolean> {
+  const rows = await conn.query<{ id: string }>(sql`
+    UPDATE user_identities SET password_hash = ${passwordHash}
+     WHERE user_id = ${userId} AND provider = 'local'
+     RETURNING id
+  `);
+  return rows.length > 0;
+}
+
+/** 只有 OIDC 身分的帳號第一次設定密碼時，補一筆 local identity */
+export async function createLocalIdentity(
+  conn: Queryable,
+  input: { userId: string; email: string; passwordHash: string },
+): Promise<void> {
+  await conn.query(sql`
+    INSERT INTO user_identities (user_id, provider, external_id, password_hash)
+    VALUES (${input.userId}, 'local', ${input.email.toLowerCase()}, ${input.passwordHash})
+    ON CONFLICT (provider, external_id)
+    DO UPDATE SET password_hash = EXCLUDED.password_hash
+  `);
+}
+
+export async function findLocalIdentityByUserId(
+  userId: string,
+  conn: Queryable = db,
+): Promise<LocalIdentityRow | null> {
+  return conn.queryOne<LocalIdentityRow>(sql`
+    SELECT id, user_id, password_hash
+      FROM user_identities
+     WHERE user_id = ${userId} AND provider = 'local'
+  `);
+}
+
+/**
+ * 訪客升級成正式帳號：users.email 與 local identity 的 external_id 必須同時換，
+ * 否則下次用新 email 登入會找不到身分 → 一定要在同一個交易裡。
+ */
+export async function claimGuestAccount(
+  conn: Queryable,
+  input: { userId: string; email: string; passwordHash: string; name?: string | undefined },
+): Promise<UserRow> {
+  const email = input.email.trim().toLowerCase();
+  const nameSet = input.name ? sql`, name = ${input.name}` : sql.empty;
+  const user = await conn.queryOne<UserRow>(sql`
+    UPDATE users
+       SET email = ${email}::citext, email_verified_at = NULL ${nameSet}
+     WHERE id = ${input.userId} AND deleted_at IS NULL
+     RETURNING ${USER_COLUMNS}
+  `);
+  if (!user) throw new Error('找不到要升級的帳號');
+  const updated = await conn.query<{ id: string }>(sql`
+    UPDATE user_identities
+       SET external_id = ${email}, password_hash = ${input.passwordHash}
+     WHERE user_id = ${input.userId} AND provider = 'local'
+     RETURNING id
+  `);
+  // 走 OIDC 進來、身上沒有 local identity 的帳號：補一筆
+  if (updated.length === 0) {
+    await conn.query(sql`
+      INSERT INTO user_identities (user_id, provider, external_id, password_hash)
+      VALUES (${input.userId}, 'local', ${email}, ${input.passwordHash})
+    `);
+  }
+  return user;
 }

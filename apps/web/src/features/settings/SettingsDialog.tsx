@@ -2,19 +2,20 @@
  * 設定 Dialog（UI-SPEC §7）：左側導覽 + 右側內容，Ctrl+, 開啟。
  *
  * 分頁：我的帳號 / 我的設定 / 通知 / 成員 / 工作區 / 匯入匯出。
- * 「改密碼 / 登出所有裝置」需要 `apps/server/src/modules/auth/**` 的新端點，
- * 那個模組不在本代理的可改範圍，所以先做成停用狀態並標註 TODO（見 features/shell/README.md 決策 #7）。
+ * 「我的帳號」整塊搬到 AccountPanel.tsx（頭像、改密碼、訪客升級、裝置、刪除帳號），
+ * 現在都接上 auth 模組的端點，不再是停用狀態。
  */
 import { useEffect, useRef, useState } from 'react';
-import type { WorkspaceMember, WorkspaceSummary } from '@kennote/shared-types';
+import type { StartPagePreference, WorkspaceMember, WorkspaceSummary } from '@kennote/shared-types';
 import { COLLAB_API_ROUTES } from '@kennote/shared-types';
 import { Avatar, Button, Dialog, Icon, Input, Select, Switch, toast } from '@kennote/ui';
 import { api } from '../../lib/api-client';
 import { deleteWorkspace, patchWorkspace, useWorkspaceMembers } from '../../lib/queries';
-import { logout, reloadMe, useAuth } from '../../stores/auth';
+import { reloadMe, updatePreferences, useAuth } from '../../stores/auth';
 import { setSettingsTab, useUi } from '../../stores/ui';
 import { applyTheme, getTheme, type Theme } from '../../lib/theme';
 import { exportPage } from '../shell/export';
+import { AccountPanel } from './AccountPanel';
 import styles from './SettingsDialog.module.css';
 
 export interface SettingsDialogProps {
@@ -100,7 +101,7 @@ export function SettingsDialog({ open, workspace, onClose }: SettingsDialogProps
         </nav>
 
         <div className={styles.panel}>
-          {tab === 'account' && <AccountPanel />}
+          {tab === 'account' && <AccountPanel workspace={workspace} />}
           {tab === 'preferences' && <PreferencesPanel />}
           {tab === 'notifications' && <NotificationsPanel />}
           {tab === 'members' && <MembersPanel workspace={workspace} />}
@@ -112,99 +113,63 @@ export function SettingsDialog({ open, workspace, onClose }: SettingsDialogProps
   );
 }
 
-function AccountPanel(): JSX.Element {
-  const { user } = useAuth();
-  const [name, setName] = useState(user?.name ?? '');
-
-  useEffect(() => setName(user?.name ?? ''), [user?.name]);
-
-  return (
-    <>
-      <h2 className={styles.panelTitle}>我的帳號</h2>
-      <p className={styles.panelSubtitle}>你的個人資料，工作區裡的成員都看得到。</p>
-
-      <div className={styles.avatarRow}>
-        <Avatar name={user?.name ?? user?.email ?? '?'} src={user?.avatarUrl ?? undefined} size={64} />
-        <div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => toast.show({ title: '頭像上傳尚未開放', description: '需要 auth 模組的 PATCH /api/auth/me。' })}
-          >
-            上傳頭像
-          </Button>
-        </div>
-      </div>
-
-      <div className={styles.row}>
-        <div className={styles.rowBody}>
-          <div className={styles.rowLabel}>顯示名稱</div>
-          <div className={styles.rowHint}>出現在頁面協作者與留言中。</div>
-        </div>
-        <div className={styles.rowControl}>
-          <Input size="sm" value={name} onChange={(e) => setName(e.target.value)} />
-        </div>
-      </div>
-
-      <div className={styles.row}>
-        <div className={styles.rowBody}>
-          <div className={styles.rowLabel}>電子郵件</div>
-          <div className={styles.rowHint}>{user?.email}</div>
-        </div>
-      </div>
-
-      <h3 className={styles.sectionTitle}>安全性</h3>
-      <div className={styles.row}>
-        <div className={styles.rowBody}>
-          <div className={styles.rowLabel}>變更密碼</div>
-          <div className={styles.rowHint}>尚未開放（需要 auth 模組的新端點）。</div>
-        </div>
-        <div className={styles.rowControl}>
-          <Button variant="outline" size="sm" disabled>
-            變更密碼
-          </Button>
-        </div>
-      </div>
-      <div className={styles.row}>
-        <div className={styles.rowBody}>
-          <div className={styles.rowLabel}>登出</div>
-          <div className={styles.rowHint}>結束這一台裝置上的工作階段。</div>
-        </div>
-        <div className={styles.rowControl}>
-          <Button variant="danger" size="sm" onClick={() => void logout()}>
-            登出
-          </Button>
-        </div>
-      </div>
-    </>
-  );
-}
-
+/**
+ * 「我的設定」。M3 時主題與起始頁面只寫 localStorage，換一台裝置就跑掉了；
+ * 現在存進 users.preferences（PATCH /api/auth/me），登入時由 stores/auth 的
+ * applyUserPreferences 套回來。localStorage 仍然同步寫入 —— 下次開啟時在
+ * /refresh 回來之前就要有正確的主題，否則會先閃一下淺色底。
+ */
 function PreferencesPanel(): JSX.Element {
-  const [theme, setTheme] = useState<Theme>(getTheme);
-  const [startPage, setStartPage] = useState<string>(() => {
+  const { user } = useAuth();
+  const prefs = user?.preferences ?? {};
+  // 伺服器沒存過就沿用這台裝置目前的值，不要硬把人切回預設
+  const [theme, setTheme] = useState<Theme>(() => (prefs.theme as Theme | undefined) ?? getTheme());
+  const [locale, setLocale] = useState(prefs.locale ?? 'zh-TW');
+  const [startPage, setStartPage] = useState<StartPagePreference>(() => {
+    if (prefs.startPage) return prefs.startPage;
     try {
-      return localStorage.getItem('kennote:start-page') ?? 'home';
+      return localStorage.getItem('kennote:start-page') === 'last' ? 'last' : 'home';
     } catch {
       return 'home';
     }
   });
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (prefs.theme) setTheme(prefs.theme as Theme);
+    if (prefs.locale) setLocale(prefs.locale);
+    if (prefs.startPage) setStartPage(prefs.startPage);
+  }, [prefs.theme, prefs.locale, prefs.startPage]);
+
+  async function save(patch: Parameters<typeof updatePreferences>[0]): Promise<void> {
+    setSaving(true);
+    try {
+      await updatePreferences(patch);
+    } catch {
+      toast.error('偏好儲存失敗，這台裝置仍會套用');
+    } finally {
+      setSaving(false);
+    }
+  }
 
   return (
     <>
       <h2 className={styles.panelTitle}>我的設定</h2>
-      <p className={styles.panelSubtitle}>選擇你想要的 kennote 外觀和行為。</p>
+      <p className={styles.panelSubtitle}>
+        選擇你想要的 kennote 外觀和行為。這些偏好跟著帳號走，換一台裝置登入也一樣。
+      </p>
 
       <h3 className={styles.sectionTitle}>外觀</h3>
       <div className={styles.row}>
         <div className={styles.rowBody}>
           <div className={styles.rowLabel}>主題</div>
-          <div className={styles.rowHint}>選擇此裝置的 kennote 主題（Ctrl+Shift+L 可快速切換）。</div>
+          <div className={styles.rowHint}>Ctrl+Shift+L 可快速切換。</div>
         </div>
         <div className={styles.rowControl}>
           <Select
             size="sm"
             value={theme}
+            disabled={saving}
             options={[
               { value: 'light', label: '淺色' },
               { value: 'dark', label: '深色' },
@@ -212,7 +177,9 @@ function PreferencesPanel(): JSX.Element {
             ]}
             onChange={(v) => {
               setTheme(v as Theme);
+              // 先套用再存：網路慢的時候 UI 不該等伺服器
               applyTheme(v as Theme);
+              void save({ theme: v as Theme });
             }}
           />
         </div>
@@ -225,7 +192,16 @@ function PreferencesPanel(): JSX.Element {
           <div className={styles.rowHint}>目前只提供繁體中文。</div>
         </div>
         <div className={styles.rowControl}>
-          <Select size="sm" value="zh-TW" options={[{ value: 'zh-TW', label: '繁體中文' }]} onChange={() => {}} />
+          <Select
+            size="sm"
+            value={locale}
+            disabled={saving}
+            options={[{ value: 'zh-TW', label: '繁體中文' }]}
+            onChange={(v) => {
+              setLocale(v);
+              void save({ locale: v });
+            }}
+          />
         </div>
       </div>
 
@@ -239,17 +215,20 @@ function PreferencesPanel(): JSX.Element {
           <Select
             size="sm"
             value={startPage}
+            disabled={saving}
             options={[
               { value: 'home', label: '首頁' },
               { value: 'last', label: '上次造訪的頁面' },
             ]}
             onChange={(v) => {
-              setStartPage(v);
+              const next = v as StartPagePreference;
+              setStartPage(next);
               try {
-                localStorage.setItem('kennote:start-page', v);
+                localStorage.setItem('kennote:start-page', next);
               } catch {
                 /* 無痕模式 */
               }
+              void save({ startPage: next });
             }}
           />
         </div>

@@ -150,6 +150,12 @@ export const API_ROUTES = {
   me: '/api/auth/me',
   authProviders: '/api/auth/providers',
   authOpen: '/api/auth/open',
+  // 帳號設定（設定 Dialog 的「我的帳號」）
+  authPassword: '/api/auth/password',
+  authClaim: '/api/auth/claim',
+  authLogoutAll: '/api/auth/logout-all',
+  authSessions: '/api/auth/sessions',
+  authSession: (id: string) => `/api/auth/sessions/${id}`,
   workspaces: '/api/workspaces',
   workspaceTree: (id: string) => `/api/workspaces/${id}/tree`,
   workspaceMembers: (id: string) => `/api/workspaces/${id}/members`,
