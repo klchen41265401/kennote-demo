@@ -1,5 +1,9 @@
 /**
- * ⚠️ 暫時的 UI 基元（Popover / Menu / Dialog / VirtualList / dnd / icons）。
+ * ⚠️ 暫時的 UI 基元（Popover / Menu / Dialog / VirtualList / icons）。
+ *
+ * 第十一輪：`dnd` 已經**從這裡搬走**了 —— HTML5 Drag & Drop 那一份
+ * （`_fallback/dnd.ts`）整個刪掉，改用 `packages/ui/src/dnd` 的 Pointer 引擎，
+ * 轉接層在 `features/database/dnd.ts`。理由見那支檔案的檔頭。
  *
  * `packages/ui` 由另一位代理平行開發中（`@kennote/ui` 目前只 export
  * createStore / useStore / useQuery / useMutation / invalidateQueries）。
@@ -17,6 +21,4 @@ export type { PopoverProps } from './Popover';
 export { Menu, MenuItem, MenuSeparator, MenuLabel } from './Menu';
 export { Dialog } from './Dialog';
 export { VirtualList } from './VirtualList';
-export { useDragHandle, useDropZone, reorder } from './dnd';
-export type { DragPayload } from './dnd';
 export { FieldIcon, UiIcon } from './icons';

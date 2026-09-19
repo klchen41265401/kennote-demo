@@ -168,6 +168,8 @@ export const API_ROUTES = {
   pageDuplicate: (id: string) => `/api/pages/${id}/duplicate`,
   pageRestore: (id: string) => `/api/pages/${id}/restore`,
   pageTransactions: (id: string) => `/api/pages/${id}/transactions`,
+  /** 跨頁面搬移 block（第十一輪）。POST { blockIds, targetPageId, afterId } */
+  pageBlocksMoveTo: (id: string) => `/api/pages/${id}/blocks/move-to`,
   trash: '/api/trash',
   databases: '/api/databases',
   database: (id: string) => `/api/databases/${id}`,

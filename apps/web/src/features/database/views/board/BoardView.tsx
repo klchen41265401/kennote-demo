@@ -7,7 +7,8 @@
 import { useState } from 'react';
 import type { DatabaseRow, RowGroup } from '@kennote/shared-types';
 import { richTextToPlainText } from '@kennote/shared-types';
-import { UiIcon, useDragHandle, useDropZone } from '../../_fallback';
+import { UiIcon } from '../../_fallback';
+import { useCardDrag, useCardZone } from '../../dnd';
 import { EditableCell } from '../../EditableCell';
 import { useDatabaseContext } from '../../context';
 import { getFieldType } from '../../fields/types';
@@ -102,7 +103,7 @@ function BoardColumn({ lane, width, groupProperty, readOnly, ...props }: ColumnP
   const { schema, view } = props;
   const [collapsed, setCollapsed] = useState(false);
 
-  const { over, handlers } = useDropZone({
+  const { isOver, zoneRef } = useCardZone({
     accept: 'row',
     onDrop: (payload) => {
       if (payload.from === lane.key) return;
@@ -121,9 +122,9 @@ function BoardColumn({ lane, width, groupProperty, readOnly, ...props }: ColumnP
 
   return (
     <section
-      className={`${styles.column} ${over ? styles.columnOver : ''}`}
+      ref={zoneRef}
+      className={`${styles.column} ${isOver ? styles.columnOver : ''}`}
       style={{ width: collapsed ? 44 : width }}
-      {...handlers}
     >
       <header className={styles.columnHeader}>
         <button
@@ -186,12 +187,14 @@ interface CardProps extends ViewProps {
 
 function BoardCard({ row, laneKey, properties, ...props }: CardProps) {
   const { schema } = props;
-  const { dragging, handlers } = useDragHandle({ kind: 'row', id: row.id, from: laneKey });
+  // 第十一輪：長按 400ms 才進入拖曳（Pointer Events），所以卡片的 onClick 仍然正常
+  const { isDragging, dragRef, handleProps } = useCardDrag('row', row.id, { from: laneKey });
 
   return (
     <article
-      className={`${styles.card} ${dragging ? styles.cardDragging : ''}`}
-      {...handlers}
+      ref={dragRef}
+      className={`${styles.card} ${isDragging ? styles.cardDragging : ''}`}
+      {...handleProps}
       onClick={() => props.openRow(row.id)}
     >
       <h4 className={styles.cardTitle}>{richTextToPlainText(row.title) || '未命名'}</h4>

@@ -4,7 +4,8 @@
  */
 import { useState } from 'react';
 import type { CollectionSchema, FieldType, ViewFormat } from '@kennote/shared-types';
-import { FieldIcon, Menu, MenuItem, MenuLabel, Popover, UiIcon, reorder, useDragHandle, useDropZone } from './_fallback';
+import { FieldIcon, Menu, MenuItem, MenuLabel, Popover, UiIcon } from './_fallback';
+import { reorder, useSortableItem, useSortableList } from './dnd';
 import { useDatabaseContext } from './context';
 import { FieldConfigPopover } from './FieldConfigPopover';
 import { fieldTypeGroups, getFieldType } from './fields/types';
@@ -72,10 +73,16 @@ export function PropertyList({ schema, format, onChangeFormat }: Props) {
     }
   }
 
+  const { listRef } = useSortableList({
+    kind: 'property',
+    ids: entries.map((e) => e.property),
+    onReorder: (from, to) => commit(reorder(entries, from, to)),
+  });
+
   return (
     <div className={styles.panel}>
       <MenuLabel>此視圖顯示的屬性</MenuLabel>
-      <div className={styles.propertyList}>
+      <div className={styles.propertyList} ref={listRef}>
         {entries.map((entry, index) => (
           <PropertyRow
             key={entry.property}
@@ -85,7 +92,6 @@ export function PropertyList({ schema, format, onChangeFormat }: Props) {
             onToggle={() =>
               commit(entries.map((e, i) => (i === index ? { ...e, visible: !e.visible } : e)))
             }
-            onMove={(from, to) => commit(reorder(entries, from, to))}
             onConfig={(anchor) => setConfigFor({ property: entry.property, anchor })}
           />
         ))}
@@ -136,29 +142,26 @@ interface RowProps {
   index: number;
   schema: CollectionSchema;
   onToggle: () => void;
-  onMove: (from: number, to: number) => void;
   onConfig: (anchor: HTMLElement) => void;
 }
 
-function PropertyRow({ entry, index, schema, onToggle, onMove, onConfig }: RowProps) {
+function PropertyRow({ entry, index, schema, onToggle, onConfig }: RowProps) {
   const def = schema[entry.property];
-  const { dragging, handlers } = useDragHandle({ kind: 'property', id: entry.property, index });
-  const drop = useDropZone({
-    accept: 'property',
-    onDrop: (payload) => {
-      if (payload.index !== undefined) onMove(payload.index, index);
-    },
-  });
+  // 第十一輪：整份清單一個 zone，這一列只負責「我是第幾項」（data-kn-dnd-item）
+  const { isDragging, dragRef, itemProps, handleProps } = useSortableItem(
+    'property',
+    entry.property,
+    index,
+  );
   if (!def) return null;
 
   return (
     <div
-      className={`${styles.propertyRow} ${dragging ? styles.rowDragging : ''} ${
-        drop.over ? styles.rowOver : ''
-      }`}
-      {...drop.handlers}
+      ref={dragRef}
+      {...itemProps}
+      className={`${styles.propertyRow} ${isDragging ? styles.rowDragging : ''}`}
     >
-      <span className={styles.dragHandle} {...handlers} aria-hidden="true">
+      <span className={styles.dragHandle} {...handleProps} aria-hidden="true">
         <UiIcon name="drag" size={12} />
       </span>
       <FieldIcon type={def.type} />

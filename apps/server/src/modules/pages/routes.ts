@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireUser } from '../../plugins/auth.js';
 import { applyTransaction, listTransactionsSince } from '../blocks/apply-transaction.js';
+import { MAX_MOVE_BLOCKS, moveBlocksToPage } from '../blocks/move-to.js';
 import { findPageInUserWorkspace } from './repo.js';
 import {
   addFavorite,
@@ -38,6 +39,14 @@ const patchSchema = z
 const moveSchema = z.object({
   parentId: z.string().uuid().nullable(),
   afterId: z.string().uuid().nullable().optional(),
+});
+
+/** 跨頁面搬移 block（第十一輪）。詳見 modules/blocks/move-to.ts 的檔頭。 */
+const blocksMoveToSchema = z.object({
+  blockIds: z.array(z.string().uuid()).min(1).max(MAX_MOVE_BLOCKS),
+  targetPageId: z.string().uuid(),
+  afterId: z.string().uuid().nullable().optional(),
+  originSessionId: z.string().max(100).optional(),
 });
 
 const writeLimit = { config: { rateLimit: { max: 120, timeWindow: '1 minute' } } };
@@ -153,6 +162,19 @@ export async function pageRoutes(app: FastifyInstance): Promise<void> {
   });
 
   /* ── Block 變更的唯一入口（04 §5.4） ─────────────────── */
+
+  /**
+   * 跨頁面搬移 block（第十一輪；BlockMenu 的「移動到…」）。
+   *
+   * 兩頁各記一筆 transaction、同一個資料庫交易、兩頁都要 `edit`
+   * （權限由 applyWithin 的 permissionGuard 逐頁把關）。
+   */
+  app.post('/:id/blocks/move-to', writeLimit, async (req, reply) => {
+    const user = requireUser(req);
+    const { id } = idParams.parse(req.params);
+    const input = blocksMoveToSchema.parse(req.body);
+    return reply.send({ data: await moveBlocksToPage(id, user.id, input) });
+  });
 
   app.post('/:id/transactions', { config: { rateLimit: { max: 600, timeWindow: '1 minute' } } },
     async (req, reply) => {

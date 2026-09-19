@@ -266,14 +266,17 @@ registerCreateDatabase(async ({ workspaceId, parentId }) => {
   但**一般 block 的拖曳搬移在觸控裝置上仍然沒有替代路徑**
   （資料庫表格列另外做了最小版，見 `functional-round6.md` BUG-34）。
   → [`docs/qa/README.md`](../../../../../docs/qa/README.md) §2 D 的 O-15。
-- **「移動到…」**（跨頁面搬移 block）**仍然只跳 toast**，而且文案還寫著「會在 M3 開放」
-  （`menus/BlockMenu.tsx`）——M3 早就完成了，卡的是 op 集合裡沒有「改 block 的 pageId」。
-  要嘛補這個 operation，要嘛把文案改成誠實的「尚未實作」。
-- **編輯器裡的「留言」入口仍是佔位**：`menus/BubbleMenu.tsx` 與 `menus/BlockMenu.tsx`
-  的留言按鈕都只 `toast('留言功能在 M5 才會開放')`。
-  ⚠️ **這段文案已經過期** —— M5 的留言系統早就上線，
-  `features/comments/CommentsPanel` 也已經接在 `AppShell` 上（頁面層級的留言可以用）。
-  差的只有「從選取的文字／某個 block 直接開 inline discussion」這條路。
+- ~~**「移動到…」只跳 toast**~~ **第十一輪已接**：
+  `POST /api/pages/:id/blocks/move-to`（`modules/blocks/move-to.ts`，**需部署**）。
+  協定上仍然沒有「改 block 的 pageId」這個 op —— 端點做的是
+  **來源頁 `block.delete` + 目標頁 `block.insert`，同一個資料庫交易、id 不換**。
+  id 不換是核心：comment mark / `#blockId` 深連結 / `files.page_id` 全部認 id。
+  細節見 `docs/qa/functional-round11.md` §4。
+- ~~**編輯器裡的「留言」入口仍是佔位**~~ **第十一輪已接**：
+  `BubbleMenu` / `BlockMenu` / `PageHeader` 三顆都接上了
+  （`Editor.tsx` 的 `openInlineComment` / `openBlockComment`）。
+  ⚠️ 改這條路時要記得**選取範圍必須在按下「留言」那一刻凍起來** ——
+  輸入框一 focus，`editor.getSelection()` 就沒了，`toggleMark()` 會靜靜地什麼都不做。
 - **AI** 是佔位按鈕（P2）。
 - **虛擬捲動未啟用**：02 §3.4 說 block 數 > 200 才需要，M2-B 的驗收是「500 block 輸入 < 50ms」，
   實測前不預先優化。`BlockPortals` 只為「有 React renderer 的 block」建 portal，

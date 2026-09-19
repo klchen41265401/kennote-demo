@@ -218,7 +218,7 @@ export { Popover, Menu, MenuItem, Dialog, VirtualList } from '@kennote/ui';
 | `Menu` / `MenuItem` | `MenuItem: onSelect / icon / danger / disabled / selected / hint` |
 | `Dialog` | `open / onClose / title / footer / variant('side' \| 'center') / width` |
 | `VirtualList` | `items / itemHeight / renderItem / onEndReached / footer` |
-| `useDragHandle` / `useDropZone` | payload `{ kind, id, from?, index? }` |
+| ~~`useDragHandle` / `useDropZone`~~ | **第十一輪刪除**。拖放改用 `features/database/dnd.ts`（`packages/ui/src/dnd` 的 Pointer 引擎）：`useCardDrag` / `useCardZone`（看板、日曆）、`useSortableList` / `useSortableItem`（屬性、排序） |
 | `FieldIcon` | `type`（欄位型別 key） |
 
 ---
@@ -251,9 +251,18 @@ export { Popover, Menu, MenuItem, Dialog, VirtualList } from '@kennote/ui';
 - **拖曳列排序只有表格接了**（`POST /api/databases/:id/rows/reorder`，寫 `pages.sort_key`），
   **沒有鍵盤替代路徑**，而且視圖有 `sort` 時仍可拖曳（Notion 是停用）（O-17）。
   `view.format.manualOrder` 那條既有路徑仍未使用（O-18）。
-- **看板卡片、日曆、`PropertyList`、`SortBuilder` 還是 HTML5 DnD → 觸控全死。**
-  正解是統一改用 `@kennote/ui` 的 dnd 引擎（O-11）。連續四輪延後。
-- **手機版的資料庫表格橫捲**連續五～六輪沒有走查過（O-13）。
+- ~~**看板卡片、日曆、`PropertyList`、`SortBuilder` 還是 HTML5 DnD → 觸控全死**（O-11）~~
+  **第十一輪已修**：`_fallback/dnd.ts` 已刪除，四個落點全部改走
+  `features/database/dnd.ts`（Pointer + 長按 400ms）。
+  ⚠️ 不要在呼叫端套 `useDraggable` 回的 `handleProps.style`
+  （裡面的 `touch-action: none` 會讓整欄不能捲；擋捲動是 controller 的事，
+  見 `docs/qa/functional-round11.md` §6-2）。
+- ~~**手機版的資料庫表格橫捲**連續五～六輪沒有走查過（O-13）~~
+  **第十一輪走查完畢**：首欄 sticky 有效（R11-12），並補上 767px 斷點。
+- **手機上點「開啟」鈕不會開列 peek**（`RowPeek` 沒掛上來，原因未明；
+  `e2e/functional-round11.spec.ts` 的 R11-13 是 `fixme`）。桌機正常。
+- **`properties` 面板（「此視圖顯示的屬性」）沒有任何觸發點** ——
+  `DatabaseHeader.tsx` 有完整的 `<Popover>`，但全檔案沒有 `open('properties', …)`。
 - `createDual` 關掉開關時**不會刪對方的欄位**（刻意），UI 也沒有「順便刪掉」的選項（O-19）。
 - 舊資料裡**已經寫出去的孤兒屬性沒有清理腳本**（新的寫入已經擋住了）（O-21）。
 - **子分組 sub-group** 與**個人暫用視圖設定**是 P2，尚未實作。

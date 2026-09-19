@@ -15,9 +15,10 @@ import {
   toOffsetText,
   type InlineAtom,
 } from '@kennote/editor-core';
+import { toggleMarkOps } from '@kennote/editor-core';
 import type { MenuTriggerPayload } from '@kennote/editor-core';
 import type { BlockType, PageSnapshot } from '@kennote/shared-types';
-import { API_ROUTES } from '@kennote/shared-types';
+import { API_ROUTES, richTextToPlainText } from '@kennote/shared-types';
 import { EditorHostContext, type EditorHostApi } from './context';
 import { useEditorHost } from './useEditorHost';
 import type { TransportState } from './transport';
@@ -50,6 +51,8 @@ import { pointRect, rectFromDOMRect, type RectLike } from './lib/floating';
 import { overlayDepth, Popover } from './ui/overlay';
 import { ToastHost, toast } from './ui/toast';
 import { EmojiPicker } from '../../components/EmojiPicker';
+import { CommentPopover } from '../comments/CommentPopover';
+import { setRightPanel } from '../../stores/ui';
 import { isImageFile, isVideoFile } from '../../lib/upload';
 import { useWorkspaceTree } from '../../lib/queries';
 import { usePresence } from '../../lib/presence';
@@ -93,6 +96,22 @@ export function Editor({
   const [mentionState, setMentionState] = useState<MentionState | null>(null);
   const [blockMenu, setBlockMenu] = useState<MenuAnchorState | null>(null);
   const [linkRequest, setLinkRequest] = useState(0);
+  /**
+   * 第十一輪：留言草稿。
+   *
+   * `range` 是**按下「留言」那一刻**的選取範圍，不是送出時的 ——
+   * 輸入框一 focus，編輯器的 DOM 選取就沒了，`editor.toggleMark()` 會無事發生。
+   * 所以這裡把 `{blockId,start,end}` 凍起來，送出後直接用
+   * `toggleMarkOps(doc, …)` 建 op，走 host.applyOps 送出。
+   */
+  const [commentDraft, setCommentDraft] = useState<{
+    blockId: string;
+    range: { start: number; end: number } | null;
+    quote: string;
+    rect: { top: number; left: number } | null;
+  } | null>(null);
+  /** 第十一輪：block 的「移動到…」目標頁挑選器 */
+  const [moveTo, setMoveTo] = useState<{ blockIds: string[]; anchor: RectLike } | null>(null);
   const [emojiTarget, setEmojiTarget] = useState<
     { kind: 'callout' | 'inline'; blockId: string; anchor: RectLike } | null
   >(null);
@@ -292,6 +311,92 @@ export function Editor({
     return sel.type === 'block' ? sel.blockIds : [];
   }, [editor]);
   const { drag, startDrag } = useBlockDrag({ editor, readOnly, getSelectedIds });
+
+  /* ── 留言（第十一輪）────────────────────────────────
+   *
+   * 錨點策略照 `shared-types/comments.ts` 的規定：**行內留言靠 rich text 上的
+   * `{t:'comment',id}` mark**，不用字元位移。所以順序一定是
+   *   ① 前端先產生 discussionId（CommentPopover 內部做）
+   *   ② POST 成功 → onCreated(discussionId)
+   *   ③ 才把 mark 套在「按下留言那一刻」的範圍上
+   * 反過來（先套 mark 再送）會在 POST 失敗時留下指向不存在討論串的 mark。
+   */
+  const openInlineComment = useCallback(() => {
+    if (!editor || readOnly) return;
+    const sel = editor.getSelection();
+    if (sel.type !== 'text') return;
+    const sameBlock = sel.anchor.blockId === sel.focus.blockId;
+    if (!sameBlock || sel.anchor.offset === sel.focus.offset) return;
+    const start = Math.min(sel.anchor.offset, sel.focus.offset);
+    const end = Math.max(sel.anchor.offset, sel.focus.offset);
+    const block = editor.getBlock(sel.focus.blockId);
+    const text = richTextToPlainText(block?.content ?? []);
+    const rect = editor.getSelectionRect();
+    setCommentDraft({
+      blockId: sel.focus.blockId,
+      range: { start, end },
+      quote: [...text].slice(start, end).join(''),
+      rect: rect ? { top: rect.bottom + 8, left: rect.left } : null,
+    });
+  }, [editor, readOnly]);
+
+  /**
+   * Block 層級留言：錨點是 **block 本身**（`discussion.blockId`），
+   * 整段內容一起套 mark。沒有行內內容的 block（圖片 / 分隔線）就只留 blockId ——
+   * 面板的 hover 高亮走 `[data-block-id]`，不依賴 mark，所以仍然指得到。
+   */
+  const openBlockComment = useCallback(
+    (blockId: string) => {
+      if (!editor || readOnly) return;
+      const block = editor.getBlock(blockId);
+      if (!block) return;
+      const text = richTextToPlainText(block.content ?? []);
+      const len = [...text].length;
+      const el = wrapperRef.current?.querySelector(`[data-block-id="${blockId}"]`);
+      const rect = el?.getBoundingClientRect();
+      setCommentDraft({
+        blockId,
+        range: len > 0 ? { start: 0, end: len } : null,
+        quote: text.slice(0, 500),
+        rect: rect ? { top: rect.bottom + 8, left: rect.left } : null,
+      });
+    },
+    [editor, readOnly],
+  );
+
+  const onCommentCreated = useCallback(
+    (discussionId: string) => {
+      const draft = commentDraft;
+      if (!draft || !host) return;
+      if (draft.range) {
+        const built = toggleMarkOps(
+          host.editor.getDoc(),
+          draft.blockId,
+          draft.range.start,
+          draft.range.end,
+          { t: 'comment', id: discussionId },
+        );
+        if (built.ops.length > 0) host.applyOps(built.ops);
+      }
+      // 留言送出了就把面板打開 —— 不然使用者看不到自己剛寫的東西去哪了
+      setRightPanel(true, 'comments');
+    },
+    [commentDraft, host],
+  );
+
+  /* ── 跨頁面搬移（第十一輪）───────────────────────── */
+  const runMoveTo = useCallback(
+    async (blockIds: string[], targetPageId: string): Promise<void> => {
+      try {
+        await api.post(API_ROUTES.pageBlocksMoveTo(pageId), { blockIds, targetPageId });
+        toast('已移動到其他頁面', { kind: 'success' });
+        // 兩頁各有一筆 transaction；本頁靠 WS 廣播收回來（sync 的 onRemoteOps）。
+      } catch (err) {
+        toast(err instanceof Error ? err.message : '搬移失敗', { kind: 'error' });
+      }
+    },
+    [pageId],
+  );
 
   /* ── 快捷鍵 ─────────────────────────────────────────── */
   useHostKeymap(wrapperRef, {
@@ -842,6 +947,7 @@ export function Editor({
               const target = ids.length > 0 ? ids : sel.type === 'text' ? [sel.focus.blockId] : [];
               for (const id of target) host.updateProps(id, { color });
             }}
+            onComment={openInlineComment}
           />
 
           <BlockMenu
@@ -849,6 +955,31 @@ export function Editor({
             anchor={blockMenu?.anchor ?? null}
             blockIds={blockMenu?.blockIds ?? []}
             onClose={() => setBlockMenu(null)}
+            onComment={readOnly ? undefined : openBlockComment}
+            onMoveTo={
+              readOnly
+                ? undefined
+                : (ids) => {
+                    const anchor = blockMenu?.anchor;
+                    if (anchor) setMoveTo({ blockIds: ids, anchor });
+                  }
+            }
+          />
+
+          {/* 跨頁面搬移：目標頁挑選器（沿用「連結到頁面」那一顆） */}
+          <PickerPopover
+            anchor={moveTo?.anchor ?? null}
+            open={moveTo !== null}
+            title="移動到…"
+            placeholder="搜尋目標頁面…"
+            nodes={(tree.data ?? []).filter((n) => n.id !== pageId)}
+            loading={tree.isLoading}
+            onClose={() => setMoveTo(null)}
+            onSelect={(node) => {
+              const current = moveTo;
+              setMoveTo(null);
+              if (current) void runMoveTo(current.blockIds, node.id);
+            }}
           />
 
           {/* emoji：callout 圖示 / 行內插入 */}
@@ -936,6 +1067,21 @@ export function Editor({
                 {drag.label}
               </div>
             </>,
+            document.body,
+          )
+        : null}
+
+      {/* 留言草稿框（固定定位，掛在 body；panel 與 mark 由 onCommentCreated 收尾） */}
+      {commentDraft
+        ? createPortal(
+            <CommentPopover
+              pageId={pageId}
+              blockId={commentDraft.blockId}
+              quote={commentDraft.quote}
+              anchorRect={commentDraft.rect}
+              onCreated={onCommentCreated}
+              onClose={() => setCommentDraft(null)}
+            />,
             document.body,
           )
         : null}

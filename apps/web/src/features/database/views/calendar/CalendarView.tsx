@@ -7,7 +7,8 @@
 import { useMemo, useState } from 'react';
 import type { DatabaseRow } from '@kennote/shared-types';
 import { richTextToPlainText } from '@kennote/shared-types';
-import { UiIcon, useDragHandle, useDropZone } from '../../_fallback';
+import { UiIcon } from '../../_fallback';
+import { useCardDrag, useCardZone } from '../../dnd';
 import { useDatabaseContext } from '../../context';
 import { dateStartOf } from '../../fields/_shared/ops';
 import type { ViewProps } from '../types';
@@ -126,7 +127,7 @@ interface DayCellProps extends ViewProps {
 
 function DayCell({ day, inMonth, isToday, dayRows, dateProperty, readOnly, ...props }: DayCellProps) {
   const key = toKey(day);
-  const { over, handlers } = useDropZone({
+  const { isOver, zoneRef } = useCardZone({
     accept: 'row',
     onDrop: (payload) => {
       // 拖到哪一格就把日期改成那一天（保留原本的 includeTime 設定交給後端正規化）
@@ -136,8 +137,8 @@ function DayCell({ day, inMonth, isToday, dayRows, dateProperty, readOnly, ...pr
 
   return (
     <div
-      className={`${styles.day} ${inMonth ? '' : styles.dayOut} ${over ? styles.dayOver : ''}`}
-      {...handlers}
+      ref={zoneRef}
+      className={`${styles.day} ${inMonth ? '' : styles.dayOut} ${isOver ? styles.dayOver : ''}`}
     >
       <div className={styles.dayHeader}>
         <span className={isToday ? styles.dayNumberToday : styles.dayNumber}>{day.getDate()}</span>
@@ -163,13 +164,14 @@ function DayCell({ day, inMonth, isToday, dayRows, dateProperty, readOnly, ...pr
 }
 
 function CalendarChip({ row, onOpen }: { row: DatabaseRow; onOpen: () => void }) {
-  const { dragging, handlers } = useDragHandle({ kind: 'row', id: row.id });
+  const { isDragging, dragRef, handleProps } = useCardDrag('row', row.id);
   return (
     <button
+      ref={dragRef}
       type="button"
-      className={`${styles.chip} ${dragging ? styles.chipDragging : ''}`}
+      className={`${styles.chip} ${isDragging ? styles.chipDragging : ''}`}
       onClick={onOpen}
-      {...handlers}
+      {...handleProps}
     >
       {richTextToPlainText(row.title) || '未命名'}
     </button>

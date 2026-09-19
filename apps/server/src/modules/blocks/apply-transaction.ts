@@ -313,6 +313,15 @@ export function setBroadcaster(fn: BroadcastFn): void {
 }
 
 /**
+ * 第十一輪：讓「自己開交易、自己 commit」的呼叫端也能走同一個廣播出口
+ *（跨頁搬移 `move-to.ts` 會在一個資料庫交易裡套兩筆 transaction，
+ *  兩筆都必須在 **commit 之後** 才廣播，所以不能由 applyTransaction 代勞）。
+ */
+export function broadcastResult(result: TransactionResult, originSessionId: string): void {
+  broadcast(result, originSessionId);
+}
+
+/**
  * 第七輪：transaction 提交後的通知掛勾（第六輪 §5-3 / §5-4）。
  *
  * 編輯器的 `MentionMenu` 早就插得出正確的 mention atom，但

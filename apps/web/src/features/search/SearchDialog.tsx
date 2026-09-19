@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { PageTreeNode } from '@kennote/shared-types';
 import { Dialog, Icon } from '@kennote/ui';
 import { searchPages, useRecentPages, type ShellSearchHit } from '../../lib/queries';
+import { useAuth } from '../../stores/auth';
 import { displayTitle } from '../page-tree/tree';
 import styles from './SearchDialog.module.css';
 
@@ -19,11 +20,24 @@ export interface SearchDialogProps {
 
 type FilterId = 'all' | 'title' | 'creator' | 'date';
 
+/**
+ * 第十一輪：三顆 chip 終於各自接到東西上。
+ *
+ * - **建立者 / 日期**接後端本來就有的 `createdBy` / `updatedAfter`
+ *   （`search/routes.ts` 的 querySchema 從 M6 就宣告了，只是沒有呼叫端 ——
+ *   第六輪 §「前端沒有呼叫端」那個型態的第 N 例）。
+ * - **標題**沒有對應的後端參數：`type` 的 zod enum 只有 `page | database`，
+ *   送 `type:'title'` 會 400（所以這顆 chip 以前一按結果就空）。
+ *   這裡改成**前端過濾**：只留標題命中的那些（`blockId === null`
+ *   或標題文字本身含關鍵字），不動後端契約。
+ */
 const FILTERS: { id: FilterId; label: string }[] = [
-  { id: 'title', label: '僅顯示標題' },
-  { id: 'creator', label: '建立者' },
-  { id: 'date', label: '日期' },
+  { id: 'title', label: '僅標題' },
+  { id: 'creator', label: '我建立的' },
+  { id: 'date', label: '最近 7 天' },
 ];
+
+const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 
 export function SearchDialog({
   open,
@@ -39,6 +53,8 @@ export function SearchDialog({
   const [active, setActive] = useState(0);
   const recent = useRecentPages(open ? workspaceId : null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const { user } = useAuth();
+  const userId = user?.id ?? null;
 
   useEffect(() => {
     if (!open) {
@@ -59,16 +75,19 @@ export function SearchDialog({
     }
     setLoading(true);
     const id = window.setTimeout(() => {
-      searchPages(q, workspaceId, filter === 'title' ? { type: 'title' } : {})
+      const options: Parameters<typeof searchPages>[2] = {};
+      if (filter === 'creator' && userId) options.createdBy = userId;
+      if (filter === 'date') options.updatedAfter = new Date(Date.now() - SEVEN_DAYS_MS).toISOString();
+      searchPages(q, workspaceId, options)
         .then((res) => {
-          setHits(res);
+          setHits(filter === 'title' ? res.filter((hit) => titleMatches(hit, q)) : res);
           setActive(0);
         })
         .catch(() => setHits([]))
         .finally(() => setLoading(false));
     }, 300);
     return () => window.clearTimeout(id);
-  }, [query, workspaceId, filter, open]);
+  }, [query, workspaceId, filter, open, userId]);
 
   const recentRows = useMemo<ShellSearchHit[]>(
     () =>
@@ -181,6 +200,17 @@ export function SearchDialog({
       </div>
     </Dialog>
   );
+}
+
+/**
+ * 「僅標題」的前端過濾。
+ * 後端回的每一筆要嘛是頁面本身（`blockId === null`）、要嘛是某個 block 的片段；
+ * 這裡只留「標題文字真的含關鍵字」的那些 —— 標題沒中卻因為內文而上榜的就丟掉。
+ */
+export function titleMatches(hit: ShellSearchHit, query: string): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  return displayTitle(hit.title).toLowerCase().includes(q);
 }
 
 /** 把命中的關鍵字包成 <mark>（不使用 innerHTML） */

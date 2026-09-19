@@ -446,3 +446,50 @@
 .batchDanger {
   color: var(--kn-color-danger, #e03e3e);
 }
+
+/* ────────────────────────────────────────────────────────────
+   第十一輪：手機（≤767px）—— O-13「表格橫捲」連六輪沒走查
+   ──────────────────────────────────────────────────────────── */
+@media (max-width: 767px) {
+  /*
+   * 首欄 sticky 本來就有（`.frozen` + `tableFreezeColumns` 預設 1），
+   * 但在手機上**看不出它是黏住的**：橫捲時第二欄會從它底下滑過去，
+   * 兩者背景同色、只有一條 1px 格線，視覺上像「文字互相穿透」。
+   * 加一條右側陰影就分得開了 —— 這是 sticky 欄的標準收尾。
+   */
+  .frozen {
+    box-shadow: 2px 0 0 -1px var(--kn-db-line), 6px 0 8px -6px rgb(0 0 0 / 18%);
+  }
+
+  /*
+   * 名稱欄預設 280px，在 390 寬的螢幕上等於「一欄就吃掉 72%」，
+   * 橫捲時右邊只剩一條縫。手機上收到 160，其餘欄位才看得見。
+   * 用 min()：使用者自己拉過欄寬（format.properties[].width）時不要放大它。
+   */
+  .titleCell,
+  .headerRow .frozen,
+  .aggRow .frozen {
+    width: min(160px, 46vw) !important;
+  }
+
+  /*
+   * ⭐ 第十一輪 BUG-53：**手機上完全打不開列 peek**。
+   * `.openButton` 是 `display: none` + `.row:hover` 才變 `inline-flex` ——
+   * 觸控裝置沒有 hover，所以那顆按鈕在手機上**從來沒有出現過**。
+   * 第十輪 R10-8 之所以量不到 peek 的寬度，真正的原因就是這個
+   *（當時記成「找不到開啟鈕」，沒有往下追）。
+   *
+   * **hover-only 的入口在觸控裝置上等於不存在。**
+   * 手機上一律顯示；為了不擋住儲存格文字，縮成一顆圖示大小的按鈕。
+   */
+  .openButton {
+    display: inline-flex;
+    opacity: 0.75;
+  }
+
+  /* 觸控捲動要有慣性，否則橫捲在 iOS 上會頓一下才動 */
+  .grid {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+  }
+}

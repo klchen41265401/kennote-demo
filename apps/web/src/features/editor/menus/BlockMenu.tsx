@@ -18,9 +18,13 @@ export interface BlockMenuProps {
   anchor: RectLike | null;
   blockIds: string[];
   onClose(): void;
+  /** 第十一輪：block 層級留言（anchor 綁在 block 上，見 Editor 的 openBlockComment） */
+  onComment?(blockId: string): void;
+  /** 第十一輪：跨頁面搬移（POST /api/pages/:id/blocks/move-to） */
+  onMoveTo?(blockIds: string[]): void;
 }
 
-export function BlockMenu({ host, anchor, blockIds, onClose }: BlockMenuProps) {
+export function BlockMenu({ host, anchor, blockIds, onClose, onComment, onMoveTo }: BlockMenuProps) {
   const [sub, setSub] = useState<'type' | 'color' | null>(null);
   const [subAnchor, setSubAnchor] = useState<RectLike | null>(null);
   const open = anchor !== null && blockIds.length > 0;
@@ -94,22 +98,26 @@ export function BlockMenu({ host, anchor, blockIds, onClose }: BlockMenuProps) {
           <MenuSeparator />
           <MenuItem icon={<Icon name="copy" />} label="複製一份" hint="Ctrl+D" onSelect={duplicate} />
           <MenuItem icon={<Icon name="link" />} label="複製區塊連結" onSelect={copyLink} />
-          <MenuItem
-            icon={<Icon name="move" />}
-            label="移動到…"
-            onSelect={() => {
-              toast('跨頁面搬移會在 M3（頁面樹）開放', { kind: 'info' });
-              onClose();
-            }}
-          />
-          <MenuItem
-            icon={<Icon name="comment" />}
-            label="留言"
-            onSelect={() => {
-              toast('留言功能在 M5 才會開放', { kind: 'info' });
-              onClose();
-            }}
-          />
+          {onMoveTo ? (
+            <MenuItem
+              icon={<Icon name="move" />}
+              label="移動到…"
+              onSelect={() => {
+                onMoveTo(blockIds);
+                onClose();
+              }}
+            />
+          ) : null}
+          {onComment && primary ? (
+            <MenuItem
+              icon={<Icon name="comment" />}
+              label="留言"
+              onSelect={() => {
+                onComment(primary);
+                onClose();
+              }}
+            />
+          ) : null}
           <MenuSeparator />
           <MenuItem
             icon={<Icon name="trash" />}

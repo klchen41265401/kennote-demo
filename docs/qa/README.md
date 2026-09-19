@@ -21,6 +21,8 @@
 | [functional-round7.md](functional-round7.md) | 權限**下推到查詢層**（樹 / 垃圾桶 / 最近 / 收藏 / snapshot / duplicate） | 推翻第六輪的推論：guest 實測拿得到整份 recordMap。本輪**前端一行都沒改** |
 | [functional-round8.md](functional-round8.md) | **權限總掃**（資源 × 角色 × 動作，47 格） | 47 格中 21 格失敗；最大的是整個 `databases` 模組 15 支端點零權限檢查 |
 | [functional-round9.md](functional-round9.md) | 附件權限 / WS 撤權踢人 / 列頁種子段落 | 補完「一份資料的出口清單」最後兩格；`permission_changed` 通知終於有發送端 |
+| [functional-round10.md](functional-round10.md) | 搜尋 guest 正例 / 協作即時性 / 觸控 | 連三輪的「未驗證」其實從頭就可驗；抓到 `pointercancel` 被當成 `pointerup`（手機上捲動 = 搬頁） |
+| [functional-round11.md](functional-round11.md) | 殘餘佔位入口 / 跨頁搬移 / 觸控拖曳 / 手機版資料庫 | `_fallback/dnd.ts` 刪掉了；抓到「hover-only 的入口在觸控上等於不存在」（BUG-53） |
 | [database-gaps.md](database-gaps.md) | 資料庫功能缺口補完（relation 反向欄位、RowPeek、垃圾桶、CSV、欄寬、列選取） | 7 項全部做完；§4 另列 6 項未做 |
 | [regression-triage-1.md](regression-triage-1.md) | 第一次全量 e2e（78 條）之後的紅燈分診 | 4 條紅燈 = 2 條產品缺陷（前端時序競態，只在 0 block 的列頁看得見）+ 3 條測試過時 |
 
@@ -53,13 +55,17 @@
 下面是跨所有輪次**明確標為未修 / 延後 / 已知限制**的清單。
 各 feature README 的「已知限制」段落指向這裡。
 
-> 🚧 **第十輪正在進行中。** `e2e/functional-round10.spec.ts` 已經在
-> （主題：**搜尋 guest 過濾正例**、協作即時性、觸控 / 手機），
-> `docs/qa/functional-round10.md` 還沒寫完。
-> 工作目錄裡另有尚未 commit 的修正（`modules/files/`、`modules/databases/service.ts`、
-> `SharePopover.tsx`、`ui/src/dnd/controller.ts`、`scripts/backfill-file-pages.ts`），
-> 看起來正是衝著下面的 **O-1 / O-2 / O-3 / O-4 / O-11** 來的。
+> 🚧 **第十 / 十一輪的修正都還沒 commit。**
+> `docs/qa/functional-round10.md` 與 `functional-round11.md` 都已經寫完，
+> 對應的 `e2e/functional-round10.spec.ts` / `functional-round11.spec.ts` 也都在，
+> 但工作目錄裡有一整批尚未 commit 的改動（第十輪：`modules/files/`、
+> `modules/databases/service.ts`、`SharePopover.tsx`、`ui/src/dnd/controller.ts`、
+> `scripts/backfill-file-pages.ts`；第十一輪：`modules/blocks/move-to.ts`、
+> `features/editor/*`、`features/database/*`、`features/search/SearchDialog.tsx`）。
 > **本節反映的是已 commit 的狀態**；動手修之前先 `git status` 看一眼，不要撞車。
+>
+> 第十一輪結案的是 **O-11**（`_fallback/dnd.ts` 已刪除）與 **O-13**（表格橫捲已走查），
+> 並新增 **O-31 / O-32**（見 D 段）。
 
 ### A. 有編號但從未結案
 
@@ -96,11 +102,13 @@
 
 | # | 一句話 | 元件 |
 |---|---|---|
-| O-11 | 看板卡片、日曆、`PropertyList`、`SortBuilder` 仍是 HTML5 DnD → **觸控全死**（正解是統一改用 `@kennote/ui` 的 dnd） | database / ui |
+| ~~O-11~~ | ~~看板卡片、日曆、`PropertyList`、`SortBuilder` 仍是 HTML5 DnD → 觸控全死~~ **第十一輪結案**：`_fallback/dnd.ts` 已刪除 | database / ui |
 | O-12 | **`/settings` 這個 URL 根本不存在**（`App.tsx` 沒宣告，會掉到 NotFound）；設定是 store 裡的 overlay，不支援深連結 | shell |
-| O-13 | **資料庫表格橫捲**（手機版）連續五～六輪沒走查 | database |
+| ~~O-13~~ | ~~**資料庫表格橫捲**（手機版）連續五～六輪沒走查~~ **第十一輪走查完畢**（R11-12：首欄 sticky 有效） | database |
 | O-14 | 編輯器 5 項未走：媒體 URL 實際填入、圖片檔案拖放上傳、程式碼語言切換、block selection 的複製貼上、Word/GDocs 剪貼簿 HTML | editor |
 | O-15 | 觸控的**拖曳排序**只做到「長按開選單」與表格列（最小版），一般 block 的拖曳搬移仍無替代路徑 | editor / ui |
+| O-31 | **手機上點「開啟」鈕不會開列 peek**（`RowPeek` 沒掛上來，原因未明；桌機正常）。`e2e/functional-round11.spec.ts` R11-13 是 `fixme` | database |
+| O-32 | **`properties` 面板（「此視圖顯示的屬性」）沒有任何觸發點** —— `DatabaseHeader.tsx` 有完整的 `<Popover>`，但全檔案沒有 `open('properties', …)` | database |
 
 ### E. `database-gaps.md` §4 的 6 項
 

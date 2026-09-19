@@ -393,6 +393,8 @@ export function DatabaseHeader(props: DatabaseHeaderProps) {
         anchor={panel?.anchor ?? null}
         onClose={close}
         placement="bottom-end"
+        /* 第十一輪：手機上改成 bottom sheet（桌機不變） */
+        sheetOnMobile
         flush
       >
         <FilterBuilder
@@ -407,6 +409,8 @@ export function DatabaseHeader(props: DatabaseHeaderProps) {
         anchor={panel?.anchor ?? null}
         onClose={close}
         placement="bottom-end"
+        /* 第十一輪：手機上改成 bottom sheet（桌機不變） */
+        sheetOnMobile
         flush
       >
         <SortBuilder
@@ -421,6 +425,8 @@ export function DatabaseHeader(props: DatabaseHeaderProps) {
         anchor={panel?.anchor ?? null}
         onClose={close}
         placement="bottom-end"
+        /* 第十一輪：手機上改成 bottom sheet（桌機不變） */
+        sheetOnMobile
       >
         <GroupSettings
           schema={schema}
@@ -435,6 +441,8 @@ export function DatabaseHeader(props: DatabaseHeaderProps) {
         anchor={panel?.anchor ?? null}
         onClose={close}
         placement="bottom-end"
+        /* 第十一輪：手機上改成 bottom sheet（桌機不變） */
+        sheetOnMobile
       >
         <PropertyList
           schema={schema}
@@ -448,6 +456,8 @@ export function DatabaseHeader(props: DatabaseHeaderProps) {
         anchor={panel?.anchor ?? null}
         onClose={close}
         placement="bottom-end"
+        /* 第十一輪：手機上改成 bottom sheet（桌機不變） */
+        sheetOnMobile
       >
         {viewDef.SettingsPanel ? (
           <viewDef.SettingsPanel
@@ -466,6 +476,8 @@ export function DatabaseHeader(props: DatabaseHeaderProps) {
         anchor={panel?.anchor ?? null}
         onClose={close}
         placement="bottom-end"
+        /* 第十一輪：手機上改成 bottom sheet（桌機不變） */
+        sheetOnMobile
         flush
       >
         {panel ? (

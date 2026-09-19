@@ -156,3 +156,66 @@
   padding: var(--kn-space-3) var(--kn-space-5);
   border-top: 1px solid var(--kn-color-divider);
 }
+
+/* ────────────────────────────────────────────────────────────
+   第十一輪：手機（≤767px）
+   第十輪 §4 查到 `features/database/**` 底下**一條 @media 都沒有**
+   （shell / settings / home / trash 都有 767px 的斷點）。
+   現況是「勉強塞得下」，不是「做對了」：
+     - 篩選 / 排序 / 設定仍然是桌機的 popover，會蓋住觸發它的那顆按鈕
+     - 列 peek 是側欄寬度，不是全螢幕
+   ──────────────────────────────────────────────────────────── */
+
+/** bottom sheet：位置固定、滿寬、從底部長出來（見 Popover.tsx 的 sheetOnMobile） */
+.popoverSheet {
+  top: auto;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  max-height: 80vh;
+  border-radius: var(--kn-radius-lg) var(--kn-radius-lg) 0 0;
+  box-shadow: var(--kn-shadow-lg);
+  /* 手機有底部安全區（瀏海機的 home indicator），不補的話最後一列點不到 */
+  padding-bottom: calc(var(--kn-space-2) + env(safe-area-inset-bottom, 0px));
+  animation: sheetUp var(--kn-motion-normal) var(--kn-motion-ease);
+}
+
+.popoverSheet::before {
+  content: '';
+  display: block;
+  width: 36px;
+  height: 4px;
+  margin: 4px auto 8px;
+  border-radius: 2px;
+  background: var(--kn-color-divider);
+}
+
+@keyframes sheetUp {
+  from {
+    transform: translateY(16px);
+    opacity: 0;
+  }
+}
+
+@media (max-width: 767px) {
+  /** 列 peek 全螢幕：560px 的側欄在 390 寬的螢幕上等於「一條縫」 */
+  .dialogSide {
+    width: 100%;
+    max-width: 100%;
+    height: 100%;
+    margin-left: 0;
+    animation: sheetUp var(--kn-motion-normal) var(--kn-motion-ease);
+  }
+
+  .dialogCenter {
+    width: 100vw;
+    max-width: 100vw;
+    max-height: 100%;
+    height: 100%;
+    margin: 0;
+    border-radius: 0;
+  }
+}

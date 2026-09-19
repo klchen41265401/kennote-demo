@@ -24,11 +24,17 @@ export interface BubbleMenuProps {
   linkRequest: number;
   onConvert(type: BlockType): void;
   onColor(color: string): void;
+  /**
+   * 第十一輪：行內留言。宿主（Editor）負責在**當下**把選取範圍記起來
+   *（`{blockId, start, end}`），因為輸入框一拿到焦點，DOM 選取就沒了。
+   * 沒給這個 prop 時按鈕不顯示 —— 不要留一顆按了會說「還沒開放」的按鈕。
+   */
+  onComment?(): void;
 }
 
 type SubMenu = 'type' | 'color' | null;
 
-export function BubbleMenu({ editor, rev, readOnly, linkRequest, onConvert, onColor }: BubbleMenuProps) {
+export function BubbleMenu({ editor, rev, readOnly, linkRequest, onConvert, onColor, onComment }: BubbleMenuProps) {
   const [anchor, setAnchor] = useState<RectLike | null>(null);
   const [sub, setSub] = useState<SubMenu>(null);
   const [subAnchor, setSubAnchor] = useState<RectLike | null>(null);
@@ -175,11 +181,16 @@ export function BubbleMenu({ editor, rev, readOnly, linkRequest, onConvert, onCo
           <Icon name="palette" />
           <Icon name="chevron-down" size={10} />
         </button>
-        <FormatButton
-          icon="comment"
-          title="留言（尚未實作）"
-          onClick={() => toast('留言功能在 M5 才會開放', { kind: 'info' })}
-        />
+        {onComment ? (
+          <FormatButton
+            icon="comment"
+            title="留言 Ctrl+Shift+M"
+            onClick={() => {
+              onComment();
+              setAnchor(null);
+            }}
+          />
+        ) : null}
         <FormatButton icon="sparkle" title="AI（尚未實作）" onClick={() => toast('AI 動作尚未整合', { kind: 'info' })} />
       </Popover>
 

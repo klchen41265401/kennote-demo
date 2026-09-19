@@ -353,3 +353,35 @@
   color: var(--kn-color-text);
   font-size: var(--kn-font-size-md);
 }
+
+/* ────────────────────────────────────────────────────────────
+   第十一輪：手機（≤767px）
+   第十輪 §4 的 11：整個 database 模組一條 @media 都沒有。
+   工具列在 390 寬時是「塞得下」，但搜尋框吃掉 160px，
+   檢視 tab 只剩一顆的空間 —— 分頁列自己會一路收到只剩當前那一顆。
+   ──────────────────────────────────────────────────────────── */
+@media (max-width: 767px) {
+  .bar {
+    gap: var(--kn-space-2);
+  }
+
+  /*
+   * 搜尋框收成一顆圖示寬：焦點進來才展開。
+   * 直接 display:none 不行 —— 那會讓「在資料庫裡找一列」在手機上完全消失。
+   */
+  .search {
+    width: 84px;
+  }
+
+  .search:focus {
+    width: 160px;
+  }
+
+  /* 工具列按鈕的觸控目標：Notion 桌機是 28px，手機要 ≥36px 才按得準 */
+  .toolButton,
+  .toolButtonActive {
+    height: 36px;
+    min-width: 36px;
+    justify-content: center;
+  }
+}

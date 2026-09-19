@@ -133,16 +133,26 @@ function normalizeHits(raw: unknown): ShellSearchHit[] {
   });
 }
 
+/**
+ * 搜尋。
+ *
+ * ⚠️ `type` 只接受 `'page' | 'database'`（`search/routes.ts` 的 zod enum）。
+ * 第十一輪之前 `SearchDialog` 的「標題」chip 會送 `type: 'title'`，
+ * 那是一個**後端不認得的值**：zod 直接 400，chip 一按搜尋就整個空掉。
+ * 「只看標題」現在是前端過濾（見 SearchDialog 的 `titleOnly`）。
+ */
 export async function searchPages(
   q: string,
   workspaceId: string | null,
-  options: { type?: string; limit?: number } = {},
+  options: { type?: 'page' | 'database'; createdBy?: string; updatedAfter?: string; limit?: number } = {},
 ): Promise<ShellSearchHit[]> {
   if (!q.trim()) return [];
   const raw = await api.get<unknown>(API_ROUTES.search, {
     q,
     ...(workspaceId ? { workspaceId } : {}),
     ...(options.type ? { type: options.type } : {}),
+    ...(options.createdBy ? { createdBy: options.createdBy } : {}),
+    ...(options.updatedAfter ? { updatedAfter: options.updatedAfter } : {}),
     limit: options.limit ?? 20,
   });
   return normalizeHits(raw);

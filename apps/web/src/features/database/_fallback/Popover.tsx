@@ -18,7 +18,32 @@ export interface PopoverProps {
    * 負外距會被裁掉 → 實測面板只有 284 寬而不是 292。
    */
   flush?: boolean;
+  /**
+   * 第十一輪：≤767px 時改成 **bottom sheet**（貼著視窗底部、滿寬）。
+   *
+   * 為什麼不是「把 popover 縮小」：篩選 / 排序 / 屬性面板在手機上會蓋住
+   * 觸發按鈕本身，而且定位演算法一旦撞到視窗邊界就會翻到上面去 ——
+   * 使用者按「篩選」，面板卻出現在手指的另一端。
+   * 形狀對的做法是 sheet：位置固定、永遠從底部長出來、拇指構得到。
+   * 編輯器的 `ui/overlay` 早就有同名的 prop，這裡沿用同一個名字與同一種行為。
+   */
+  sheetOnMobile?: boolean;
   className?: string;
+}
+
+const MOBILE_QUERY = '(max-width: 767px)';
+
+function useIsMobile(enabled: boolean): boolean {
+  const [mobile, setMobile] = useState(false);
+  useEffect(() => {
+    if (!enabled || typeof window === 'undefined' || !window.matchMedia) return;
+    const mq = window.matchMedia(MOBILE_QUERY);
+    const sync = (): void => setMobile(mq.matches);
+    sync();
+    mq.addEventListener('change', sync);
+    return () => mq.removeEventListener('change', sync);
+  }, [enabled]);
+  return enabled && mobile;
 }
 
 interface StackEntry {
@@ -41,12 +66,16 @@ export function Popover({
   placement = 'bottom-start',
   minWidth,
   flush,
+  sheetOnMobile = false,
   className,
 }: PopoverProps) {
   const ref = useRef<HTMLDivElement>(null);
   const [position, setPosition] = useState({ top: 0, left: 0 });
+  const sheet = useIsMobile(sheetOnMobile);
 
   useLayoutEffect(() => {
+    // sheet 模式的位置由 CSS 決定（fixed bottom），量了也用不到
+    if (sheet) return;
     if (!open || !anchor || !ref.current) return;
     const rect = anchor.getBoundingClientRect();
     const box = ref.current.getBoundingClientRect();
@@ -61,7 +90,7 @@ export function Popover({
       top = Math.max(8, rect.top - box.height - 4);
     }
     setPosition({ top, left });
-  }, [open, anchor, placement, children]);
+  }, [open, anchor, placement, children, sheet]);
 
   useEffect(() => {
     if (!open) return;
@@ -109,8 +138,10 @@ export function Popover({
   return createPortal(
     <div
       ref={ref}
-      className={`${styles.popover} ${flush ? styles.popoverFlush : ''} ${className ?? ''}`}
-      style={{ top: position.top, left: position.left, minWidth }}
+      className={`${styles.popover} ${sheet ? styles.popoverSheet : ''} ${
+        flush ? styles.popoverFlush : ''
+      } ${className ?? ''}`}
+      style={sheet ? undefined : { top: position.top, left: position.left, minWidth }}
       role="dialog"
     >
       {children}

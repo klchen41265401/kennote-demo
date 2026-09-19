@@ -17,6 +17,7 @@ import { invalidateQueries } from '@kennote/ui';
 import { api } from '../../lib/api-client';
 import { fileUrl, uploadFile } from '../../lib/upload';
 import { queryKeys } from '../../lib/queries';
+import { setRightPanel } from '../../stores/ui';
 import { EmojiPicker } from '../../components/EmojiPicker';
 import { Popover } from './ui/overlay';
 import { Icon } from './ui/icons';
@@ -257,7 +258,9 @@ export function PageHeader({ page, workspaceId, readOnly = false, onLeaveTitle }
             <button
               type="button"
               className="kn-header-tool"
-              onClick={() => toast('留言功能在 M5 才會開放', { kind: 'info' })}
+              /* 第十一輪：頁面層級討論串的輸入框本來就在右側面板（CommentsPanel
+                 的 `anchor: {kind:'page'}` 那一條），這顆按鈕只要把面板打開就好。 */
+              onClick={() => setRightPanel(true, 'comments')}
             >
               <Icon name="comment" size={14} /> 新增留言
             </button>

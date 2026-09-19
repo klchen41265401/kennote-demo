@@ -3,7 +3,8 @@
  * 欄位清單只列 registry 裡 sortable = true 的型別。
  */
 import type { CollectionSchema, SortSpec, ViewQuery } from '@kennote/shared-types';
-import { FieldIcon, UiIcon, reorder, useDragHandle, useDropZone } from './_fallback';
+import { FieldIcon, UiIcon } from './_fallback';
+import { reorder, useSortableItem, useSortableList } from './dnd';
 import { PropertyPicker } from './PropertyPicker';
 import { getFieldType } from './fields/types';
 import styles from './Builders.module.css';
@@ -27,6 +28,13 @@ export function SortBuilder({ schema, query, onChange }: Props) {
     onChange({ ...query, sort: next });
   }
 
+  // 第十一輪：整份清單一個 drop zone（Pointer Events；觸控長按 400ms）
+  const { listRef } = useSortableList({
+    kind: 'sort',
+    ids: sorts.map((s) => s.property),
+    onReorder: (from, to) => update(reorder(sorts, from, to)),
+  });
+
   /** 還沒有排序條件時先給屬性清單（07l-db-sort-*），跟篩選同一個版型、沒有底部動作列 */
   if (sorts.length === 0) {
     return (
@@ -41,7 +49,7 @@ export function SortBuilder({ schema, query, onChange }: Props) {
   }
 
   return (
-    <div className={styles.panel}>
+    <div className={styles.panel} ref={listRef}>
       {sorts.map((sort, index) => (
         <SortRow
           key={sort.property}
@@ -49,7 +57,6 @@ export function SortBuilder({ schema, query, onChange }: Props) {
           index={index}
           schema={schema}
           sortable={sortable.map(([id]) => id)}
-          onMove={(from, to) => update(reorder(sorts, from, to))}
           onChange={(next) => update(sorts.map((s, i) => (i === index ? next : s)))}
           onRemove={() => update(sorts.filter((_, i) => i !== index))}
         />
@@ -84,31 +91,23 @@ interface SortRowProps {
   index: number;
   schema: CollectionSchema;
   sortable: string[];
-  onMove: (from: number, to: number) => void;
   onChange: (next: SortSpec) => void;
   onRemove: () => void;
 }
 
-function SortRow({ sort, index, schema, sortable, onMove, onChange, onRemove }: SortRowProps) {
+function SortRow({ sort, index, schema, sortable, onChange, onRemove }: SortRowProps) {
   const def = schema[sort.property];
-  const { dragging, handlers } = useDragHandle({ kind: 'sort', id: sort.property, index });
-  const drop = useDropZone({
-    accept: 'sort',
-    onDrop: (payload) => {
-      if (payload.index !== undefined) onMove(payload.index, index);
-    },
-  });
+  const { isDragging, dragRef, itemProps, handleProps } = useSortableItem('sort', sort.property, index);
 
   if (!def) return null;
 
   return (
     <div
-      className={`${styles.sortRow} ${dragging ? styles.rowDragging : ''} ${
-        drop.over ? styles.rowOver : ''
-      }`}
-      {...drop.handlers}
+      ref={dragRef}
+      {...itemProps}
+      className={`${styles.sortRow} ${isDragging ? styles.rowDragging : ''}`}
     >
-      <span className={styles.dragHandle} {...handlers} aria-hidden="true">
+      <span className={styles.dragHandle} {...handleProps} aria-hidden="true">
         <UiIcon name="drag" size={12} />
       </span>
       <span className={styles.fieldIcon}>
