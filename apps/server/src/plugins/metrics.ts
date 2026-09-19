@@ -13,7 +13,7 @@
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { getPool } from '../db/client.js';
-import { readMigrationFiles, resolveMigrationsDir } from '../db/migrate.js';
+import { readMigrationFiles, resolveMigrationsDir } from '../db/migration-files.js';
 import { sql } from '../db/sql.js';
 
 /* ── 最小 metrics registry ───────────────────────────── */
