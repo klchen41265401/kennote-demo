@@ -27,6 +27,8 @@ import type {
   SchemaMigrationReport,
   SchemaOp,
   SelectOption,
+  ViewFormat,
+  ViewPropertyFormat,
   ViewQuery,
 } from '@kennote/shared-types';
 import { findSchemaFormulaCycles, richTextToPlainText } from '@kennote/shared-types';
@@ -158,16 +160,89 @@ export async function getDatabase(collectionId: string, userId: string): Promise
   return { collection: repo.toCollection(collection), views: views.map(repo.toView) };
 }
 
+/**
+ * 新資料庫的預設表格視圖。
+ *
+ * ⭐ 一律 `visible: true`。原本是 `visible: i < 5`，所以帶了 6 個以上欄位建出來的
+ * 資料庫，第 6 個之後的欄位在表格裡**看不到也編輯不到**（表格沒有「隱藏欄位」的提示，
+ * 唯一的入口是 設定 → 編輯屬性 → 重新打開眼睛）。表格的 `.grid` 本來就 `overflow-x: auto`，
+ * 欄位太多就橫捲，不需要先砍。功能 QA 第三輪 BUG-10。
+ */
 function defaultViewFormat(schema: CollectionSchema) {
   return {
-    properties: Object.keys(schema).map((property, i) => ({
+    properties: Object.keys(schema).map((property) => ({
       property,
-      visible: i < 5,
+      visible: true,
       width: property === 'title' ? 320 : 160,
     })),
     tableFreezeColumns: 1,
     tableRowNumbers: false,
   };
+}
+
+/**
+ * BUG-8：**新增的欄位要接在 `view.format.properties` 的尾端**，順序不能交給 jsonb。
+ *
+ * 前端的 `visibleProperties()` 對「format 沒列到的欄位」只能用 `Object.keys(schema)`
+ * 補在後面，而那是 Postgres jsonb 的 key 排序（先比長度、再比 byte）——
+ * 所以依序加 `文字/數字/核取/…` 之後重整，看到的會是 `建立者 建立時間 核取 信箱 …`。
+ *
+ * 這一支把一個視圖的 properties 重新對齊 schema：
+ *   1. 保留既有順序與使用者調過的 width / visible；
+ *   2. 丟掉 schema 已經沒有的欄位（delete op 的清理）；
+ *   3. `appended`（這一批 add op 產生的 propertyId）一律移到最後；
+ *   4. 其他沒被列到的欄位補在 `appended` 之前。
+ *
+ * 前端 `apps/web/src/features/database/views/types.ts` 的 `alignViewProperties()`
+ * 是同一套規則（前端先本地補一份，後端再對所有視圖補一次），兩邊結果一致 ⇒ 冪等。
+ */
+export function alignViewProperties(
+  format: ViewFormat | undefined,
+  schema: CollectionSchema,
+  appended: readonly string[] = [],
+): ViewPropertyFormat[] {
+  const configured = format?.properties ?? [];
+  const prior = new Map(configured.map((entry) => [entry.property, entry]));
+  const appendedIds = [...new Set(appended)];
+  const isAppended = new Set(appendedIds);
+
+  const seen = new Set<string>();
+  const out: ViewPropertyFormat[] = [];
+
+  for (const entry of configured) {
+    if (seen.has(entry.property) || isAppended.has(entry.property)) continue;
+    if (!schema[entry.property]) continue;
+    seen.add(entry.property);
+    out.push(entry);
+  }
+  for (const property of Object.keys(schema)) {
+    if (seen.has(property) || isAppended.has(property)) continue;
+    seen.add(property);
+    out.push({ property, visible: true, width: property === 'title' ? 320 : 160 });
+  }
+  for (const property of appendedIds) {
+    if (seen.has(property) || !schema[property]) continue;
+    seen.add(property);
+    out.push(prior.get(property) ?? { property, visible: true, width: 160 });
+  }
+  return out;
+}
+
+/** 兩份 properties 一不一樣（一樣就不用打 UPDATE） */
+function samePropertyOrder(
+  a: ViewPropertyFormat[],
+  b: ViewPropertyFormat[] | undefined,
+): boolean {
+  if (!b || a.length !== b.length) return false;
+  return a.every((entry, i) => {
+    const other = b[i];
+    return (
+      other !== undefined &&
+      other.property === entry.property &&
+      other.visible === entry.visible &&
+      other.width === entry.width
+    );
+  });
 }
 
 /* ── 建立資料庫 ───────────────────────────────────────── */
@@ -366,6 +441,9 @@ export async function applySchemaOps(
   return withTransaction(async (tx) => {
     let schema: CollectionSchema = { ...original };
     const migrations: SchemaMigrationReport[] = [];
+    /** 這一批 ops 新增出來的欄位（BUG-8：要接到每個視圖的 properties 尾端） */
+    const addedPropertyIds: string[] = [];
+    let schemaShapeChanged = false;
     /** propertyId → 每一列的新值（null = 刪掉 key） */
     const pendingWrites = new Map<string, Map<string, FieldValue | null>>();
 
@@ -380,6 +458,8 @@ export async function applySchemaOps(
             throw new AppError('INVALID_FIELD_TYPE', '每個資料庫只能有一個 title 欄位');
           }
           schema[propertyId] = op.definition;
+          addedPropertyIds.push(propertyId);
+          schemaShapeChanged = true;
           break;
         }
         case 'rename': {
@@ -405,6 +485,7 @@ export async function applySchemaOps(
             throw new AppError('INVALID_FIELD_TYPE', `欄位不存在：${op.propertyId}`);
           }
           delete schema[op.propertyId];
+          schemaShapeChanged = true;
           break;
         }
         case 'retype': {
@@ -479,6 +560,22 @@ export async function applySchemaOps(
 
     const updated = await repo.updateCollectionSchema(tx, collectionId, schema);
     if (!updated) throw new AppError('COLLECTION_NOT_FOUND');
+
+    /**
+     * BUG-8：欄位增減之後，把**這個 collection 的每一個視圖**的
+     * `format.properties` 重新對齊 schema（新欄位補在尾端、刪掉的欄位清掉）。
+     * 不做的話順序會退回 jsonb 的 key 排序，而且每個視圖各自壞。
+     */
+    if (schemaShapeChanged) {
+      const views = await repo.listViews(collectionId, tx);
+      for (const viewRow of views) {
+        const format = (viewRow.format ?? {}) as ViewFormat;
+        const properties = alignViewProperties(format, schema, addedPropertyIds);
+        if (samePropertyOrder(properties, format.properties)) continue;
+        await repo.updateView(tx, viewRow.id, { format: { ...format, properties } });
+      }
+    }
+
     return { collection: repo.toCollection(updated), migrations };
   });
 }

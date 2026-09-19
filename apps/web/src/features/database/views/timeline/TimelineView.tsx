@@ -10,7 +10,7 @@
  * 日期一律用「當地時區的 YYYY-MM-DD」計算，不做 UTC 轉換 ——
  * 時程表的一格是「一天」而不是「24 小時」，用 UTC 會在 +08:00 的時區整條差一格。
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { DatabaseRow, TimelineScale } from '@kennote/shared-types';
 import { TIMELINE_SCALES, TIMELINE_SCALE_LABELS, richTextToPlainText } from '@kennote/shared-types';
 import { Menu, MenuItem, Popover, UiIcon } from '../../_fallback';
@@ -383,6 +383,11 @@ function TimelineBar({
   onCommit: (start: Date, end: Date) => void;
 }) {
   const [drag, setDrag] = useState<{ mode: DragMode; deltaDays: number } | null>(null);
+  /**
+   * 拖完之後瀏覽器照樣會補一發 click（pointerdown 的 preventDefault 擋不掉），
+   * 那一發會誤觸 onOpen 把列的 peek 打開。拖過就先記下來，讓下一發 click 作廢。
+   */
+  const suppressClickRef = useRef(false);
 
   const baseOffset = diffDays(rangeStart, span.start);
   const baseLength = diffDays(span.start, span.end) + 1;
@@ -416,6 +421,7 @@ function TimelineBar({
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', up);
       setDrag(null);
+      if (moved) suppressClickRef.current = true;
       if (!moved || deltaDays === 0) return;
       if (mode === 'move') onCommit(addDays(span.start, deltaDays), addDays(span.end, deltaDays));
       else if (mode === 'start') {
@@ -441,7 +447,13 @@ function TimelineBar({
       tabIndex={0}
       title={richTextToPlainText(span.row.title) || '未命名'}
       onPointerDown={(e) => startDrag('move', e)}
-      onClick={onOpen}
+      onClick={() => {
+        if (suppressClickRef.current) {
+          suppressClickRef.current = false;
+          return;
+        }
+        onOpen();
+      }}
       onKeyDown={(e) => {
         if (e.key === 'Enter') onOpen();
       }}

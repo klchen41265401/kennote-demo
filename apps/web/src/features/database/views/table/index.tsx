@@ -47,10 +47,19 @@ registerViewType({
   supportsAggregation: true,
   Component: TableView,
   SettingsPanel: TableSettings,
+  /**
+   * ⭐ 表格預設**顯示全部欄位**。
+   *
+   * 原本是 `visible: i < 6`，第 7 個以後的欄位一建出來就是隱藏的。
+   * 表格的 `.grid` 本來就會 `overflow-x: auto`，欄位總寬超過視窗時就橫捲，
+   * 所以沒有必要先砍掉；砍掉之後使用者反而以為「欄位不見了」——
+   * 唯一找回來的路徑是 設定 → 編輯屬性 → 打開眼睛，很難發現（功能 QA 第三輪 BUG-10）。
+   * Notion 的表格也是預設全開 + 橫捲。
+   */
   defaultFormat: (schema: CollectionSchema): ViewFormat => ({
-    properties: Object.keys(schema).map((property, i) => ({
+    properties: Object.keys(schema).map((property) => ({
       property,
-      visible: i < 6,
+      visible: true,
       width: property === 'title' ? 320 : 160,
     })),
     tableFreezeColumns: 1,
