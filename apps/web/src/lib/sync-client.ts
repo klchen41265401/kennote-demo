@@ -8,6 +8,9 @@
  *   4. `resync`：落後太多 → 請宿主重抓 snapshot
  *   5. pending queue：WS 優先、失敗降級 HTTP POST、斷線寫入 IndexedDB、重連後依序重送
  *   6. debounce 300ms 打包成一筆 Transaction
+ *   7. **OT delta 通道（M6）**：`text.delta` 不走 debounce 佇列，
+ *      由 `attachDeltaChannel()` 註冊的 OT 三狀態機決定何時送出（一次只能有一筆 outstanding）。
+ *      兩條通道共用同一條 WebSocket 與同一支伺服器 `applyTransaction()`。
  *
  * 這個檔案**不 import React、不 import store**，所以可以在 Node 裡用假 WebSocket 完整測試。
  * React 綁定在 stores/sync.ts（usePageSync / useSyncState）。
@@ -21,7 +24,13 @@ import type {
   Transaction,
   TransactionResult,
 } from '@kennote/shared-types';
-import { WS_CLIENT_PING_INTERVAL_MS } from '@kennote/shared-types';
+import type { OtDelta, TextDeltaOperation } from '@kennote/shared-types';
+import {
+  isTextDeltaOperation,
+  splitDeltaOps,
+  textDeltaOperation,
+  WS_CLIENT_PING_INTERVAL_MS,
+} from '@kennote/shared-types';
 import {
   createOfflineQueue,
   nextOrder,
@@ -69,6 +78,19 @@ export interface PageHandlers {
   onComment?(message: Extract<ServerMessage, { t: 'comment' }>): void;
   onPermission?(permission: PagePermission): void;
   onSeqChange?(seq: number): void;
+}
+
+/**
+ * OT delta 通道的回呼（M6）。與 `PageHandlers` 分開註冊，
+ * 因為它的生命週期綁在「編輯器實例」而不是「頁面訂閱」。
+ */
+export interface DeltaChannelHandlers {
+  /** 伺服器確認了我們送出的 delta（op 裡帶著 transform 過的 delta 與新的 rev） */
+  onAck?(op: TextDeltaOperation, txId: string): void;
+  /** 別人送出的 delta（伺服器已套用並 transform 過） */
+  onRemoteDelta?(op: TextDeltaOperation, meta: RemoteOpsMeta): void;
+  /** 伺服器拒絕（4xx 或 NOT_IMPLEMENTED）→ 宿主重抓整頁 */
+  onRejected?(blockId: string, reason: { code: string; message: string }): void;
 }
 
 export interface SyncClientOptions {
@@ -144,6 +166,10 @@ interface PageEntry {
   buffer: Operation[];
   flushTimer: ReturnType<typeof setTimeout> | null;
   presence: { blockId: string | null; selection: [number, number] | null } | null;
+  /** M6 OT：delta 通道的回呼（沒註冊時 text.delta 會退回走 onRemoteOps） */
+  deltaHandlers: DeltaChannelHandlers | null;
+  /** txId → blockId，txRejected 時才知道要通知哪個 block */
+  deltaTxBlocks: Map<string, string>;
 }
 
 function defaultUrl(): string {
@@ -315,6 +341,8 @@ export class SyncClient {
       buffer: [],
       flushTimer: null,
       presence: null,
+      deltaHandlers: null,
+      deltaTxBlocks: new Map(),
     };
     entry.handlers = handlers;
     if (initialSeq > entry.localSeq) entry.localSeq = initialSeq;
@@ -364,6 +392,48 @@ export class SyncClient {
     if (!entry) return;
     entry.presence = { blockId, selection };
     this.send({ t: 'presence', pageId, blockId, selection });
+  }
+
+  /* ── OT delta 通道（M6，與 tx 通道並存）──────────────── */
+
+  /**
+   * 註冊 delta 通道。回傳解除註冊的函式。
+   * 沒註冊時，收到的 `text.delta` 會退回走 `onRemoteOps`（舊的 LWW 路徑仍能運作）。
+   */
+  attachDeltaChannel(pageId: string, handlers: DeltaChannelHandlers): () => void {
+    const entry = this.pages.get(pageId);
+    if (!entry) return () => {};
+    entry.deltaHandlers = handlers;
+    return () => {
+      const current = this.pages.get(pageId);
+      if (current && current.deltaHandlers === handlers) current.deltaHandlers = null;
+    };
+  }
+
+  /**
+   * 送出一筆 delta。**不進 debounce buffer** —— OT 的三狀態機規定
+   * 「同一個 block 一次只能有一筆 outstanding」，打包會破壞這個不變量。
+   *
+   * 仍然會寫進離線佇列（txId 相同 → 伺服器冪等），所以斷線重送的行為與 tx 通道一致。
+   */
+  submitDelta(pageId: string, blockId: string, delta: OtDelta, baseRev: number): string {
+    const entry = this.pages.get(pageId);
+    const txId = createId(this.now());
+    if (!entry) return txId;
+    entry.deltaTxBlocks.set(txId, blockId);
+    const queued: QueuedTransaction = {
+      txId,
+      pageId,
+      ops: [textDeltaOperation(blockId, delta, baseRev)],
+      createdAt: this.now(),
+      attempts: 0,
+      order: nextOrder(this.now()),
+    };
+    void this.queue
+      .put(queued)
+      .catch(() => undefined)
+      .then(() => this.trySend(queued));
+    return txId;
   }
 
   /* ── 送出變更 ─────────────────────────────────────── */
@@ -472,6 +542,13 @@ export class SyncClient {
 
     const entry = this.pages.get(result.pageId);
     if (!entry) return;
+    // OT：伺服器在 result.ops 裡回傳 transform 過的 delta 與新的 rev
+    if (entry.deltaHandlers) {
+      for (const op of result.ops) {
+        if (isTextDeltaOperation(op)) entry.deltaHandlers.onAck?.(op, result.txId);
+      }
+    }
+    entry.deltaTxBlocks.delete(result.txId);
     if (result.seq > entry.localSeq) {
       entry.localSeq = result.seq;
       entry.handlers.onSeqChange?.(result.seq);
@@ -491,7 +568,14 @@ export class SyncClient {
       this.inflight.delete(queued.txId);
     }
     await this.queue.remove(queued.txId).catch(() => undefined);
-    this.pages.get(queued.pageId)?.handlers.onRollback?.(queued, reason);
+    const entry = this.pages.get(queued.pageId);
+    const blockId = entry?.deltaTxBlocks.get(queued.txId);
+    if (entry && blockId !== undefined) {
+      entry.deltaTxBlocks.delete(queued.txId);
+      entry.deltaHandlers?.onRejected?.(blockId, reason);
+      return; // delta 通道自己處理回滾（重抓整頁），不要再走 tx 的 onRollback
+    }
+    entry?.handlers.onRollback?.(queued, reason);
   }
 
   /** 重連後依序重送（txId 不變 → 伺服器冪等） */
@@ -511,6 +595,28 @@ export class SyncClient {
   }
 
   /* ── 收訊息 ───────────────────────────────────────── */
+
+  /**
+   * 把一批遠端 ops 分到兩條通道，**並保持原本的先後順序**。
+   *
+   * 順序一致性（ADR 0006 §2.6）：同一個 block 上 delta 與 block.update 的相對順序
+   * 是伺服器決定的，這裡照著 `result.ops` 的排列依序送出去，宿主不必自己排。
+   */
+  private dispatchRemoteOps(entry: PageEntry, ops: Operation[], meta: RemoteOpsMeta): void {
+    const deltaHandlers = entry.deltaHandlers;
+    if (!deltaHandlers) {
+      // 沒有 OT 通道（FEATURE_OT 關閉，或這一頁不是用編輯器開的）→ 全部走舊路徑
+      entry.handlers.onRemoteOps?.(ops, meta);
+      return;
+    }
+    for (const group of splitDeltaOps(ops)) {
+      if (group.kind === 'delta') {
+        for (const op of group.ops) deltaHandlers.onRemoteDelta?.(op, meta);
+      } else {
+        entry.handlers.onRemoteOps?.(group.ops, meta);
+      }
+    }
+  }
 
   private async handleMessage(msg: ServerMessage): Promise<void> {
     switch (msg.t) {
@@ -556,7 +662,7 @@ export class SyncClient {
         if (!entry) return;
         for (const result of [...msg.results].sort((a, b) => a.seq - b.seq)) {
           if (result.seq <= entry.localSeq) continue;
-          entry.handlers.onRemoteOps?.(result.ops, {
+          this.dispatchRemoteOps(entry, result.ops, {
             seq: result.seq,
             txId: result.txId,
             actorId: result.actorId,
@@ -574,6 +680,12 @@ export class SyncClient {
         return;
       }
       case 'txRejected': {
+        for (const entry of this.pages.values()) {
+          const blockId = entry.deltaTxBlocks.get(msg.txId);
+          if (blockId === undefined) continue;
+          entry.deltaTxBlocks.delete(msg.txId);
+          entry.deltaHandlers?.onRejected?.(blockId, { code: msg.code, message: msg.message });
+        }
         const items = await this.queue.list().catch(() => [] as QueuedTransaction[]);
         const queued = items.find((i) => i.txId === msg.txId);
         if (queued) {
@@ -589,7 +701,7 @@ export class SyncClient {
           case 'duplicate':
             return;
           case 'apply':
-            entry.handlers.onRemoteOps?.(msg.result.ops, {
+            this.dispatchRemoteOps(entry, msg.result.ops, {
               seq: msg.result.seq,
               txId: msg.result.txId,
               actorId: msg.result.actorId,
@@ -645,7 +757,7 @@ export class SyncClient {
     const data = await http.fetchSince(pageId, entry.localSeq);
     for (const result of data.results) {
       if (result.seq <= entry.localSeq) continue;
-      entry.handlers.onRemoteOps?.(result.ops, {
+      this.dispatchRemoteOps(entry, result.ops, {
         seq: result.seq,
         txId: result.txId,
         actorId: result.actorId,

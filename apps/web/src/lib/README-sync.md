@@ -193,11 +193,70 @@ useEffect(() => decorate(hostRef.current), [decorate]);
 
 ---
 
-## 8. 測試
+## 8. OT delta 通道（M6，`FEATURE_OT`）
+
+> 設計決策與已知限制：`docs/adr/0006-ot.md`。規格：04 §6.6。
+
+`FEATURE_OT` 打開之後多一條通道，**與既有的 tx 通道並存**：
+
+| 通道 | 內容 | operation |
+|---|---|---|
+| delta | 同一個 block 內的**文字變更** | `text.delta`（走 OT，兩人的字都保留） |
+| tx | 結構變更（新增／刪除／搬移／換型別／改 props） | 原本的 `block.*`（LWW） |
+
+**它不是第二套協定**：delta 一樣包成 `Transaction` 走 WS 的 `tx` 訊息，
+落到伺服器同一支 `applyTransaction()`；ack 走 `txApplied`、廣播走 `txBroadcast`。
+`packages/shared-types/src/ws.ts` 一行都沒有改。
+
+### 宿主要做的事
+
+```tsx
+// 1) 問伺服器有沒有開（或用 VITE_FEATURE_OT=1 強制打開）
+const otEnabled = useOtEnabled();
+
+// 2) 建一個 OtPageChannel，接上 sync-client 的 delta 通道
+const channel = new OtPageChannel({
+  submitDelta: (blockId, delta, baseRev) =>
+    getSyncClient().submitDelta(pageId, blockId, delta, baseRev),
+  applyRemoteDelta: (blockId, delta) => editor.applyRemoteDelta(blockId, delta),
+  onDesync: () => reload('協作狀態需要重新同步'),
+});
+channel.setInitialRevs(snapshotRevs(snapshot));   // blocks.rev（migration 0030）
+
+const detach = getSyncClient().attachDeltaChannel(pageId, {
+  onAck: (op, txId) => channel.handleAck(op, txId),
+  onRemoteDelta: (op) => channel.handleRemote(op),
+  onRejected: (blockId, reason) => channel.handleReject(blockId, reason.code),
+});
+
+// 3) 編輯器用 OT 模式建立，localOps 先過 delta 通道
+const editor = createEditor({ ..., ot: { enabled: true, getBaseRev: (id) => channel.getBaseRev(id) } });
+editor.on('localOps', (ops) => {
+  const rest = channel.submitLocalOps(ops);   // text.delta 被吃掉
+  if (rest.length > 0) sync.submit(rest);     // 其餘走原本的 tx 通道
+});
+```
+
+`apps/web/src/features/editor/useEditorHost.ts` 就是照這個形狀接的，可以直接抄。
+
+### 三件容易踩的事
+
+1. **delta 不走 300ms debounce。** OT 規定同一個 block 一次只能有一筆 outstanding，
+   打包會破壞這個不變量。`submitDelta()` 立刻送出（仍然寫 IndexedDB，斷線重送照舊）。
+2. **沒註冊 delta 通道時，`text.delta` 會退回走 `onRemoteOps`。**
+   舊路徑仍然可用（editor-core 的 `applyTextDelta` 會處理純文字），
+   但格式與 atom 會降級 —— 開啟 `FEATURE_OT` 之後請使用者重新整理分頁。
+3. **順序一致性**：同一個 block 上 delta 與 `block.update` 的相對順序由伺服器決定，
+   `splitDeltaOps()` 保證分流之後順序不變，宿主照收到的順序套用就好。
+
+---
+
+## 9. 測試
 
 ```bash
-pnpm --filter @kennote/web test      # sync-client 狀態機 + 離線佇列（假 WebSocket，不需瀏覽器）
-pnpm --filter @kennote/server test   # room-manager 廣播、RESP、權限解析、歷史重建
+pnpm --filter @kennote/web test         # sync-client 狀態機 + 離線佇列 + OT delta 通道（假 WebSocket）
+pnpm --filter @kennote/server test      # room-manager 廣播、RESP、權限解析、歷史重建、receiveDelta
+pnpm --filter @kennote/editor-core test # OT property test（各 2 萬次）+ 三方模糊測試（1 萬輪）
 ```
 
 要自己寫同步相關的測試時，`src/lib/sync-client.test.ts` 裡的 `FakeSocket` 可以直接抄。

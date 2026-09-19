@@ -171,8 +171,8 @@ export type { EditorPlugin, PluginContext } from './plugins/types.js';
 // ── history ────────────────────────────────────────────────
 export { HistoryStack } from './history/stack.js';
 export type { HistoryOptions } from './history/stack.js';
-export { canCoalesce, COALESCE_WINDOW_MS, isAdjacent } from './history/coalesce.js';
-export type { HistoryEntry } from './history/types.js';
+export { canCoalesce, COALESCE_WINDOW_MS, isAdjacent, mergeDeltas } from './history/coalesce.js';
+export type { HistoryDelta, HistoryEntry } from './history/types.js';
 
 // ── clipboard ──────────────────────────────────────────────
 export {
@@ -208,12 +208,59 @@ export { MenuTriggerController } from './input/triggers.js';
 export { applyBlockInputRule, applyInlineInputRule, INLINE_RULES, runInputRules } from './input/input-rules.js';
 export * as commands from './input/commands.js';
 
-// ── OT（M6 才啟用，型別先定） ──────────────────────────────
-export { deltaLength, normalizeDelta } from './ot/types.js';
+// ── OT（M6：自建簡化版 OT，04 §6.6） ──────────────────────
+export {
+  apply as applyDelta,
+  applyMarkPatch,
+  ATOM_PLACEHOLDER,
+  baseLength,
+  compose,
+  composeAll,
+  composeMarkPatch,
+  DeltaBuilder,
+  deltaEquals,
+  deltaFromDiff,
+  deltaLength,
+  EMPTY_DELTA,
+  insertOpFromNode,
+  invert as invertDelta,
+  isDelete,
+  isInsert,
+  isNoop,
+  isRetain,
+  isTextDeltaOp,
+  nodeFromInsertOp,
+  normalizeDelta,
+  opLength,
+  OpIterator,
+  OtClient,
+  patchSlots,
+  textDeltaOperation,
+  transform,
+  transformAgainstAll,
+  transformCursor,
+  transformMarkPatch,
+  transformPair,
+  transformRange,
+} from './ot/index.js';
+export type {
+  MarkPatch,
+  OpKind,
+  OtClientHooks,
+  OtClientOptions,
+  OtClientState,
+  OtDelta,
+  OtDeleteOp,
+  OtDocument,
+  OtInsertOp,
+  OtRetainOp,
+  OtTextOp,
+  TextDeltaOperation,
+} from './ot/index.js';
 
 // ── Editor 門面 ────────────────────────────────────────────
-export { Editor, rebaseSelection } from './core.js';
-export type { CreateEditorOptions, EditorEventMap, MenuTriggerPayload } from './core.js';
+export { Editor, rebaseSelection, rebaseSelectionByDelta } from './core.js';
+export type { CreateEditorOptions, EditorEventMap, MenuTriggerPayload, OtHostOptions } from './core.js';
 
 import { Editor, type CreateEditorOptions } from './core.js';
 

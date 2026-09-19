@@ -15,14 +15,20 @@
  * 同一頁重新整理不閃爍：doc 以 pageId 為 key 只建一次，snapshot 重新驗證不會重建編輯器。
  */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react';
-import { createEditor, type Block as CoreBlock, type Editor, type EditorDoc } from '@kennote/editor-core';
+import { createEditor, type Block as CoreBlock, type Editor, type EditorDoc, type OtDelta } from '@kennote/editor-core';
 import type { Block as ServerBlock, Operation, PageSnapshot } from '@kennote/shared-types';
-import { API_ROUTES } from '@kennote/shared-types';
+import { API_ROUTES, blockRevOf } from '@kennote/shared-types';
 import { invalidateQueries, useStore } from '@kennote/ui';
 import { api } from '../../lib/api-client';
 import { createPage, queryKeys } from '../../lib/queries';
 import { uploadFile } from '../../lib/upload';
-import { syncStore, usePageSync } from '../../stores/sync';
+import { getSyncClient, syncStore, usePageSync } from '../../stores/sync';
+import {
+  getCachedOtFlag,
+  OtPageChannel,
+  resolveOtEnabled,
+  type HealthFeatures,
+} from '../../lib/ot-client';
 import type { EditorHostApi, UploadedFile } from './context';
 import { createHostRegistry } from './blocks/hostRegistry';
 import { getCreateDatabase } from './blocks/externalRegistry';
@@ -32,6 +38,38 @@ import { createId } from '../../lib/sync-client';
 
 /** 想跳過 WebSocket 時設 `VITE_EDITOR_HTTP_TRANSPORT=1` */
 const HTTP_FALLBACK = import.meta.env.VITE_EDITOR_HTTP_TRANSPORT === '1';
+
+/**
+ * M6 自建 OT（04 §6.6、docs/adr/0006-ot.md）。
+ *
+ * 開啟條件：`VITE_FEATURE_OT=1`，或伺服器的 `/api/health` 回報 `features.ot === true`。
+ * HTTP fallback 模式不支援 OT（它沒有 delta 通道），維持 LWW。
+ */
+function useOtEnabled(): boolean {
+  // 同一個 session 探測過一次就記住 → 只有「第一次載入編輯器」可能在探測回來後重建一次
+  const [enabled, setEnabled] = useState(() => getCachedOtFlag() ?? false);
+  useEffect(() => {
+    if (HTTP_FALLBACK || getCachedOtFlag() !== null) return;
+    let alive = true;
+    void resolveOtEnabled(() => api.get<{ features?: HealthFeatures }>('/api/health')).then((ok) => {
+      if (alive) setEnabled(ok);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+  return enabled && !HTTP_FALLBACK;
+}
+
+/** snapshot 的每個 block 目前的 OT rev（`blocks.rev`，migration 0030）。 */
+export function snapshotRevs(snapshot: PageSnapshot): Record<string, number> {
+  const revs: Record<string, number> = {};
+  for (const [id, entry] of Object.entries(snapshot.recordMap.block)) {
+    const value = entry?.value as ServerBlock | undefined;
+    if (value) revs[id] = blockRevOf(value);
+  }
+  return revs;
+}
 
 /** PageSnapshot（record_map 形狀）→ editor-core 的 EditorDoc */
 export function snapshotToDoc(snapshot: PageSnapshot): EditorDoc {
@@ -74,8 +112,10 @@ export interface EditorHostResult {
 export function useEditorHost(options: UseEditorHostOptions): EditorHostResult {
   const { pageId, workspaceId, snapshot, readOnly = false, navigateToPage } = options;
 
+  const otEnabled = useOtEnabled();
   const containerRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<Editor | null>(null);
+  const otChannelRef = useRef<OtPageChannel | null>(null);
   const transportRef = useRef<Transport | null>(null);
   const sessionIdRef = useRef<string>(createSessionId());
   const navigateRef = useRef(navigateToPage);
@@ -98,6 +138,10 @@ export function useEditorHost(options: UseEditorHostOptions): EditorHostResult {
 
   const applyRemote = useCallback((ops: Operation[]) => {
     editorRef.current?.applyRemote(ops as unknown as Parameters<Editor['applyRemote']>[0]);
+  }, []);
+
+  const applyRemoteDelta = useCallback((blockId: string, delta: OtDelta) => {
+    editorRef.current?.applyRemoteDelta(blockId, delta);
   }, []);
 
   const reload = useCallback(
@@ -155,6 +199,29 @@ export function useEditorHost(options: UseEditorHostOptions): EditorHostResult {
       transportRef.current = transport;
     }
 
+    /* ── OT delta 通道（M6）───────────────────────────
+     * 開啟時：同一個 block 內的文字變更走 text.delta（OT 三狀態機）
+     *         結構變更仍走原本的 tx 通道
+     * 關閉時：otChannel 為 null，一切行為與 M5 完全相同
+     */
+    let otChannel: OtPageChannel | null = null;
+    let detachDelta: (() => void) | null = null;
+    if (otEnabled && !HTTP_FALLBACK) {
+      otChannel = new OtPageChannel({
+        submitDelta: (blockId, delta, baseRev) =>
+          getSyncClient().submitDelta(pageId, blockId, delta, baseRev),
+        applyRemoteDelta: (blockId, delta) => applyRemoteDelta(blockId, delta),
+        onDesync: (reason) => reload(`協作狀態需要重新同步（${reason}），已重新載入這一頁`),
+      });
+      if (snapshot && snapshot.pageId === pageId) otChannel.setInitialRevs(snapshotRevs(snapshot));
+      otChannelRef.current = otChannel;
+      detachDelta = getSyncClient().attachDeltaChannel(pageId, {
+        onAck: (op, txId) => otChannel?.handleAck(op, txId),
+        onRemoteDelta: (op) => otChannel?.handleRemote(op),
+        onRejected: (blockId, reason) => otChannel?.handleReject(blockId, reason.code),
+      });
+    }
+
     const instance = createEditor({
       container,
       doc: initialDoc,
@@ -162,12 +229,24 @@ export function useEditorHost(options: UseEditorHostOptions): EditorHostResult {
       editable: !readOnly,
       // 後端要求 block id 必須是 UUID（v7，與 server 同版面）
       newId: createId,
+      ...(otChannel
+        ? { ot: { enabled: true, getBaseRev: (blockId: string) => otChannel!.getBaseRev(blockId) } }
+        : {}),
     });
     editorRef.current = instance;
 
     const offOps = instance.on('localOps', (ops, tx) => {
-      if (transport) transport.push(ops as unknown as Operation[], tx.inverseOps as unknown as Operation[]);
-      else syncRef.current.submit(ops as unknown as Operation[]);
+      if (transport) {
+        transport.push(ops as unknown as Operation[], tx.inverseOps as unknown as Operation[]);
+        return;
+      }
+      if (otChannel) {
+        // text.delta → OT 通道（不進 debounce buffer）；其餘 → 原本的 tx 通道
+        const rest = otChannel.submitLocalOps(ops as unknown as Operation[]);
+        if (rest.length > 0) syncRef.current.submit(rest);
+        return;
+      }
+      syncRef.current.submit(ops as unknown as Operation[]);
     });
     const offTx = instance.on('transaction', () => {
       setDoc(instance.getDoc());
@@ -196,6 +275,9 @@ export function useEditorHost(options: UseEditorHostOptions): EditorHostResult {
       offOps();
       offTx();
       offSel();
+      detachDelta?.();
+      otChannel?.reset();
+      otChannelRef.current = null;
       // 離開頁面前把排隊中的變更送出去
       void (transport ? transport.flush() : syncRef.current.flush()).finally(() => {
         transport?.destroy();
@@ -208,7 +290,8 @@ export function useEditorHost(options: UseEditorHostOptions): EditorHostResult {
       setDoc(null);
     };
     // initialDoc 的 identity 以 (pageId, reloadToken) 為 key 穩定，所以一頁只跑一次
-  }, [pageId, initialDoc, readOnly, initialSeq, applyRemote]);
+    // （snapshot / reload 是刻意不進依賴陣列的：它們只在建立編輯器的那一刻被讀一次）
+  }, [pageId, initialDoc, readOnly, initialSeq, applyRemote, applyRemoteDelta, otEnabled]);
 
   // 分頁被隱藏 / 關閉 → 立刻沖出去
   useEffect(() => {

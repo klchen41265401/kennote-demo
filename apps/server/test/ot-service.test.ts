@@ -34,8 +34,8 @@ class FakeTx implements Tx {
     this.content = initial;
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  readonly client = null as any;
+  /** receiveDelta 不會碰 raw client，測試裡用不到 */
+  readonly client = null as unknown as Tx['client'];
 
   async query<T = Record<string, unknown>>(statement: Sql): Promise<T[]> {
     const sqlText = statement.text.replace(/\s+/g, ' ').trim();

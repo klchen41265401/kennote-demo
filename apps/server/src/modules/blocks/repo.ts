@@ -12,6 +12,8 @@ export interface BlockRow {
   content: RichText;
   children: string[];
   version: number;
+  /** M6 OT 版本號（migration 0030）。FEATURE_OT 關閉時永遠是 0 */
+  rev: number;
   created_by: string | null;
   updated_by: string | null;
   created_at: Date;
@@ -20,7 +22,7 @@ export interface BlockRow {
 }
 
 const BLOCK_COLUMNS = sql.raw(
-  'id, workspace_id, page_id, parent_id, type, props, content, children, version, ' +
+  'id, workspace_id, page_id, parent_id, type, props, content, children, version, rev, ' +
     'created_by, updated_by, created_at, updated_at, deleted_at',
 );
 
@@ -34,11 +36,14 @@ export function toBlock(row: BlockRow): Block {
     content: row.content ?? [],
     children: row.children ?? [],
     version: Number(row.version),
+    // M6 OT：客戶端要知道每個 block 的起始 rev 才能送出正確的 baseRev。
+    // `Block` 介面刻意不宣告 rev（不動 M1 就定案的契約），統一用 blockRevOf() 讀。
+    rev: Number(row.rev ?? 0),
     createdAt: row.created_at.toISOString(),
     updatedAt: row.updated_at.toISOString(),
     createdBy: row.created_by,
     updatedBy: row.updated_by,
-  };
+  } as Block;
 }
 
 export async function listBlocksByPage(

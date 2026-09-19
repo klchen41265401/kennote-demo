@@ -4,6 +4,7 @@
  */
 import { BLOCK_TYPES, MAX_OPS_PER_TRANSACTION, type Operation, type Transaction } from '@kennote/shared-types';
 import { z } from 'zod';
+import { env } from '../../env.js';
 import { AppError } from '../../lib/errors.js';
 import { getBlockType, richTextSchema } from './block-types/index.js';
 
@@ -106,7 +107,11 @@ export function normalizeOp(op: Operation): Operation {
       return op;
     }
     case 'text.delta':
-      throw new AppError('NOT_IMPLEMENTED', 'text.delta 要等 M6 的自建 OT 才會啟用');
+      // FEATURE_OT 關閉時行為與 M5 完全相同；打開才走 OT 路徑（詳細驗證在 ot-service.ts）
+      if (!env.FEATURE_OT) {
+        throw new AppError('NOT_IMPLEMENTED', 'text.delta 需要開啟 FEATURE_OT（M6 自建 OT）');
+      }
+      return op;
     default:
       return op;
   }

@@ -18,11 +18,14 @@
  *   5. 廣播（M5 接 WS；目前 broadcast 是 no-op）
  *   6. 回傳 TransactionResult
  */
-import type { Operation, Transaction, TransactionResult } from '@kennote/shared-types';
+import type { Operation, RichText, Transaction, TransactionResult } from '@kennote/shared-types';
+import { asOtDelta, textDeltaOperation } from '@kennote/shared-types';
 import type { Tx } from '../../db/client.js';
 import { withTransaction } from '../../db/client.js';
 import { sql } from '../../db/sql.js';
+import { env } from '../../env.js';
 import { AppError, pageNotFound } from '../../lib/errors.js';
+import { contentDeltaOf, receiveDelta, recordContentUpdateAsDelta } from './ot-service.js';
 import {
   bumpPageSeq,
   findPageForUser,
@@ -73,12 +76,29 @@ async function writeChildren(
   else await setBlockChildren(tx, parentId, children);
 }
 
+/**
+ * 套用單一 op。
+ *
+ * `emitted` 是「要廣播 / 存進 TransactionResult 的 ops」——
+ * 絕大多數 op 就是原本那一個，只有 `text.delta` 會被換成「伺服器 transform 過的版本 + 新 rev」。
+ * `history` 是「要寫進 page_transactions.ops 的 ops」——
+ * `text.delta` 在這裡會被記成 `block.update{content}`，
+ * 讓版本歷史重播（M8）與 LWW 客戶端完全不必認識 OT。
+ */
 async function applyOne(
   tx: Tx,
   ctx: ApplyContext & { workspaceId: string },
   op: Operation,
   conflicts: string[],
+  emitted: Operation[],
+  history: Operation[],
 ): Promise<void> {
+  // block.update 與 text.delta 的 emitted 要在各自的 case 裡決定（OT 模式會改寫），
+  // 其餘 op 原封不動地進兩份清單
+  if (op.type !== 'text.delta' && op.type !== 'block.update') {
+    emitted.push(op);
+    history.push(op);
+  }
   switch (op.type) {
     case 'block.insert': {
       if (op.parentId !== null) {
@@ -137,7 +157,42 @@ async function applyOne(
       if (op.patch.content !== undefined) {
         patch.content = def.hasInlineContent ? op.patch.content : [];
       }
+      // 版本歷史永遠記「整段內容」的原始 op —— 重播時完全不必認識 OT
+      history.push(op);
+
+      // OT 模式：整段覆蓋也要在 block_deltas 留一筆，兩條通道才會在同一條 rev 線上
+      // （否則用舊 baseRev 送來的 delta 會套在已被覆蓋的內容上，offset 全錯）
+      let contentRev: number | null = null;
+      if (env.FEATURE_OT && patch.content !== undefined) {
+        contentRev = await recordContentUpdateAsDelta(tx, {
+          blockId: op.blockId,
+          before: (block.content ?? []) as RichText,
+          after: patch.content,
+          actorId: ctx.userId,
+        });
+      }
       await updateBlockRow(tx, op.blockId, patch, ctx.userId);
+
+      if (contentRev === null) {
+        emitted.push(op);
+        return;
+      }
+      // 廣播時把「內容變更」改用 text.delta 表示，OT 客戶端才能維持 rev 對齊；
+      // 型別 / props 的變更仍然是 block.update（那一層本來就是 LWW）。
+      const rest: typeof op.patch = {};
+      if (op.patch.blockType !== undefined) rest.blockType = op.patch.blockType;
+      if (op.patch.props !== undefined) rest.props = op.patch.props;
+      if (Object.keys(rest).length > 0) {
+        emitted.push({ type: 'block.update', blockId: op.blockId, patch: rest });
+      }
+      emitted.push(
+        textDeltaOperation(
+          op.blockId,
+          contentDeltaOf((block.content ?? []) as RichText, patch.content ?? []),
+          contentRev - 1,
+          contentRev,
+        ),
+      );
       return;
     }
 
@@ -191,8 +246,25 @@ async function applyOne(
       return;
     }
 
-    case 'text.delta':
-      throw new AppError('NOT_IMPLEMENTED', 'text.delta 要等 M6 的自建 OT 才會啟用');
+    case 'text.delta': {
+      if (!env.FEATURE_OT) {
+        throw new AppError('NOT_IMPLEMENTED', 'text.delta 需要開啟 FEATURE_OT（M6 自建 OT）');
+      }
+      const result = await receiveDelta(tx, {
+        blockId: op.blockId,
+        pageId: ctx.pageId,
+        delta: asOtDelta(op.delta),
+        baseRev: op.baseRev,
+        actorId: ctx.userId,
+      });
+      // 廣播的是「伺服器 transform 過的 delta + 新 rev」
+      emitted.push(textDeltaOperation(op.blockId, result.transformed, op.baseRev, result.rev));
+      // 版本歷史 / LWW 客戶端看到的是最終 content
+      if (result.changed) {
+        history.push({ type: 'block.update', blockId: op.blockId, patch: { content: result.content } });
+      }
+      return;
+    }
   }
 }
 
@@ -240,8 +312,12 @@ async function applyWithin(
     if (!locked) throw pageNotFound();
 
     const conflicts: string[] = [];
+    /** 要廣播 / 回給提交者的 ops（text.delta 會被換成 transform 過的版本 + 新 rev） */
+    const emitted: Operation[] = [];
+    /** 要寫進 page_transactions.ops 的 ops（text.delta 會被記成最終 content 的 block.update） */
+    const history: Operation[] = [];
     for (const op of transaction.ops) {
-      await applyOne(tx, { ...ctx, workspaceId: page.workspace_id }, op, conflicts);
+      await applyOne(tx, { ...ctx, workspaceId: page.workspace_id }, op, conflicts, emitted, history);
     }
 
     const seq = await bumpPageSeq(tx, ctx.pageId, ctx.userId);
@@ -250,7 +326,7 @@ async function applyWithin(
       txId: transaction.txId,
       pageId: ctx.pageId,
       seq,
-      ops: transaction.ops,
+      ops: emitted,
       appliedAt,
       actorId: ctx.userId,
       ...(conflicts.length > 0 ? { conflicts } : {}),
@@ -259,7 +335,7 @@ async function applyWithin(
     await tx.query(sql`
       INSERT INTO page_transactions (tx_id, page_id, seq, ops, result, actor_id, origin_session_id)
       VALUES (${transaction.txId}, ${ctx.pageId}, ${seq},
-              ${JSON.stringify(transaction.ops)}::jsonb,
+              ${JSON.stringify(history)}::jsonb,
               ${JSON.stringify(txResult)}::jsonb,
               ${ctx.userId}, ${transaction.originSessionId})
       ON CONFLICT (tx_id) DO NOTHING

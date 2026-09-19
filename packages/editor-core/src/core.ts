@@ -34,7 +34,16 @@ import { BlockSelectionController, paintBlockSelection } from './selection/block
 import { DomView } from './view/view.js';
 import { BlockRegistry, createDefaultRegistry } from './plugins/block-registry.js';
 import type { EditorPlugin, PluginContext } from './plugins/types.js';
-import { HistoryStack, type HistoryOptions } from './history/stack.js';
+import { HistoryStack, type HistoryDelta, type HistoryOptions } from './history/stack.js';
+import {
+  apply as applyOtDelta,
+  deltaFromDiff,
+  invert as invertOtDelta,
+  isNoop,
+  textDeltaOperation,
+  transformCursor,
+  type OtDelta,
+} from './ot/index.js';
 import { InputController } from './input/controller.js';
 import type { RenderInlineOptions } from './view/dom-view.js';
 
@@ -76,7 +85,28 @@ export interface CreateEditorOptions {
   newId?: () => string;
   /** 可注入假時鐘。 */
   now?: () => number;
+  /**
+   * M6 自建 OT（04 §6.6）。預設關閉 → 行為與 M5 完全相同（block 粒度 LWW）。
+   *
+   * 開啟之後：
+   *   - `localOps` 事件中「同一個 block 內、只改 content」的 `block.update`
+   *     會被換成 `text.delta`（宿主把它交給 OT 三狀態機送出）
+   *   - 結構變更（insert / move / delete / 換型別 / 改 props）仍然走原本的 tx 通道
+   *   - undo / redo 改用可 transform 的 delta 表示（協作 undo）
+   */
+  ot?: OtHostOptions;
 }
+
+export interface OtHostOptions {
+  enabled: boolean;
+  /** 這個 block 目前對齊到的伺服器 rev（由宿主的 OT client 維護）。 */
+  getBaseRev?(blockId: string): number;
+}
+
+/** IME 組字期間排隊的遠端變更（保持 ops 與 delta 的相對順序）。 */
+type RemoteQueueItem =
+  | { kind: 'ops'; ops: Operation[] }
+  | { kind: 'delta'; blockId: string; delta: OtDelta };
 
 type Listener = (...args: never[]) => void;
 
@@ -96,8 +126,9 @@ export class Editor {
   private readonly plugins: EditorPlugin[];
   private readonly pluginCleanups: (() => void)[] = [];
   private readonly input: InputController;
-  private remoteQueue: Operation[] = [];
+  private remoteQueue: RemoteQueueItem[] = [];
   private destroyed = false;
+  private readonly ot: OtHostOptions;
 
   constructor(options: CreateEditorOptions) {
     this.container = options.container;
@@ -106,6 +137,7 @@ export class Editor {
     this.now = options.now ?? (() => Date.now());
     this.doc = normalizeDoc(options.doc ?? createEmptyDoc(this.newId));
     this.plugins = options.plugins ?? [];
+    this.ot = options.ot ?? { enabled: false };
 
     this.builderCtx = {
       hasInlineContent: (type) => this.registry.get(type).hasInlineContent,
@@ -241,14 +273,20 @@ export class Editor {
     if (!current.skipRender) this.applyToView(prevDoc, current);
     else for (const id of current.blockIds) this.view.adopt(this.doc.blocks[id] ?? prevDoc.blocks[id]!);
 
+    // OT 模式：把「只改 content」的 block.update 壓縮成 delta，
+    // 同時給 history（協作 undo 要能對後續遠端 delta 做 transform）與 localOps（送出）使用
+    const deltas = this.ot.enabled ? contentDeltas(prevDoc, this.doc, current.ops) : null;
+
     if (current.source === 'user' || current.source === 'ime' || current.source === 'paste') {
-      this.history.record(current);
+      this.history.record(current, deltas ?? undefined);
     }
 
     if (current.selectionAfter.type !== 'none') this.setSelection(current.selectionAfter);
 
     this.emit('transaction', current, this.doc);
-    if (current.source !== 'remote') this.emit('localOps', current.ops, current);
+    if (current.source !== 'remote') {
+      this.emit('localOps', deltas ? this.toWireOps(current.ops, deltas) : current.ops, current);
+    }
     for (const plugin of this.plugins) plugin.onTransaction?.(current, this.pluginContext());
     return true;
   }
@@ -290,7 +328,7 @@ export class Editor {
     if (ops.length === 0) return false;
     // IME 組字期間：排隊等解凍（組字中改 DOM 會讓輸入法崩掉）
     if (this.isComposing) {
-      this.remoteQueue.push(...ops);
+      this.remoteQueue.push({ kind: 'ops', ops });
       return false;
     }
     const before = this.doc;
@@ -321,16 +359,58 @@ export class Editor {
     return this.applyTransaction(neutral);
   }
 
-  /** 解除 IME 凍結後，把排隊的遠端 ops 沖出去。 */
+  /**
+   * 套用一個遠端 delta（OT 通道）。
+   *
+   * 與 `applyRemote` 的差別：
+   *   1. 用 `transformCursor` 精準推游標（不是 diff 猜），因此不會在別人於游標前打字時跳位
+   *   2. 通知 history 對 undo/redo stack 裡的 delta 做 transform（協作 undo）
+   *
+   * 傳進來的 delta 必須已經被 OT 三狀態機 transform 過（宿主端的 `OtClient.applyRemote`）。
+   */
+  applyRemoteDelta(blockId: string, delta: OtDelta): boolean {
+    if (this.destroyed) return false;
+    if (isNoop(delta)) return false;
+    if (this.isComposing) {
+      this.remoteQueue.push({ kind: 'delta', blockId, delta });
+      return false;
+    }
+    const block = this.doc.blocks[blockId];
+    if (!block) return false;
+
+    const selectionBefore = this.selection.value;
+    const content = applyOtDelta(block.content, delta);
+    const ops: Operation[] = [{ type: 'block.update', blockId, patch: { content } }];
+    const tx = createTransaction(this.doc, {
+      ops,
+      selectionBefore,
+      selectionAfter: selectionBefore,
+      source: 'remote',
+      timestamp: this.now(),
+    });
+    const applied = this.applyTransaction({ ...tx, selectionAfter: NO_SELECTION });
+    if (!applied) return false;
+
+    this.setSelection(rebaseSelectionByDelta(selectionBefore, blockId, delta));
+    this.history.onRemoteDelta(blockId, delta);
+    return true;
+  }
+
+  /** 解除 IME 凍結後，把排隊的遠端變更沖出去（維持原本的先後順序）。 */
   flushRemoteQueue(): void {
     if (this.remoteQueue.length === 0) return;
     const queued = this.remoteQueue;
     this.remoteQueue = [];
-    this.applyRemote(queued);
+    for (const item of queued) {
+      if (item.kind === 'ops') this.applyRemote(item.ops);
+      else this.applyRemoteDelta(item.blockId, item.delta);
+    }
   }
 
   get pendingRemoteOps(): number {
-    return this.remoteQueue.length;
+    let n = 0;
+    for (const item of this.remoteQueue) n += item.kind === 'ops' ? item.ops.length : 1;
+    return n;
   }
 
   // ── 常用命令 ─────────────────────────────────────────────
@@ -339,7 +419,7 @@ export class Editor {
     const entry = this.history.popUndo();
     if (!entry) return false;
     const tx = createTransaction(this.doc, {
-      ops: entry.inverseOps,
+      ops: this.historyOps(entry.deltas, 'inverse') ?? entry.inverseOps,
       selectionBefore: entry.selectionAfter,
       selectionAfter: entry.selectionBefore,
       source: 'history',
@@ -353,7 +433,7 @@ export class Editor {
     const entry = this.history.popRedo();
     if (!entry) return false;
     const tx = createTransaction(this.doc, {
-      ops: entry.ops,
+      ops: this.historyOps(entry.deltas, 'forward') ?? entry.ops,
       selectionBefore: entry.selectionBefore,
       selectionAfter: entry.selectionAfter,
       source: 'history',
@@ -361,6 +441,62 @@ export class Editor {
       timestamp: this.now(),
     });
     return this.applyTransaction(tx);
+  }
+
+  /**
+   * 協作 undo（04 §8 M6-5）。
+   *
+   * OT 模式下，undo/redo 不再套用「當時記下的整段舊內容」（那會蓋掉別人後來打的字），
+   * 而是把已經對後續遠端 delta transform 過的 inverse delta，
+   * 套到**目前**的內容上。
+   */
+  private historyOps(
+    deltas: HistoryDelta[] | undefined,
+    direction: 'forward' | 'inverse',
+  ): Operation[] | null {
+    if (!this.ot.enabled || !deltas || deltas.length === 0) return null;
+    const ops: Operation[] = [];
+    for (const item of deltas) {
+      const block = this.doc.blocks[item.blockId];
+      if (!block) return null; // block 已被刪掉 → 退回保守路徑
+      const delta = direction === 'forward' ? item.forward : item.inverse;
+      if (isNoop(delta)) continue;
+      ops.push({
+        type: 'block.update',
+        blockId: item.blockId,
+        patch: { content: applyOtDelta(block.content, delta) },
+      });
+    }
+    return ops.length > 0 ? ops : null;
+  }
+
+  /** 把「只改 content」的 block.update 換成 text.delta（送往同步層的形狀）。 */
+  private toWireOps(ops: Operation[], deltas: HistoryDelta[]): Operation[] {
+    if (deltas.length === 0) return ops;
+    const byBlock = new Map<string, HistoryDelta[]>();
+    for (const d of deltas) {
+      const list = byBlock.get(d.blockId);
+      if (list) list.push(d);
+      else byBlock.set(d.blockId, [d]);
+    }
+    const out: Operation[] = [];
+    for (const op of ops) {
+      if (!isContentOnlyUpdate(op)) {
+        out.push(op);
+        continue;
+      }
+      const pending = byBlock.get(op.blockId);
+      const next = pending?.shift();
+      if (!next) {
+        out.push(op);
+        continue;
+      }
+      if (isNoop(next.forward)) continue;
+      out.push(
+        textDeltaOperation(op.blockId, next.forward, this.ot.getBaseRev?.(op.blockId) ?? 0),
+      );
+    }
+    return out;
   }
 
   focusBlock(blockId: string, offset = 0): void {
@@ -525,6 +661,65 @@ function normalizeDoc(doc: EditorDoc): EditorDoc {
     blocks[id] = { ...block, content: normalize(block.content) };
   }
   return { rootIds: doc.rootIds.slice(), blocks };
+}
+
+/** 只改 content、不動型別與 props 的 block.update —— OT 通道要接手的就是這種 op。 */
+function isContentOnlyUpdate(
+  op: Operation,
+): op is Extract<Operation, { type: 'block.update' }> {
+  return (
+    op.type === 'block.update' &&
+    op.patch.content !== undefined &&
+    op.patch.blockType === undefined &&
+    op.patch.props === undefined
+  );
+}
+
+/**
+ * 從「套用前 / 套用後」的 doc 算出每個 content-only 變更的 forward / inverse delta。
+ *
+ * 同一批 ops 若對同一個 block 連續改兩次 content，會依序算出兩個 delta
+ * （用 running content 推進，不能兩次都拿 prevDoc 當基準）。
+ * 只要批次裡有任何不是 content-only 的 op，就整批放棄 delta 化（退回 LWW 的 block.update）。
+ */
+function contentDeltas(
+  prevDoc: EditorDoc,
+  nextDoc: EditorDoc,
+  ops: Operation[],
+): HistoryDelta[] | null {
+  if (ops.length === 0) return null;
+  const running = new Map<string, RichText>();
+  const out: HistoryDelta[] = [];
+  for (const op of ops) {
+    if (!isContentOnlyUpdate(op)) return null;
+    const before = running.get(op.blockId) ?? prevDoc.blocks[op.blockId]?.content;
+    if (before === undefined) return null;
+    const after = normalize(op.patch.content ?? []);
+    const forward = deltaFromDiff(before, after);
+    out.push({ blockId: op.blockId, forward, inverse: invertOtDelta(forward, before) });
+    running.set(op.blockId, after);
+  }
+  // 防呆：算出來的 delta 套回去必須等於實際的新內容
+  for (const [blockId, content] of running) {
+    const actual = nextDoc.blocks[blockId]?.content;
+    if (!actual || JSON.stringify(normalize(actual)) !== JSON.stringify(content)) return null;
+  }
+  return out.filter((d) => !isNoop(d.forward));
+}
+
+/** 遠端 delta 套用之後，把本地游標推到正確位置（不是猜，是精確 transform）。 */
+export function rebaseSelectionByDelta(
+  sel: EditorSelection,
+  blockId: string,
+  delta: OtDelta,
+): EditorSelection {
+  if (sel.type !== 'text') return sel;
+  if (sel.anchor.blockId !== blockId && sel.focus.blockId !== blockId) return sel;
+  const shift = (point: { blockId: string; offset: number }): { blockId: string; offset: number } =>
+    point.blockId === blockId
+      ? { blockId, offset: transformCursor(point.offset, delta, false) }
+      : point;
+  return { type: 'text', anchor: shift(sel.anchor), focus: shift(sel.focus) };
 }
 
 /**

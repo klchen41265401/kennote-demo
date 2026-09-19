@@ -4,6 +4,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ClientMessage, Operation, ServerMessage, TransactionResult } from '@kennote/shared-types';
+import { textDeltaOperation } from '@kennote/shared-types';
 import { MemoryQueue } from './offline-queue';
 import {
   backoffDelay,
@@ -404,3 +405,107 @@ async function setupReconnect(h: Harness): Promise<void> {
   socket.emit({ t: 'synced', pageId: PAGE, seq: 10, permission: 'edit' });
   await vi.advanceTimersByTimeAsync(0);
 }
+
+/* ────────────────────────────────────────────────────────────
+ * M6：OT delta 通道（與既有 tx 通道並存）
+ * ──────────────────────────────────────────────────────────── */
+
+describe('OT delta 通道', () => {
+  const BLOCK = '22222222-2222-7222-8222-222222222222';
+  const deltaOp = (rev?: number): Operation =>
+    textDeltaOperation(BLOCK, { ops: [{ retain: 1 }, { insert: 'x' }] }, 0, rev);
+
+  function attachDelta(h: Harness) {
+    const acks: Array<{ blockId: string; rev: number | undefined; txId: string }> = [];
+    const remotes: Array<{ blockId: string; rev: number | undefined }> = [];
+    const rejected: Array<{ blockId: string; code: string }> = [];
+    const detach = h.client.attachDeltaChannel(PAGE, {
+      onAck: (op, txId) => acks.push({ blockId: op.blockId, rev: op.rev, txId }),
+      onRemoteDelta: (op) => remotes.push({ blockId: op.blockId, rev: op.rev }),
+      onRejected: (blockId, reason) => rejected.push({ blockId, code: reason.code }),
+    });
+    return { acks, remotes, rejected, detach };
+  }
+
+  it('submitDelta 立刻送出，不等 debounce（OT 一次只能有一筆 outstanding）', async () => {
+    const h = setup();
+    const socket = handshake();
+    const txId = h.client.submitDelta(PAGE, BLOCK, { ops: [{ insert: 'a' }] }, 3);
+    // 只等一個 microtask（遠小於 tx 通道的 300ms debounce）就已經送出去了
+    await vi.advanceTimersByTimeAsync(0);
+    const sent = socket.messagesOfType('tx');
+    expect(sent.length).toBeGreaterThanOrEqual(1);
+    // 重送（attachPage / synced 的 resendQueued）用的是同一個 txId → 伺服器冪等
+    expect(new Set(sent.map((m) => m.tx.txId))).toEqual(new Set([txId]));
+    const op = sent[0]!.tx.ops[0]!;
+    expect(op.type).toBe('text.delta');
+    if (op.type === 'text.delta') expect(op.baseRev).toBe(3);
+  });
+
+  it('txApplied 裡的 text.delta 會交給 delta 通道（帶著新的 rev）', async () => {
+    const h = setup();
+    const socket = handshake();
+    const channel = attachDelta(h);
+    const txId = h.client.submitDelta(PAGE, BLOCK, { ops: [{ insert: 'a' }] }, 0);
+    await vi.advanceTimersByTimeAsync(0);
+    socket.emit({ t: 'txApplied', result: txResult(11, [deltaOp(7)], { txId, actorId: 'me' }) });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(channel.acks).toEqual([{ blockId: BLOCK, rev: 7, txId }]);
+  });
+
+  it('txBroadcast 會把 text.delta 與其他 ops 分流，且保持順序', async () => {
+    const h = setup();
+    const socket = handshake();
+    const channel = attachDelta(h);
+    socket.emit({
+      t: 'txBroadcast',
+      result: txResult(11, [op('b-first'), deltaOp(4), op('b-last')]),
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(channel.remotes).toEqual([{ blockId: BLOCK, rev: 4 }]);
+    // 非 delta 的 ops 仍然走 onRemoteOps，且被切成前後兩批（順序保留）
+    expect(
+      h.remote.map((r) => r.ops.map((o) => ('blockId' in o ? o.blockId : o.type))),
+    ).toEqual([['b-first'], ['b-last']]);
+  });
+
+  it('沒有註冊 delta 通道時，text.delta 退回走 onRemoteOps（舊路徑仍可用）', async () => {
+    const h = setup();
+    const socket = handshake();
+    socket.emit({ t: 'txBroadcast', result: txResult(11, [deltaOp(4)]) });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(h.remote).toHaveLength(1);
+    expect(h.remote[0]!.ops[0]!.type).toBe('text.delta');
+  });
+
+  it('txRejected 會通知 delta 通道對應的 block', async () => {
+    const h = setup();
+    const socket = handshake();
+    const channel = attachDelta(h);
+    const txId = h.client.submitDelta(PAGE, BLOCK, { ops: [{ insert: 'a' }] }, 0);
+    await vi.advanceTimersByTimeAsync(0);
+    socket.emit({ t: 'txRejected', txId, code: 'NOT_IMPLEMENTED', message: '沒開 FEATURE_OT' });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(channel.rejected).toEqual([{ blockId: BLOCK, code: 'NOT_IMPLEMENTED' }]);
+  });
+
+  it('detach 之後 text.delta 又回到 onRemoteOps', async () => {
+    const h = setup();
+    const socket = handshake();
+    const channel = attachDelta(h);
+    channel.detach();
+    socket.emit({ t: 'txBroadcast', result: txResult(11, [deltaOp(4)]) });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(channel.remotes).toHaveLength(0);
+    expect(h.remote).toHaveLength(1);
+  });
+
+  it('delta 仍然會進離線佇列（斷線重送，txId 不變）', async () => {
+    const h = setup();
+    handshake();
+    const txId = h.client.submitDelta(PAGE, BLOCK, { ops: [{ insert: 'a' }] }, 0);
+    await vi.advanceTimersByTimeAsync(0);
+    const items = await h.queue.list(PAGE);
+    expect(items.map((i) => i.txId)).toContain(txId);
+  });
+});
