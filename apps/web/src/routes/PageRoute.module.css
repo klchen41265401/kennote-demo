@@ -1,7 +1,8 @@
 .page {
-  max-width: var(--kn-size-content-width);
-  margin: 0 auto;
-  padding: var(--kn-space-9) var(--kn-space-6) var(--kn-space-9);
+  /* 封面要滿版，所以內容寬度由 PageHeader / Editor 各自控制 */
+  position: relative;
+  width: 100%;
+  padding-bottom: var(--kn-space-9);
 }
 
 .header {
@@ -21,6 +22,10 @@
 }
 
 .savedHint {
+  position: absolute;
+  top: var(--kn-space-4);
+  right: var(--kn-space-6);
+  z-index: var(--kn-z-sticky);
   color: var(--kn-color-text-tertiary);
   font-size: var(--kn-font-size-xs);
 }
