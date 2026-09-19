@@ -189,7 +189,38 @@ export class DragController {
 
     window.addEventListener('pointermove', this.onPointerMove, true);
     window.addEventListener('pointerup', this.onPointerUp, true);
-    window.addEventListener('pointercancel', this.onPointerUp, true);
+    /**
+     * ⭐ 第十輪 BUG-49：`pointercancel` **不是** `pointerup`。
+     *
+     * 原本兩個事件共用 `onPointerUp`，而它在 `phase === 'dragging'` 時會 `drop()`。
+     * 但 pointercancel 的語意是「這個手勢被系統收走了」（瀏覽器開始捲動、
+     * 來電、手掌誤觸被判定成 palm rejection）—— 使用者**沒有放手**。
+     * 於是在手機上：長按一列 → 手指一動 → 瀏覽器接管捲動 → pointercancel →
+     * **那一列被丟到手指當下的位置**。使用者以為自己在捲動，樹卻被改了結構，
+     * 而且完全沒有任何 UI 提示。
+     *
+     * 拖放的錯誤方向必須是「什麼都沒發生」，不是「掉在半路」。
+     */
+    window.addEventListener('pointercancel', this.onPointerCancel, true);
+
+    /**
+     * ⭐ 第十輪 BUG-50：觸控拖曳時要擋掉瀏覽器的捲動。
+     *
+     * `useDraggable` 有給 `handleProps.style.touchAction = 'none'`，但
+     *   (a) 呼叫端不一定會把那個 style 套上去（`page-tree/TreeRow.tsx` 就只拿了
+     *       `onPointerDown`），而且
+     *   (b) 就算套了，`touch-action: none` 會讓**整列都不能捲動** ——
+     *       側邊欄是一個長清單，手機上不能捲等於不能用。
+     *
+     * 正確的形狀是「平常可以捲，長按 400ms 進入拖曳之後才不能捲」，
+     * 而 `touch-action` 是在 touchstart 當下就決定的、改不動的。
+     * 所以這裡掛一條 **non-passive 的 touchmove**：只在 `phase === 'dragging'`
+     * 時 `preventDefault()`。長按門檻之前完全不攔，捲動照常。
+     *
+     * `{ passive: false }` 是關鍵 —— Chrome 對 document 層的 touchmove
+     * 預設是 passive，preventDefault() 會被忽略（且只噴一行 console 警告）。
+     */
+    window.addEventListener('touchmove', this.onTouchMove, { passive: false, capture: true });
 
     this.setState({ phase: 'pending', sourceId, kind: source.spec.kind, pointer: this.pointer });
 
@@ -223,6 +254,18 @@ export class DragController {
     if (event.pointerId !== this.pointerId) return;
     if (this.state.phase === 'dragging') this.drop();
     else this.cancel();
+  };
+
+  /** 見 handlePointerDown 的 BUG-49：手勢被系統收走 = 取消，不是放下。 */
+  private onPointerCancel = (event: PointerEvent): void => {
+    if (event.pointerId !== this.pointerId) return;
+    this.cancel();
+  };
+
+  /** 見 handlePointerDown 的 BUG-50：只在真的拖起來之後才攔捲動。 */
+  private onTouchMove = (event: TouchEvent): void => {
+    if (this.state.phase !== 'dragging') return;
+    if (event.cancelable) event.preventDefault();
   };
 
   // ── 狀態轉換 ─────────────────────────────────────────────
@@ -406,7 +449,10 @@ export class DragController {
     }
     window.removeEventListener('pointermove', this.onPointerMove, true);
     window.removeEventListener('pointerup', this.onPointerUp, true);
-    window.removeEventListener('pointercancel', this.onPointerUp, true);
+    // ⚠️ 註冊時用哪一個 handler、哪一組 options，移除時就要一模一樣，
+    //    否則監聽器會一直留著（BUG-49 之前這裡就是拆錯 handler 的形狀）。
+    window.removeEventListener('pointercancel', this.onPointerCancel, true);
+    window.removeEventListener('touchmove', this.onTouchMove, { capture: true });
     this.captureEl = null;
     this.pointerId = -1;
     this.active = null;

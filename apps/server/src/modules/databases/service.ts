@@ -40,7 +40,7 @@ import { getMemberRole } from '../workspaces/repo.js';
 import { applyTransaction } from '../blocks/apply-transaction.js';
 import { uuidv7 } from '../../lib/uuidv7.js';
 import { buildPermissionIndex, canSee } from '../permissions/bulk.js';
-import { requirePagePermission } from '../permissions/service.js';
+import { requirePagePermission, resolvePagePermission } from '../permissions/service.js';
 import * as pagesRepo from '../pages/repo.js';
 import { generateKeyBetween } from '../../lib/fractional.js';
 import {
@@ -848,27 +848,68 @@ export interface QueryRowsOptions {
   timeZone?: string;
 }
 
+/**
+ * ⭐ 第十輪 BUG-48：**relation 的目標資料庫要在「讀」的時候再問一次權限**。
+ *
+ * 第八輪補的 `assertRelationTargetsReadable()` 擋的是**定義的那一刻**
+ * （`patchSchema` / `applySchemaOps`）。但權限會在定義之後改變：
+ *   · A 把 relation 指到「業績」資料庫時看得到它，後來被撤權
+ *   · 或 relation 是別人（有權限的人）定義的，我只是有這張表的 read
+ * 這兩種情況下 rollup / CSV 仍然把目標列的**標題與數值**讀出來 ——
+ * 授權檢查發生在寫入時，資料卻是在讀取時流出去的。
+ *
+ * 一個資料庫只問一次（`readable` cache），因為同一批 rows 共用同一個目標。
+ * 問不到 → 那一個 relation 屬性的 source 直接留空，
+ * rollup 會算出「沒有來源」（0 / 空字串），**不是報錯** ——
+ * 報錯等於告訴對方「這裡有一個你看不到的資料庫」。
+ */
+async function targetCollectionIfReadable(
+  targetId: string,
+  userId: string | null,
+  cache: Map<string, Awaited<ReturnType<typeof repo.findCollectionById>>>,
+  conn: Queryable,
+): Promise<Awaited<ReturnType<typeof repo.findCollectionById>>> {
+  const cached = cache.get(targetId);
+  if (cached !== undefined) return cached;
+  const row = await repo.findCollectionById(targetId, conn);
+  let out = row;
+  // userId === null 只出現在內部呼叫（沒有使用者的背景工作），維持舊行為
+  if (row && userId !== null) {
+    const permission = await resolvePagePermission(userId, row.page_id);
+    if (permission === 'none') out = null;
+  }
+  cache.set(targetId, out);
+  return out;
+}
+
 async function loadRollupSources(
   schema: CollectionSchema,
   rows: repo.RowRecord[],
+  userId: string | null,
   conn: Queryable = db,
 ): Promise<RollupSources> {
   const sources: RollupSources = new Map();
   const relationProps = schemaRelationProperties(schema);
   if (relationProps.length === 0) return sources;
 
+  const targetCache = new Map<string, Awaited<ReturnType<typeof repo.findCollectionById>>>();
   for (const relationProp of relationProps) {
     const def = schema[relationProp];
     if (!def || def.type !== 'relation') continue;
+    const targetCollection = def.collectionId
+      ? await targetCollectionIfReadable(def.collectionId, userId, targetCache, conn)
+      : null;
+    // 目標資料庫看不見 → 連目標列都不要撈（不只是不給 schema）
+    if (def.collectionId && !targetCollection) {
+      sources.set(relationProp, { schema: {} as CollectionSchema, rows: new Map() });
+      continue;
+    }
     const targetIds = new Set<string>();
     for (const row of rows) {
       const value = (row.properties ?? {})[relationProp];
       if (value && value.type === 'relation') for (const id of value.pageIds) targetIds.add(id);
     }
     const targetRows = await repo.findRowsByIds([...targetIds], conn);
-    const targetCollection = def.collectionId
-      ? await repo.findCollectionById(def.collectionId, conn)
-      : null;
     const source: RollupSource = {
       schema: (targetCollection?.schema ?? {}) as CollectionSchema,
       rows: new Map(
@@ -996,7 +1037,7 @@ export async function queryRows(
       groupKey: groupKeySql,
       perGroup: limit,
     });
-    const sources = await loadRollupSources(schema, records);
+    const sources = await loadRollupSources(schema, records, userId);
     const groups = assembleGroups(
       schema,
       query.groupBy.property,
@@ -1028,7 +1069,7 @@ export async function queryRows(
       compiled.sort.order,
       MEMORY_SCAN_LIMIT,
     );
-    const sources = await loadRollupSources(schema, records);
+    const sources = await loadRollupSources(schema, records, userId);
     let rows = records.map((r) => materializeRow(r, schema, sources, ctx.now, true));
     if (compiled.memoryFilter) {
       rows = rows.filter((r) => matchesFilter(schema, r.properties, query.filter, ctx));
@@ -1062,7 +1103,7 @@ export async function queryRows(
 
   const hasMore = records.length > limit;
   const pageRecords = hasMore ? records.slice(0, limit) : records;
-  const sources = await loadRollupSources(schema, pageRecords);
+  const sources = await loadRollupSources(schema, pageRecords, userId);
   const rows = pageRecords.map((r) => materializeRow(r, schema, sources, ctx.now, hasComputed));
   const total = await repo.countRows(collectionId, compiled.where);
   const last = pageRecords[pageRecords.length - 1];
@@ -1369,7 +1410,7 @@ export async function patchRow(
     return row;
   });
 
-  const sources = await loadRollupSources(schema, [updated]);
+  const sources = await loadRollupSources(schema, [updated], userId);
   return materializeRow(updated, schema, sources, new Date(), schemaHasComputed(schema));
 }
 
@@ -1447,7 +1488,7 @@ export async function reorderRow(
     return row;
   });
 
-  const sources = await loadRollupSources(schema, [updated]);
+  const sources = await loadRollupSources(schema, [updated], userId);
   return materializeRow(updated, schema, sources, new Date(), schemaHasComputed(schema));
 }
 
@@ -1595,13 +1636,34 @@ async function loadRelationTitles(
   schema: CollectionSchema,
   columns: readonly string[],
   records: readonly repo.RowRecord[],
+  userId: string,
 ): Promise<Map<string, string>> {
   const relationColumns = columns.filter((id) => schema[id]?.type === 'relation');
   if (relationColumns.length === 0) return new Map();
+  /*
+   * 第十輪 BUG-48 的第二個現場：CSV 的 relation 欄位匯出的是**目標列的標題**，
+   * 所以它和 rollup 一樣是一條「把別的資料庫的字帶出來」的路。
+   * 目標資料庫問不到 read → 那一欄整欄不解析標題（`relationTitles` 查不到時
+   * 呼叫端會回退成 pageId，pageId 本來就是持有者自己那一列裡的值）。
+   */
+  const targetCache = new Map<string, Awaited<ReturnType<typeof repo.findCollectionById>>>();
+  const readableColumns: string[] = [];
+  for (const column of relationColumns) {
+    const def = schema[column];
+    const targetId = def?.type === 'relation' ? def.collectionId : null;
+    if (!targetId) {
+      readableColumns.push(column);
+      continue;
+    }
+    if (await targetCollectionIfReadable(targetId, userId, targetCache, db)) {
+      readableColumns.push(column);
+    }
+  }
+  if (readableColumns.length === 0) return new Map();
   const ids = new Set<string>();
   for (const record of records) {
     const props = (record.properties ?? {}) as RowProperties;
-    for (const column of relationColumns) {
+    for (const column of readableColumns) {
       const value = props[column];
       if (value && value.type === 'relation') for (const id of value.pageIds) ids.add(id);
     }
@@ -1637,9 +1699,9 @@ export async function exportCsv(
     compiled.sort.order,
     MAX_EXPORT_ROWS,
   );
-  const sources = await loadRollupSources(schema, records);
+  const sources = await loadRollupSources(schema, records, userId);
   const hasComputed = schemaHasComputed(schema);
-  const relationTitles = await loadRelationTitles(schema, columns, records);
+  const relationTitles = await loadRelationTitles(schema, columns, records, userId);
 
   const lines: string[] = [
     columns.map((id) => csvCell(schema[id]?.name ?? id)).join(','),

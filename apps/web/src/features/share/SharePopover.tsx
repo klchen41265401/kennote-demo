@@ -11,8 +11,15 @@ import type {
   PagePermission,
   PublicLinkInfo,
   WorkspaceMember,
+  WorkspaceRole,
 } from '@kennote/shared-types';
-import { API_ROUTES, COLLAB_API_ROUTES } from '@kennote/shared-types';
+import {
+  API_ROUTES,
+  COLLAB_API_ROUTES,
+  PAGE_PERMISSION_RANK,
+  WORKSPACE_ROLE_BASELINE,
+  WORKSPACE_ROLE_CEILING,
+} from '@kennote/shared-types';
 import { useQuery } from '@kennote/ui';
 import { ApiError, api } from '../../lib/api-client';
 import { serverFeatures } from '../../lib/features';
@@ -142,9 +149,42 @@ export function SharePopover({ pageId, workspaceId, onClose }: SharePopoverProps
     }
   };
 
-  const entryPermission = (userId: string): PagePermission =>
-    access.data?.entries.find((e) => e.subjectType === 'user' && e.subjectId === userId)
-      ?.permission ?? 'edit';
+  /**
+   * ⭐ 第十輪 BUG-47：下拉框的「現在是什麼」必須與後端 `resolvePermission()` 一致。
+   *
+   * 原本這裡沒有條目就一律 fallback `'edit'` —— 對 guest 是**錯的**：
+   * `WORKSPACE_ROLE_BASELINE.guest === 'none'`，他其實什麼都看不到，
+   * 畫面上卻寫「可編輯」。更糟的是這是一個 `<select>`：使用者以為
+   * 「本來就是可編輯」而不去動它，等於**畫面顯示的授權從來沒有被建立**。
+   *
+   * 現在照 03 §4.12 的規則在前端重算同一件事（同一組常數，不是另一份表）：
+   *   1. 收集適用條目：指名這個人的 `user` 條目；非 guest 再加上 `workspace` 條目
+   *   2. 有條目 → 取最大值；沒有 → 用 `WORKSPACE_ROLE_BASELINE[role]`
+   *   3. 最後與 `WORKSPACE_ROLE_CEILING[role]` 取 min（guest 封頂 comment）
+   *
+   * 這裡**刻意不讀** `access.data.permission` —— 那是「我自己」的權限，
+   * 不是「這一列這個人」的。
+   *
+   * 注意：這是**近似**，因為前端只拿得到這一頁自己的條目，
+   * 祖先鏈上的授權看不到。近似的方向是「少說」（顯示得比實際低），
+   * 而第六輪那個 fallback 的方向是「多說」—— 權限 UI 的錯誤方向必須是少說。
+   */
+  const rank = (p: PagePermission): number => PAGE_PERMISSION_RANK[p];
+
+  const entryPermission = (userId: string, role: WorkspaceRole): PagePermission => {
+    const applicable = (access.data?.entries ?? []).filter((e) =>
+      e.subjectType === 'user'
+        ? e.subjectId === userId
+        : e.subjectType === 'workspace' && role !== 'guest',
+    );
+    const fromEntries = applicable.reduce<PagePermission | null>(
+      (acc, e) => (acc === null || rank(e.permission) > rank(acc) ? e.permission : acc),
+      null,
+    );
+    const effective = fromEntries ?? WORKSPACE_ROLE_BASELINE[role];
+    const ceiling = WORKSPACE_ROLE_CEILING[role];
+    return rank(effective) <= rank(ceiling) ? effective : ceiling;
+  };
 
   return (
     <div className={styles.popover} role="dialog" aria-label="分享">
@@ -194,7 +234,7 @@ export function SharePopover({ pageId, workspaceId, onClose }: SharePopoverProps
             </span>
             <select
               className={styles.select}
-              value={entryPermission(member.userId)}
+              value={entryPermission(member.userId, member.role)}
               disabled={busy}
               onChange={(e) => void setPermission(member.userId, e.target.value as PagePermission)}
               aria-label={`${member.user.name} 的權限`}

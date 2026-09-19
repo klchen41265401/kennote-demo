@@ -355,3 +355,96 @@ describe('DragController — 觸控長按', () => {
     }
   });
 });
+
+describe('第十輪 BUG-49 / BUG-50：觸控拖曳的取消與捲動', () => {
+  /**
+   * `pointercancel` 的語意是「這個手勢被系統收走了」（瀏覽器開始捲動、來電、
+   * palm rejection）—— 使用者**沒有放手**。原本它和 `pointerup` 共用同一個
+   * handler，於是在 `dragging` 階段會走 `drop()`：手機上長按一列、手指一動，
+   * 那一列就被丟到手指當下的位置，而使用者以為自己只是在捲動。
+   */
+  it('pointercancel 在 dragging 階段是取消，不是放下', () => {
+    vi.useFakeTimers();
+    try {
+      const controller = new DragController();
+      const el = document.createElement('div');
+      document.body.appendChild(el);
+      stubRect(el, { top: 0, left: 0, width: 100, height: 28 });
+      const dropped: unknown[] = [];
+      controller.registerSource(el, {
+        id: 's',
+        kind: 'block',
+        getPayload: () => null,
+        onDragEnd: (result) => dropped.push(result),
+      });
+
+      controller.handlePointerDown(
+        's',
+        pointerEvent('pointerdown', {
+          pointerType: 'touch',
+          clientX: 10,
+          clientY: 10,
+        }) as unknown as PointerEvent,
+      );
+      vi.advanceTimersByTime(TOUCH_HOLD_MS + 10);
+      expect(controller.getSnapshot().phase).toBe('dragging');
+
+      window.dispatchEvent(pointerEvent('pointercancel', { pointerId: 1 }));
+
+      expect(controller.getSnapshot().phase).toBe('idle');
+      // 取消 = 沒有放下，onDragEnd 只能拿到 null
+      expect(dropped).toEqual([null]);
+      el.remove();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  /**
+   * `touch-action: none` 是 touchstart 當下就決定、之後改不動的，
+   * 套在整列上等於「這個清單在手機上不能捲」。所以改成掛一條 non-passive 的
+   * touchmove，只在 `dragging` 階段 preventDefault：
+   * 長按門檻之前完全不攔，捲動照常。
+   */
+  it('touchmove 只在 dragging 階段被 preventDefault（pending 階段要能捲動）', () => {
+    vi.useFakeTimers();
+    try {
+      const controller = new DragController();
+      const el = document.createElement('div');
+      document.body.appendChild(el);
+      stubRect(el, { top: 0, left: 0, width: 100, height: 28 });
+      controller.registerSource(el, { id: 's', kind: 'block', getPayload: () => null });
+
+      controller.handlePointerDown(
+        's',
+        pointerEvent('pointerdown', {
+          pointerType: 'touch',
+          clientX: 10,
+          clientY: 10,
+        }) as unknown as PointerEvent,
+      );
+
+      // 還在 pending（長按未滿）→ 不能攔，否則使用者捲不動清單
+      const early = new Event('touchmove', { bubbles: true, cancelable: true });
+      window.dispatchEvent(early);
+      expect(early.defaultPrevented).toBe(false);
+
+      vi.advanceTimersByTime(TOUCH_HOLD_MS + 10);
+      expect(controller.getSnapshot().phase).toBe('dragging');
+
+      const during = new Event('touchmove', { bubbles: true, cancelable: true });
+      window.dispatchEvent(during);
+      expect(during.defaultPrevented).toBe(true);
+
+      controller.cancel();
+
+      // 拖曳結束後監聽器要被拆掉，不能一直留著攔全站的捲動
+      const after = new Event('touchmove', { bubbles: true, cancelable: true });
+      window.dispatchEvent(after);
+      expect(after.defaultPrevented).toBe(false);
+      el.remove();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});

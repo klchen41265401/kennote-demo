@@ -140,6 +140,11 @@ export interface PageSyncApi {
   updatePresence(blockId: string | null, selection: [number, number] | null): void;
 }
 
+
+/** 遠端 op 觸發「版本歷史重抓」的節流窗（BUG-51）。歷史的粒度是版本，不是按鍵。 */
+const HISTORY_INVALIDATE_THROTTLE_MS = 3000;
+let lastHistoryInvalidate = 0;
+
 export function usePageSync(
   pageId: string | null,
   options: UsePageSyncOptions = {},
@@ -170,6 +175,7 @@ export function usePageSync(
    * （另一半的保險在 `lib/sync-client.ts` 的 `submit()`：改成先進 pending 佇列，
    * attach 時再補送，而不是默默丟掉。）
    */
+  /** 見下方 BUG-51：版本歷史的重抓節流窗（模組層，跨頁共用一個時間戳就夠） */
   useLayoutEffect(() => {
     if (!pageId) return;
     const sync = getSyncClient();
@@ -181,7 +187,33 @@ export function usePageSync(
     const detach = sync.attachPage(
       pageId,
       {
-        onRemoteOps: (ops, meta) => optionsRef.current.onRemoteOps?.(ops, meta),
+        onRemoteOps: (ops, meta) => {
+          /**
+           * ⭐ 第十輪 BUG-51：**版本歷史面板對別人的編輯是瞎的。**
+           *
+           * `HistoryPanel` 的資料來自 `useQuery(['page', pageId, 'history'])`，
+           * 而全站只有兩個地方讓它失效：面板自己按下「還原」，
+           * 以及 `onResync` 的 `['page', pageId, 'snapshot']` ——
+           * 但 `invalidateQueries` 是**前綴比對**，`...'snapshot'` 比不中 `...'history'`。
+           * 結果是：兩個人同時開著同一頁，A 一直編輯，B 的版本歷史停在打開的那一刻，
+           * 而且**畫面上沒有任何東西說它過期了**（沒有 spinner、沒有「有新版本」）。
+           * 協作 UI 最糟的形狀就是「看起來是現況、其實是快照」。
+           *
+           * 為什麼要節流：遠端 op 是**每一次按鍵**都會來一筆，
+           * 一次 invalidate 等於一次 `GET /history` 往返。歷史的粒度是「版本」
+           * （伺服器把連續編輯折成一段），秒級的即時性完全夠用。
+           * 3 秒是刻意選的：比「使用者停下來看面板」快，比「連續打字」慢很多。
+           *
+           * `invalidateQueries` 只會讓**掛載中的**元件重抓（沒有 listener 的條目
+           * 連 data 都直接丟掉），所以面板沒開時這條路是零成本的。
+           */
+          const now = Date.now();
+          if (now - lastHistoryInvalidate > HISTORY_INVALIDATE_THROTTLE_MS) {
+            lastHistoryInvalidate = now;
+            invalidateQueries(['page', pageId, 'history']);
+          }
+          optionsRef.current.onRemoteOps?.(ops, meta);
+        },
         onSeqChange: (next) => setSeq(next),
         onPermission: (next) => setPermission(next),
         onPresence: (peers) => setPagePresence(pageId, peers),
@@ -206,6 +238,27 @@ export function usePageSync(
       },
       initialSeq,
     );
+
+    /**
+     * ⭐ 第十輪 BUG-52：**只有「在編輯器裡點過一下」的人才會出現在 presence 名單上。**
+     *
+     * `updatePresence()` 全站只有一個呼叫端：`useEditorHost` 的 `selectionChange`
+     * （`features/editor/useEditorHost.ts:344`）。而伺服器的房間只把
+     * **送過 `{ t: 'presence' }` 的 session** 放進 `room.presence`
+     * （`realtime/room-manager.ts`），所以：
+     *   · 純閱讀的人（開著頁面沒點進內文）→ 別人的頭像列上**完全不存在**
+     *   · **資料庫頁**（表格 / 看板 / 日曆）根本沒有編輯器 → 一個人都不會顯示，
+     *     哪怕五個人同時在改同一張表。這就是「presence 名牌在資料庫儲存格」
+     *     這一條走不下去的真正原因：不是名牌沒畫，是**連人都還沒進名單**。
+     *
+     * 「我在這一頁」和「我的游標在哪」是兩件事，前者在 attach 當下就成立。
+     * 這裡在 attach 之後立刻宣告一次「我在，但沒有游標」；
+     * 之後編輯器有選取時再用同一支 API 覆蓋上去。
+     *
+     * 連線還沒好也沒關係：`updatePresence()` 會把它記進 `entry.presence`，
+     * `sync-client` 收到 `synced` 時會照著重送一次（見那一支的 `case 'synced'`）。
+     */
+    sync.updatePresence(pageId, null, null);
 
     void refreshPending();
 

@@ -61,3 +61,28 @@ export async function findFileInUserWorkspace(
      WHERE f.id = ${fileId} AND f.deleted_at IS NULL
   `);
 }
+
+/**
+ * 第十輪：把附件改綁到另一頁（`POST /api/files/:id/rebind`）。
+ *
+ * ⚠️ 這支**不問權限** —— 兩頁的 `edit` 由 route 先問過。
+ * 名字刻意是 `rebindFilePage` 而不是 `moveFileForUser`（第八輪 BUG-44 的命名紅線）。
+ *
+ * `WHERE page_id IS NOT DISTINCT FROM`：帶上「我以為它原本在哪一頁」，
+ * 兩個人同時搬同一個附件時，第二個人會拿到 0 列而不是覆蓋掉第一個人的結果。
+ */
+export async function rebindFilePage(
+  fileId: string,
+  expectedPageId: string | null,
+  pageId: string,
+): Promise<FileRow | null> {
+  return db.queryOne<FileRow>(sql`
+    UPDATE files
+       SET page_id = ${pageId}
+     WHERE id = ${fileId}
+       AND deleted_at IS NULL
+       AND page_id IS NOT DISTINCT FROM ${expectedPageId}
+    RETURNING id, workspace_id, storage_key, storage_driver, original_name,
+              content_type, size, uploaded_by, page_id, created_at
+  `);
+}
