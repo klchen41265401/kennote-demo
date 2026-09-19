@@ -200,9 +200,20 @@ BASE_URL=http://127.0.0.1:5173 npx playwright test rwd.spec.ts
 
 ---
 
-## 6.5 踩到的 `@kennote/ui` primitives 問題（已在本模組繞過，建議回頭修）
+## 6.5 踩到的 `@kennote/ui` primitives 問題（⚠️ **四個都已經在上游修掉了**）
 
-這四個都是實測到的、會讓功能「靜靜地壞掉」的坑，繞法都寫在對應檔案的註解裡：
+> **這一節保留下來是為了記錄症狀，不是為了照抄繞法。**
+> 下面四個坑當初是在這個模組裡繞過去的，後來**全部在 `packages/ui` 本體修好了**
+> （對照 [`packages/ui/README.md`](../../../../../packages/ui/README.md)
+> 的「這四個曾經害下游靜靜壞掉的坑」）：
+> `Resizable` 先求值再呼叫、dnd 註冊改以 effect 為準（`dnd/useNodeRegistration.ts`）、
+> 指標捕獲打在註冊的元素上、trigger 的 handler 組合收斂到 `components/trigger.ts`。
+>
+> **新的呼叫端不需要再繞。** 本模組留著的繞法是歷史包袱，
+> 下次動到這幾個檔案時可以順手拆掉（拆完記得跑 `pnpm --filter @kennote/ui test`，
+> 那 133 條裡有 dnd 落點與浮層堆疊的回歸）。
+
+原始症狀（都是實測到的、會讓功能「靜靜地壞掉」的坑）：
 
 1. **`Resizable` 的鍵盤調整與雙擊重設，在沒給 `onResizeEnd` 時完全沒作用。**
    `onResizeEnd?.(apply(size + delta))` —— optional chaining 在 `onResizeEnd` 是
@@ -234,13 +245,45 @@ BASE_URL=http://127.0.0.1:5173 npx playwright test rwd.spec.ts
 
 ## 7. 已知限制
 
+> 完整清單在 [`docs/qa/README.md`](../../../../../docs/qa/README.md) §2
+> （shell 相關的是 C 的 O-7 / O-8 / O-10、D 的 O-12、F 的 O-26 / O-29）。
+
+### 仍然開著
+
+- **`/settings` 這個 URL 根本不存在。** `App.tsx` 沒有宣告這條路由，打進去會掉到
+  `NotFoundRoute`；設定是 store 裡的 overlay，**不支援深連結**（QA O-12，連三輪延後）。
+- **點通知跳頁後不會捲到該討論串**：`InboxRoute` 把 `discussionId` 丟掉了（QA O-7）。
+- **版本預覽時，編輯器顯示的還是現在的內容。**
+  `AppShell` 丟掉了 `onPreview` 的 snapshot 參數，但橫幅照樣寫「編輯已停用」
+  —— 使用者會以為自己在看舊版。這是**會誤導的錯**，不是純缺功能（QA O-8）。
+- **「追蹤這個頁面」藏在 ⋯ 選單第二層**，而 `page_updated` 只通知 `explicit` 訂閱者
+  —— 整條鏈路通了但沒人走得到（QA O-10）。
 - **`Ctrl+Shift+N`（開新視窗）未實作**，快捷鍵說明表上有標示。
-- **搜尋的「建立者 / 日期」篩選 chips 是 UI 佔位**：後端 `GET /api/search` 還沒有對應參數
-  （M6 的搜尋代理會補 `type`），前端已經照 `type=` 的形狀送出。
 - **收藏區不支援拖曳排序**（`favorites.sort_key` 欄位在，API 還沒開）。
-- **匯入**只跳 toast（排在 M6 的 `features/export` / `features/import`）。
 - **AI（新對話 / Ctrl+O）是佔位**，P2。
-- 側邊欄底部「新對話」用的是 `sync` icon —— 80 個自建 icon 裡沒有 Notion 那顆 AI 星芒，
-  等 icon 集補上再換。
+  側邊欄底部「新對話」用的是 `sync` icon —— 80 個自建 icon 裡沒有 Notion 那顆 AI 星芒。
+- **永久刪除（UI 路徑）、訪客升級、登出所有裝置**三條流程從第一輪掛到第六輪
+  **都沒有實際走查過**（後端與 UI 都在，只是沒人驗）（QA O-26）。
+- `SharePopover` 的 `entryPermission()` 對「沒有 `page_permissions` 條目的成員」
+  **寫死 fallback `'edit'`**，對 guest 是錯的（實際是 `none`）——
+  UI 會顯示比真實權限更高的值（QA O-2，連四輪延後）。
+- 分享彈窗用 `goto('/page/:id')` 直接進去時**偶爾開不起來**（頂欄按鈕點得到但 popover 不出現），
+  沒有穩定重現（QA O-29）。
 - 內容欄左緣與 Notion 差約 8px：Notion 的 frame 右側有捲軸槽，左右留白是不對稱的
   （量到 217.5 / 232.5），我們是對稱置中。寬度本身（720）一致。
+
+### 已經修掉、不要再照抄
+
+- ~~搜尋的「建立者 / 日期」篩選 chips 是 UI 佔位，後端沒有對應參數~~ →
+  **後端已經有了**：`GET /api/search` 收 `type` / `createdBy` / `updatedAfter` / `cursor`
+  （`modules/search/routes.ts`）。**但前端 `SearchDialog.tsx` 還沒接** ——
+  `creator` / `date` 兩個 chip 目前只改本地 state，不會進 query。
+  這是「後端好了、前端沒有呼叫端」的老型態（QA §1 主線 2），接上去就好。
+  ⚠️ 順便注意 `filter === 'title'` 目前送的是 `{ type: 'title' }`，
+  但後端的 `type` 只收 `page | database` —— 這個值會被 zod 擋下來。
+- ~~匯入只跳 toast~~ → **已接上**（`features/import/ImportDialog`、
+  `features/export/ExportDialog`，第五輪 BUG-19：模組早就寫好了，只是沒人 import）。
+- ~~guest / 唯讀使用者看得到完整編輯 UI~~ → **已修**（第六輪 BUG-32）。
+- ~~分享彈窗邀不了 guest、一按就把人放進整個工作區~~ → **已修**（第六輪 BUG-31）。
+- ~~手機版設定 Dialog 不是真的滿版~~ → **已修**（第六輪 BUG-33）。
+- ~~`@提及 → 通知`整條鏈路從 UI 完全走不到~~ → **已修**（第六輪 BUG-30、第七輪 BUG-38/39）。

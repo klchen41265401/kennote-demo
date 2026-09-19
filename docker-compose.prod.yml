@@ -55,6 +55,8 @@ services:
       STORAGE_MAX_FILE_SIZE: ${STORAGE_MAX_FILE_SIZE:-52428800}
       FEATURE_REALTIME: ${FEATURE_REALTIME:-true}
       FEATURE_OT: ${FEATURE_OT:-false}
+      FEATURE_OPEN_LOGIN: ${FEATURE_OPEN_LOGIN:-true}
+      FEATURE_PUBLIC_SHARE: ${FEATURE_PUBLIC_SHARE:-false}
     volumes:
       - uploads:/app/data/uploads
     depends_on:

@@ -254,7 +254,34 @@ pnpm --filter @kennote/editor-core playground   # http://localhost:5174/playgrou
 
 ### 其他
 
-- `ot/transform.ts` 尚未實作（M6）。`applyRemote` 目前的 selection rebase 只處理
-  「同一個 block 內的文字變更」，那是協作時 99% 的情況。
 - 沒有虛擬化：500+ block 的頁面效能尚未驗證（M2-B 的驗收項目）。
-- 沒有 `readonly` 模式的完整驗證（`editable: false` 只讓 contenteditable 不掛上去）。
+- `editable: false` 只讓 contenteditable 不掛上去，**沒有做過完整的 readonly 稽核**
+  （例如 plugin 註冊的鍵盤處理是否一律短路）。
+  宿主端已經真的在用它了（`PageRoute` / `DatabaseRoute` 的
+  `permission.canEdit === false`、鎖定頁面、版本預覽、公開分享頁），
+  所以這裡破掉會直接變成權限問題 —— 後端仍然會拒絕無權限的寫入，但 UI 不該讓人白打一段字。
+- OT 只作用於**單一 block 內的文字**；結構操作（新增／刪除／搬移／換型別）仍然是
+  block 粒度 LWW（ADR 0004 / 0006）。
+- undo stack 深層紀錄的 transform 是**近似值**（ADR 0006 已知限制）。
+- IME 組字期間遠端 delta 會排隊 —— 組字 10 秒，對方的字就晚 10 秒出現。
+- 改動 `ot/transform.ts` 或 `ot/delta.ts` 的 `compose` **一定要重跑 property test**
+  （`pnpm --filter @kennote/editor-core test`：TP1 / compose 結合律 / invert 可還原 /
+  cursor 單調性各 2 萬次 + 三方模糊測試 1 萬輪）。
+
+### 已經修掉、不要再照抄
+
+- ~~`ot/transform.ts` 尚未實作（M6）~~ → **已實作。**
+  `src/ot/` 底下是 `transform.ts` / `delta.ts` / `client.ts` / `types.ts`，
+  **前後端共用同一份**（server 端請用深路徑 import，barrel import 會把 DOM 相關的
+  view/input/selection 拉進 server 的 tsc program —— ADR 0005）。
+  remote 套用時的游標推算走 `transformCursor`，不再只是「同一個 block 內的文字變更」近似。
+  預設仍然關閉（`FEATURE_OT=false`），開啟步驟見
+  [`docs/adr/0006-ot.md`](../../docs/adr/0006-ot.md) §4。
+- ~~跨 block 的 redo 會把內容再吃掉一段（QA BUG-18，資料遺失級）~~ → **已修。**
+  客戶端這一半是 per-op history deltas + op 路由（undo/redo 跨 block 時逐 op 反轉，
+  搭配 peek/commit 的歷史堆疊）；伺服器那一半是
+  `blocks/repo.ts` 的 `ON CONFLICT (id) DO UPDATE SET deleted_at = NULL`
+  —— **「undo 刪掉、redo 插回來」要能復活軟刪除的 block，而不是撞主鍵回 500**。
+  `e2e/functional-round4.spec.ts` 已經沒有 `test.fixme`。
+  > `docs/adr/0006-ot.md` §2.10 與 `docs/qa/functional-round4.md` 裡
+  > 都還寫著「未修」，以本節與 `docs/qa/README.md` §2 為準。

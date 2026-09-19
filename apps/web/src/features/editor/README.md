@@ -260,22 +260,43 @@ registerCreateDatabase(async ({ workspaceId, parentId }) => {
 
 ### 互動
 - **拖曳框選**（在 block 外緣拉出選取框）未實作，editor-core 也還沒有。
-- **觸控長按拖曳**未實作（目前只有 Pointer Events 的滑鼠路徑）。
-- **「移動到…」**（跨頁面搬移 block）只跳 toast：op 集合裡沒有「改 block 的 pageId」，
-  需要後端支援，排在 M3。
-- **留言 / AI** 是佔位按鈕（M5 / P2）。
+- **觸控：長按已實作，拖曳搬移還沒有替代路徑。**
+  `menus/BlockHandle.tsx` 只在 `event.pointerType === 'touch'` 掛長按 →
+  開 bottom sheet 版的 block 選單（QA 第五輪 BUG-25），桌機滑鼠路徑一個位元都沒動。
+  但**一般 block 的拖曳搬移在觸控裝置上仍然沒有替代路徑**
+  （資料庫表格列另外做了最小版，見 `functional-round6.md` BUG-34）。
+  → [`docs/qa/README.md`](../../../../../docs/qa/README.md) §2 D 的 O-15。
+- **「移動到…」**（跨頁面搬移 block）**仍然只跳 toast**，而且文案還寫著「會在 M3 開放」
+  （`menus/BlockMenu.tsx`）——M3 早就完成了，卡的是 op 集合裡沒有「改 block 的 pageId」。
+  要嘛補這個 operation，要嘛把文案改成誠實的「尚未實作」。
+- **編輯器裡的「留言」入口仍是佔位**：`menus/BubbleMenu.tsx` 與 `menus/BlockMenu.tsx`
+  的留言按鈕都只 `toast('留言功能在 M5 才會開放')`。
+  ⚠️ **這段文案已經過期** —— M5 的留言系統早就上線，
+  `features/comments/CommentsPanel` 也已經接在 `AppShell` 上（頁面層級的留言可以用）。
+  差的只有「從選取的文字／某個 block 直接開 inline discussion」這條路。
+- **AI** 是佔位按鈕（P2）。
 - **虛擬捲動未啟用**：02 §3.4 說 block 數 > 200 才需要，M2-B 的驗收是「500 block 輸入 < 50ms」，
   實測前不預先優化。`BlockPortals` 只為「有 React renderer 的 block」建 portal，
   純文字頁面完全沒有 React 節點，所以長頁面的成本主要在 editor-core。
-- **權限**：`sync.canEdit` 尚未接到 `editable`，因為那會在權限回來時重建編輯器（閃爍）。
-  後端仍然會拒絕無權限的寫入。
+- **文件尾端沒有「點空白處補一段」的落點**：最後一個 block 是 table / divider / image 時
+  只剩 gutter 的 `+`，手機上完全走不下去（QA O-22）。
+- **貼上純 URL 只做「貼上為連結」**，沒有 Notion 的「連結／書籤／嵌入」三選一選單（QA O-23）。
+
+### 已經修掉、不要再照抄的舊限制
+
+- ~~`sync.canEdit` 尚未接到 `editable`~~ → **已接上。**
+  `PageRoute.tsx` / `DatabaseRoute.tsx` 算出
+  `readOnly = layout.locked || ui.historyPreviewSeq !== null || permission.canEdit === false`，
+  `useEditorHost` 再轉成 `editable: !readOnly`。
+  注意 `canEdit === null`（還在載入）**不鎖**，只有明確的 `false` 才鎖 —— 否則會閃一下唯讀。
+  切換 `readOnly` 會重建編輯器，第五輪 BUG-20 就是重建時把剛打的字弄丟，
+  現在的重建路徑會保留 live doc 與選取。
+- ~~`typecheck` 會在 `src/features/database/**` 報兩個錯~~ → **已修，`pnpm typecheck` 全綠。**
+- ~~`reference/notion-capture/` 沒有 `tokens.md`~~ → **有了**
+  （實機量測的 Notion 7.34 設計 token）。`styles/editor.css` 的數值請改以它為準，
+  不要再用規格條文的近似值。
 
 ### 其他
-- `pnpm --filter @kennote/web typecheck` 目前會在 `src/features/database/**` 報兩個錯
-  （`fields/rollup/Cell.tsx`、`views/table/TableView.tsx`），那是資料庫代理進行中的檔案，
-  不在本模組範圍。`features/editor/**` 與 `vite build` 都是綠的。
-- `reference/notion-capture/` 沒有 `tokens.md`，所以 `styles/editor.css` 的數值取自
-  02 §3.4 / 規格條文（h1 30px/600、h2 24px、h3 20px、內文 16px/1.5、程式碼 14px mono、
-  清單縮排 24px、quote 左線 3px、程式碼底色 `#f7f6f3` / 深色 `#252525`、
-  選取藍 `rgba(35,131,226,.14)`）。
+- 視覺差異請對 [`reference/shots/compare/`](../../../../../reference/shots/compare/)
+  的 `NOTES-round2~8.md`，那一條線與功能 QA **不共用 bug 編號**。
 ```

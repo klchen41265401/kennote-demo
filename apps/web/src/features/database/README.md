@@ -223,13 +223,51 @@ export { Popover, Menu, MenuItem, Dialog, VirtualList } from '@kennote/ui';
 
 ---
 
-## 7. 已知限制（M4 的邊界）
+## 7. 已知限制
 
-- **formula / rollup 的 filter/sort 走記憶體路徑**，掃描上限 2000 列、cursor 改成 offset。
+> 完整清單與編號在 [`docs/qa/README.md`](../../../../../docs/qa/README.md) §2
+> （資料庫相關的是 B 的 O-3、D 的 O-11 / O-13、**E 的 O-16～O-21 整組**、F 的 O-24 / O-27）。
+> 這裡只留「改這個模組時一定要知道」的。
+
+### 仍然開著
+
+- **`BUG-7`：檢視分頁列溢位時，選中的檢視會被收進溢位選單**，
+  `aria-selected` 的 tab 因此不存在，整組檢視選單（改名／複本／刪除）打不開。
+  第二輪抓到、第三輪再次確認仍擋著，**從未結案**。
+- **`BUG-8`：新增欄位不排在最後**（順序是 jsonb key 序）。
+  server 端有 `alignViewProperties()`，`database-gaps` 也沿用了 append 規則，
+  但**沒有做過正式回歸驗證**，所以仍算開著。
+- **formula / rollup 的 filter/sort 走記憶體路徑**，`MEMORY_SCAN_LIMIT = 2000`、
+  cursor 改成 offset，超過會截斷而且**UI 沒有提示**（ADR 0003）。
+- **`loadRollupSources` / `loadRelationTitles` 讀目標 collection 的列時沒再問一次權限**
+  —— 舊 relation 指向你看不見的資料庫時，rollup 仍讀得到標題（QA O-3）。
 - **relation 儲存格**顯示標題快取；快取沒命中時顯示 id 前 8 碼（picker 開過就會有標題）。
-- **files 欄位**只支援外部連結；`POST /api/files/upload` 接上後換掉 `fields/files/Editor.tsx` 即可。
+- **files 欄位只支援外部連結。** `POST /api/files/upload` 早就可以用了，
+  換掉 `fields/files/Editor.tsx` 走上傳流程即可 —— 這一項純粹是還沒接（QA O-27）。
+- **date 儲存格是輸入框不是月曆格**（QA O-27）。
 - **Gallery 的 `pageContent` 封面**（頁面內容首圖）目前退回頁面封面，要載入 block 才做得到。
-- **拖曳列排序**走 `POST /api/databases/:id/rows/reorder`（寫 `pages.sort_key`），
-  只有**表格**接了，而且沒有鍵盤替代路徑；`view.format.manualOrder` 那條路徑仍未使用。
-- **列選取 / 批次操作**（勾選框、Shift 連選、批次列）只有**表格**有。
-- **子分組 sub-group**、**timeline 視圖**、**個人暫用視圖設定**是 P2，尚未實作。
+- **列選取 / 批次操作只有表格有**（看板 / 圖庫 / 清單沒有勾選框與批次列，QA O-16）；
+  批次操作也沒有「移動到」「加到收藏」與批次改屬性值（O-20）。
+- **拖曳列排序只有表格接了**（`POST /api/databases/:id/rows/reorder`，寫 `pages.sort_key`），
+  **沒有鍵盤替代路徑**，而且視圖有 `sort` 時仍可拖曳（Notion 是停用）（O-17）。
+  `view.format.manualOrder` 那條既有路徑仍未使用（O-18）。
+- **看板卡片、日曆、`PropertyList`、`SortBuilder` 還是 HTML5 DnD → 觸控全死。**
+  正解是統一改用 `@kennote/ui` 的 dnd 引擎（O-11）。連續四輪延後。
+- **手機版的資料庫表格橫捲**連續五～六輪沒有走查過（O-13）。
+- `createDual` 關掉開關時**不會刪對方的欄位**（刻意），UI 也沒有「順便刪掉」的選項（O-19）。
+- 舊資料裡**已經寫出去的孤兒屬性沒有清理腳本**（新的寫入已經擋住了）（O-21）。
+- **子分組 sub-group** 與**個人暫用視圖設定**是 P2，尚未實作。
+- **資料庫的列刪掉後該進哪個垃圾桶**規格面未定案（目前進工作區垃圾桶）（O-24）。
+
+### 已經修掉、不要再照抄
+
+- ~~timeline 視圖尚未實作~~ → **已實作**（`views/timeline/`，migration `0060_timeline_view.sql`
+  把 `'timeline'` 加進 `collection_view_type` enum）。**6 種視圖全部都在。**
+- ~~relation 的 `dualProperty` 指到不存在的欄位會寫出孤兒資料（BUG-11）~~ →
+  **已修**（`database-gaps.md` 第 1 項：雙向驗證 + 自動建立反向欄位）。
+- ~~表格預設只看得到前 5 個欄位（BUG-10）~~ → **已修**（前後端兩份 `defaultFormat` 都改了）。
+- ~~巢狀浮層一按就把父浮層關掉、資料庫設定面板整個按不動（BUG-5）~~ →
+  **已修**（`@kennote/ui` 的 overlay stack）。
+- ~~RowPeek 的內容區是寫死的佔位文字~~ → **已是完整的編輯器**（見 §4）。
+- ~~側邊欄沒有「建立資料庫」入口~~ / ~~刪除的列不進垃圾桶~~ / ~~CSV 欄序不對~~ →
+  全部在 `database-gaps.md` 結清。

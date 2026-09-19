@@ -244,7 +244,7 @@ editor.on('localOps', (ops) => {
 
 `apps/web/src/features/editor/useEditorHost.ts` 就是照這個形狀接的，可以直接抄。
 
-### 三件容易踩的事
+### 四件容易踩的事
 
 1. **delta 不走 300ms debounce。** OT 規定同一個 block 一次只能有一筆 outstanding，
    打包會破壞這個不變量。`submitDelta()` 立刻送出（仍然寫 IndexedDB，斷線重送照舊）。
@@ -272,3 +272,38 @@ pnpm --filter @kennote/editor-core test # OT property test（各 2 萬次）+ �
 ```
 
 要自己寫同步相關的測試時，`src/lib/sync-client.test.ts` 裡的 `FakeSocket` 可以直接抄。
+
+---
+
+## 10. 已知限制
+
+> 完整清單在 [`docs/qa/README.md`](../../../../docs/qa/README.md) §2。
+> 這裡只列會影響「接線方式」的。
+
+### 仍然開著
+
+- **`restoreVersion` 超過 200 ops 會切成多筆 transaction，整批不是 atomic。**
+  中途失敗會留下半還原的狀態，而 UI 沒有任何提示（QA O-9）。
+  接還原流程時請把它當成「可能部分成功」來處理。
+- **本機 vite 代理時 WebSocket 常常不跟著 proxy**，頂欄顯示「尚未連線」。
+  即時同步／presence／OT 在 `VITE_PROXY_TARGET` 模式下**測不了**，請直接打正式站（QA O-28）。
+- **`pruneBlockDeltas(7)` 已寫好但還沒接排程**，`block_deltas` 會一直長
+  （真值是 `blocks.content`，不受影響，只是磁碟變大）。ADR 0006。
+- **OT 只作用於單一 block 內的文字。** 結構操作（新增／刪除／搬移／換型別／改 props）
+  仍然是 block 粒度 LWW —— 兩人同時搬同一個 block，後送的覆蓋前者。
+- 離線久了的 delta 一定會被拒絕（`baseRev` 太舊），此時 `onDesync` 會要求重載。
+- `/api/health` 的 feature 探測**每個分頁只做一次**，伺服器線上切換 `FEATURE_OT`
+  該分頁不會跟著切。
+
+### 已經修掉、不要再照抄
+
+這兩個是第一次全量 e2e 之後分診出來的（`docs/qa/regression-triage-1.md`），
+**都是前端時序競態，症狀都是「使用者打的字消失」**，只在「0 個 block 的資料庫列頁」才看得見：
+
+- ~~`SyncClient.submit()` 在頁面還沒 attach 之前靜默丟掉 ops~~ → **已修：**
+  attach 之前的 ops 進 **pre-attach queue**，attach 之後照原順序送出。
+  （`submitDelta()` 的 silent early return 也一併修掉了。）
+  接新的呼叫端時請記得：**編輯器可能比 attach 早一步就開始產生 ops**，
+  這不是錯誤狀態，不要在那裡 early return。
+- ~~OT 的 `/api/health` 探測回來時把編輯器整個重建，焦點掉回 `<body>`~~ → **已修：**
+  重建路徑會保留 live doc 與選取（第五輪 BUG-20 的同一條路徑）。

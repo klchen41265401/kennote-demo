@@ -559,9 +559,30 @@ template、import、export、expand、collapse、external-link、sync、emoji、
     捕獲用事件的 `currentTarget` 會打在 React 的 root container 上，讓整個應用的 click 失效。
     細節見 `dnd/useNodeRegistration.ts` 的註解。
 
-## 尚未實作
+## 尚未實作 / 已知限制
 
-- `DatePicker`、`EmojiPicker`、`ColorSwatch`（§4.7.4 列為 P1，但依賴 emoji 資料表與日期在地化，
-  規模足以自成一個交付）。
-- DnD 的鍵盤拖曳模式（§4.6.5，P2）與 spring-loaded 自動展開的 UI（引擎已提供 `invalidateRects()`）。
+- `DatePicker`、`ColorSwatch`（§4.7.4 列為 P1，但依賴日期在地化，規模足以自成一個交付）。
+  `EmojiPicker` **目前落在 `apps/web/src/components/EmojiPicker.tsx`**，
+  需要第二個呼叫端時再搬進來。
+  連帶影響：資料庫的 `date` 儲存格現在是輸入框不是月曆格
+  （[`docs/qa/README.md`](../../docs/qa/README.md) §2 F 的 O-27）。
+- **DnD 的鍵盤拖曳模式（§4.6.5，P2）尚未實作。**
+  這不只是「少一個模式」—— 下游因此**沒有任何鍵盤替代路徑**：
+  資料庫的拖曳列排序（QA O-17）、編輯器的 block 搬移在觸控裝置上（QA O-15）都卡在這裡。
+- spring-loaded 自動展開的 UI（引擎已提供 `invalidateRects()`）。
 - `Drawer`（行動版側欄）——目前 `Dialog` 在 640px 以下已自動全螢幕，暫時夠用。
+- **下游還有四處沒改用這裡的 dnd 引擎**：資料庫的看板卡片、日曆、`PropertyList`、
+  `SortBuilder` 仍是 HTML5 DnD，所以那四處**觸控完全不能用**（QA O-11，連四輪延後）。
+  正解是統一改用 `useDraggable` / `useDroppable`。
+
+### 這四個曾經害下游靜靜壞掉的坑（都已修）
+
+`apps/web/src/features/shell/README.md` §6.5 曾記錄四個「會讓功能靜靜壞掉」的 primitives bug。
+**四個都已經在本套件修掉了**，呼叫端不必再繞：
+
+| # | 症狀 | 修法 |
+|---|---|---|
+| 1 | `Resizable` 的鍵盤調整與雙擊重設，在沒給 `onResizeEnd` 時完全沒作用 | `onResizeEnd?.(apply(x))` 的 optional chaining 連參數都不求值 → 改成 `const next = apply(...); onResizeEnd?.(next);`（`Resizable.tsx`） |
+| 2 | `useDraggable` / `useDroppable` 在 React 18 StrictMode 下把自己註銷 | 註冊搬離 ref callback，改以 effect 為準（`dnd/useNodeRegistration.ts`） |
+| 3 | `DragController` 在 `#root` 上 `setPointerCapture()`，害整個側邊欄點了沒反應 | 改用 `registerSource()` 當時記下的 `el` 當捕獲對象，不用事件的 `currentTarget`（`dnd/controller.ts`） |
+| 4 | 在 `Popover` / `Menu` 的 trigger 上 `stopPropagation()`，選單就永遠打不開 | handler 組合 + ref 合併收斂到 `components/trigger.ts`，`Popover` / `Tooltip` / `ContextMenu` 共用 |

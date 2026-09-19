@@ -54,13 +54,75 @@ server 啟動前會自動跑 migration（冪等）。開 <http://主機:8090>。
 ### 更新
 
 ```bash
-bash scripts/deploy.sh          # 本機推 + 遠端重建（見 scripts/remote-up.sh）
+bash scripts/deploy.sh              # 本機推 + 遠端重建
+bash scripts/deploy.sh --no-build   # 只重啟（沒改程式碼時）
 ```
 
 或在遠端：
 
 ```bash
 git pull && docker compose -f docker-compose.prod.yml up -d --build
+```
+
+### 兩支部署腳本到底做了什麼
+
+**`scripts/deploy.sh`（在你的機器上跑）** —— 只有三行：
+
+```bash
+BRANCH=$(git rev-parse --abbrev-ref HEAD)
+git push deploy "$BRANCH":main                        # 推到遠端工作樹
+ssh ken150ken150@100.74.148.92 "bash /home/ken150ken150/kennote/scripts/remote-up.sh ..."
+```
+
+> ⭐ **它推的是 commit，不是你的工作目錄。**
+> 沒 `git add` / `git commit` 的檔案**不會**上去 —— 這是遠端 build 失敗的頭號原因（見 §9）。
+
+**`scripts/remote-up.sh`（在遠端跑）**：
+
+1. `.env` 不存在 → 從 `.env.example` 產生，並填入隨機 `JWT_SECRET`、
+   隨機 `POSTGRES_PASSWORD`、`NODE_ENV=production`、
+   `PUBLIC_BASE_URL=http://100.74.148.92:8090`、`CORS_ORIGINS=`（同源不需要）、`LOG_LEVEL=info`。
+   **`.env` 已存在時一個字都不動**，所以改設定要自己上去改。
+2. `docker compose -f docker-compose.prod.yml build --pull`（除非帶 `--no-build`）
+3. `up -d --remove-orphans`
+4. 輪詢 `http://127.0.0.1:8090/api/health`，**最多 60 次 × 2 秒 = 120 秒**。
+   逾時會印 `compose ps` 與 server 的最後 50 行 log 然後以非 0 結束。
+
+> ⚠️ `docker-compose.prod.yml` 的 `server.environment` **只列了部分開關**
+> （`FEATURE_REALTIME` / `FEATURE_OT`）。
+> **`FEATURE_OPEN_LOGIN` 與 `FEATURE_PUBLIC_SHARE` 沒有被傳進容器**，
+> 所以它們吃的是 `apps/server/src/env.ts` 的預設值（開放登入 **ON**、公開分享 OFF）。
+> 光改 `.env` 沒有用，要先在 compose 檔裡補上那一行。
+
+### Migration 清單（0001–0070）
+
+15 支，自製 runner（`apps/server/src/db/migrate.ts`），**冪等**，
+server 啟動前自動跑。已套用的記在 `schema_migrations`。
+
+| 檔名 | 里程碑 | 一句話 |
+|---|---|---|
+| `0001_init.sql` | M1 | 身分層：`users` / `user_identities`（OIDC 插槽）/ `sessions` / `workspaces` / `workspace_members`。也定義 `uuid_generate_v7()` |
+| `0002_pages_blocks.sql` | M1 | 頁面樹 `pages`（`sort_key COLLATE "C"`）、內容 `blocks`，以及整個系統最關鍵的資產 `page_transactions`（append-only operation log） |
+| `0003_collections.sql` | M4 骨架 | Database 定義層：`collections`（欄位 schema）+ `collection_views`（filter/sort/group + 外觀）。**視圖型別是 enum**，所以新增一種視圖一定要動 schema |
+| `0004_files_favorites.sql` | M2/M3 | `files`（附件）、`favorites`（我的最愛）、`page_permissions` 最小版（權限引擎的擴充點） |
+| `0005_search.sql` | M1 | 搜尋第一階段：`pg_trgm` extension + ILIKE 用的索引。不引入 Meilisearch / Elasticsearch |
+| `0006_database_m4.sql` | M4 | 補上「查詢得動、關聯得起來」需要的東西（relation 對照、屬性索引、列的排序鍵） |
+| `0010_comments_notifications.sql` | M5 | 留言系統（`discussions` / `comments`）與通知中心（`notifications`）的資料層 |
+| `0011_share_invites.sql` | M5 | 公開分享連結（token / 密碼 / 到期）與工作區邀請 |
+| `0020_search_tsvector.sql` | M6 | 搜尋第二階段：`kn_segment()` 中文 bigram 斷詞 + `blocks.search_tsv` / `pages.search_tsv` **generated column** + GIN 索引。⚠️ **整表重寫，請在離峰部署** |
+| `0021_page_visits.sql` | M6 | `page_visits`：側邊欄「最近」與搜尋建議 |
+| `0030_block_deltas.sql` | M6 | OT：`blocks.rev` + `block_deltas` 表。**`FEATURE_OT` 要打開之前必須先跑這一支** |
+| `0040_block_types.sql` | M2-C | 放寬 `chk_blocks_type`，補上 `/` 斜線選單完整還原需要的新 block 型別（如 `heading4`、`audio`、`pdf`、`breadcrumb`、`button`、`syncedBlock`） |
+| `0050_user_preferences.sql` | M3 | 帳號設定的偏好（語言 / 主題 / 起始頁面）跟著帳號走，換裝置登入也是同一組 |
+| `0060_timeline_view.sql` | M4 | `collection_view_type` enum 加上 `'timeline'`（時程表 / 甘特圖） |
+| `0070_files_page.sql` | 第九輪 | `files.page_id`：附件改依**所在頁面**的權限判斷，堵住「同工作區 guest 拿得到私密頁附件」。**刻意沒有回填舊資料**（見 §9「舊附件還是成員限定」） |
+
+檢查目前狀態：
+
+```bash
+curl -s http://localhost:8090/api/health | jq '.data.migrations'
+docker exec -it kennote-postgres psql -U kennote -d kennote \
+  -c 'SELECT name, applied_at FROM schema_migrations ORDER BY name'
 ```
 
 ### 部署後一定要看的兩件事
@@ -76,10 +138,15 @@ curl -s http://localhost:8090/api/health | jq
     "db": true,
     "version": "0.1.0",
     "uptime": 42,
-    "migrations": { "applied": 21, "onDisk": 21, "pending": 0, "latest": "0021_page_visits.sql" }
+    "migrations": { "applied": 15, "onDisk": 15, "pending": 0, "latest": "0070_files_page.sql" },
+    "features": { "realtime": true, "ot": false, "publicShare": false }
   }
 }
 ```
+
+`features` 是**前端據以決定要不要走 OT delta 通道**的依據
+（`docs/adr/0006-ot.md`）。前後端必須一致：伺服器關著而前端強制打開，
+`text.delta` 會被回 `NOT_IMPLEMENTED`，使用者會看到頁面不斷重載。
 
 **`migrations.pending > 0` → `status` 會是 `degraded`。**
 這是最常見的「服務起來了但功能是壞的」情境（部署了新程式碼但 migration 沒跑），
@@ -316,6 +383,74 @@ ANALYZE blocks;
 
 ## 9. 常見問題
 
+### 遠端 web build 失敗（`tsc` 在 `apps/web` 報一堆型別錯）
+
+**九成是 `packages/shared-types` 的改動沒有 commit。**
+
+`scripts/deploy.sh` 推的是 **commit**，不是你的工作目錄；
+`apps/web/Dockerfile` 的 build 階段跑的是 `tsc --noEmit && vite build`，
+所以「本機綠、遠端紅」的典型情境就是：你在 `shared-types` 加了一個欄位／型別，
+`apps/web` 用了它，但只 commit 了 `apps/web`。
+
+```bash
+git status --short          # ⭐ 部署前先看這個
+git status --short -- packages/   # 特別注意 packages/shared-types
+```
+
+同一個模子的其他變形：`packages/ui`、`packages/editor-core` 漏 commit；
+只改了 `.env.example` 卻以為遠端 `.env` 會跟著變（不會，見 §2）。
+
+### 「容器重啟一下就好」——不，那其實是重新部署
+
+遠端的 image 是 **build 進去的**（`apps/web/Dockerfile` 把 `dist/` COPY 進 nginx、
+`apps/server/Dockerfile` 把 esbuild bundle COPY 進去），**沒有掛原始碼 volume**
+（那是 `docker-compose.yml` 開發環境才有的）。
+
+所以：
+
+| 你想做的事 | 正確指令 |
+|---|---|
+| 只是想讓服務重來一次（記憶體 / 連線池） | `docker compose -f docker-compose.prod.yml restart server` |
+| **讓新的程式碼生效** | `bash scripts/deploy.sh`（會 build） |
+| 只改了 `.env` | 在遠端改完 `.env` 後 `... up -d`（restart 不會重讀 env） |
+
+`docker restart kennote-server` **不會**讓新 commit 生效，只會用同一個舊 image 再跑一次。
+遇到「我明明修好了，站上還是舊的」先確認是不是這一條。
+
+### Vite 埠不是 5173
+
+5173 被佔用時 Vite 會**自動往上找**（5174、5175、5199、5304…），
+而 e2e 的 `BASE_URL` 是手動帶的。
+
+```bash
+pnpm --filter @kennote/web dev
+#   ➜  Local:   http://localhost:5174/     ← 以這一行為準
+```
+
+QA 報告裡看到 `BASE_URL=http://127.0.0.1:5199` / `:5304` 這種奇怪的埠，
+就是當時 vite 跳號的結果，不是打錯。
+另外：**本機 vite 代理時 WebSocket 常常不跟著 proxy**（頂欄顯示「尚未連線」），
+即時協作請直接在正式站測。
+
+### 舊附件還是「工作區成員限定」
+
+`0070_files_page.sql` 只修「從今以後」：它加了 `files.page_id`，
+但**刻意沒有回填**（反查 `block.props` 在大工作區太慢，不該塞進會鎖表的 migration）。
+0070 之前上傳的附件 `page_id IS NULL`，退回舊行為，
+同工作區的 guest 仍然拿得到舊的私密附件。
+
+回填腳本（**先跑 dry-run**）：
+
+```bash
+export DATABASE_URL=postgres://kennote:<pw>@127.0.0.1:5432/kennote
+pnpm --filter @kennote/server exec tsx scripts/backfill-file-pages.ts --dry-run
+pnpm --filter @kennote/server exec tsx scripts/backfill-file-pages.ts --workspace <uuid>
+```
+
+它的紅線：**只補 `NULL` 永不覆蓋**、**一個附件被多頁引用時整個跳過**（不挑一頁 ——
+挑錯方向可能是放寬）、**跨工作區跳過**。跳過的會印成 `skippedMultiPage` / `skippedCrossWorkspace`，
+人再逐一看。
+
 ### 健康檢查是 degraded
 
 看 `migrations.pending`：> 0 就是 migration 沒跑（見 §2）。
@@ -374,3 +509,77 @@ docker exec -it kennote-postgres psql -U kennote -d kennote -c "
 1. 垃圾桶（`GET /api/trash?workspaceId=`）→ 30 天內都還在。
 2. 超過 30 天被 GC 掉了 → 用版本歷史（`GET /api/pages/:id/history`）。
 3. 兩者都沒有 → 才從備份還原到**另一個環境**，把那一頁匯出成 Markdown 再匯入回正式。
+
+---
+
+## 10. 資料庫整合測試（SSH 隧道）
+
+`apps/server` 有 **24 條需要真 PostgreSQL 的測試**
+（`test/auth-account.test.ts` 15 條、`test/integration/ot-delta.test.ts` 5 條、
+`test/integration/page-transactions.test.ts` 4 條）。
+沒設 `DATABASE_URL_TEST` 時它們**自動 skip 而不是失敗**，所以 CI 永遠是綠的 ——
+真的要驗那一層，必須自己接一顆資料庫。
+
+### 10.1 本機（最簡單）
+
+```bash
+pnpm db:up
+docker exec -it kennote-postgres psql -U kennote -c 'CREATE DATABASE kennote_test'
+
+export DATABASE_URL=postgres://kennote:kennote@localhost:5432/kennote_test
+pnpm --filter @kennote/server migrate           # migrate 看的是 DATABASE_URL
+
+DATABASE_URL_TEST=$DATABASE_URL pnpm --filter @kennote/server test
+```
+
+> `migrate` 讀 `DATABASE_URL`，測試讀 `DATABASE_URL_TEST`。
+> **兩個都要指到同一顆測試庫**，不然測試會對著沒有 schema 的空庫跑。
+
+### 10.2 打遠端那一顆 postgres
+
+正式環境的 postgres **不對外開埠**（只在 compose 網路內），
+所以要用 SSH 把它的容器位址映射到本機。
+
+```bash
+# 1) 問出容器在 docker bridge 網路上的 IP（在遠端跑）
+ssh ken150ken150@100.74.148.92 \
+  "docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' kennote-postgres"
+# → 例如 172.19.0.2
+
+# 2) 開隧道（前景執行，-N = 不開 shell；要背景加 -f）
+ssh -N -L 15432:172.19.0.2:5432 ken150ken150@100.74.148.92
+
+# 3) 另開一個終端機：拿遠端的密碼
+ssh ken150ken150@100.74.148.92 "grep '^POSTGRES_PASSWORD=' /home/ken150ken150/kennote/.env"
+```
+
+`-L 15432:172.19.0.2:5432` 的意思是「本機 15432 → **由遠端主機**連到 172.19.0.2:5432」，
+目標位址是在遠端解析的，所以容器 IP 可以直接用。
+
+```bash
+# 4) 建一個獨立的測試庫（⚠️ 絕對不要指向 kennote 正式庫）
+export PGPASSWORD='<剛剛拿到的密碼>'
+psql -h 127.0.0.1 -p 15432 -U kennote -d postgres -c 'CREATE DATABASE kennote_test'
+
+# 5) 跑 migration + 測試
+export DATABASE_URL="postgres://kennote:$PGPASSWORD@127.0.0.1:15432/kennote_test"
+pnpm --filter @kennote/server migrate
+DATABASE_URL_TEST="$DATABASE_URL" pnpm --filter @kennote/server test
+
+# 6) 收工
+psql -h 127.0.0.1 -p 15432 -U kennote -d postgres -c 'DROP DATABASE kennote_test'
+# 然後 Ctrl+C 關掉隧道（或 kill 掉 -f 的那個 ssh）
+```
+
+### 10.3 紅線
+
+1. **`DATABASE_URL_TEST` 絕對不能指向 `kennote` 這個正式資料庫。**
+   整合測試會建 / 刪使用者、工作區、頁面與 block。名字一律用 `kennote_test`，
+   而且是自己新建的那一顆。
+2. **容器 IP 會變。** 每次 `docker compose up -d --build` 之後都要重問一次（步驟 1）。
+   要穩定一點可以改用 `docker exec` 在遠端直接跑 psql，或暫時在 compose 加一個
+   只綁 `127.0.0.1` 的 port mapping —— **但用完務必拿掉**。
+3. **測試庫也要跑 migration。** 少一支 migration 的症狀是一堆
+   「relation does not exist」，不是測試本身壞了。
+4. 壓測腳本 `apps/server/scripts/bench-search.ts` 同樣吃 `DATABASE_URL`、
+   **會真的寫入資料**，請一樣指到獨立的 `kennote_bench`（見 §8）。
