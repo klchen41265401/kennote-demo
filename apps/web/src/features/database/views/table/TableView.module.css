@@ -4,22 +4,24 @@
  *   格線 rgb(230,229,227) / dark rgb(44,44,43)（07-db-table-dark 實測）、
  *   名稱欄預設 **280px**、欄名 14px 次要灰字。
  */
-.grid {
+/* 變數掛在 .wrapper（不是 .grid）：浮在表格外面的 `.rowHandle` 也要讀得到列高 */
+.wrapper {
   --kn-db-row-h: 37px;
   --kn-db-line: rgb(230, 229, 227);
 }
 
-:global(:root[data-theme='dark']) .grid {
+:global(:root[data-theme='dark']) .wrapper {
   --kn-db-line: rgb(44, 44, 43);
 }
 
 @media (prefers-color-scheme: dark) {
-  :global(:root:not([data-theme='light'])) .grid {
+  :global(:root:not([data-theme='light'])) .wrapper {
     --kn-db-line: rgb(44, 44, 43);
   }
 }
 
 .wrapper {
+  position: relative;
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -67,7 +69,7 @@
   gap: 6px;
   width: 100%;
   height: 100%;
-  padding: 0 8px;
+  padding: 0 4px;
   border: 0;
   background: transparent;
   color: var(--kn-color-text-secondary);
@@ -75,6 +77,17 @@
   font-size: var(--kn-font-size-sm);
   text-align: left;
   cursor: pointer;
+}
+
+/**
+ * Notion 的表格儲存格左右內距比共用的 `EditableCell`（8px）少 4px。
+ * 把 `.rowGutter` 拿掉之後量到的殘差就是這 4~5px
+ * （`07-db-table light`：表頭 icon N x55 / K x59、第一列文字 N x58 / K x63）。
+ * `EditableCell` 是 Table / Board / RowPeek 共用的，所以只從表格這邊覆寫。
+ */
+.tableCell {
+  padding-left: 4px;
+  padding-right: 4px;
 }
 
 /* 第五輪：Notion 的 07b-db-header-hover 參考圖裡表頭底其實還是白的（light 量到 rgb(255,255,255)），
@@ -102,6 +115,27 @@
   background: var(--kn-color-accent);
 }
 
+/**
+ * 表頭最右端的「＋ 新增欄位」（Notion 表頭右端那一顆）。
+ * 與表頭同高（33px＝32＋1 下框線由 `.headerRow` 畫）、hover 才上淡灰底。
+ */
+.addColumn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 36px;
+  border: 0;
+  background: transparent;
+  color: var(--kn-color-text-tertiary);
+  cursor: pointer;
+}
+
+.addColumn:hover {
+  background: var(--kn-color-menu-hover);
+  color: var(--kn-color-text-secondary);
+}
+
 .body {
   flex: 1 1 auto;
   min-height: 0;
@@ -121,22 +155,42 @@
  * → hover 只留左側把手與「⤢ 開啟」按鈕（Notion 也只有這兩個）。
  */
 
-.rowGutter {
+/**
+ * ⭐ 第九輪：**Notion 的 ⠿ 把手浮在表格左邊的頁面留白上，不是表格裡的一欄。**
+ *
+ * `HANDOFF-round8.md` §2-A 實測（`row 07-db-table light 151`）：
+ *   Notion 第一條直格線 x327、列文字左緣 x58；
+ *   kennote 則是 x361 / x95 —— 整整差 34 ＝ 32（`.rowGutter`）＋ 2。
+ *   `07` / `07b` / `07c` / `07d` / `07-full` 的 dx `+4`~`+5` 全部來自這一欄。
+ *
+ * 所以 `.rowGutter` 整個拿掉，改成 `.wrapper` 裡**一顆** absolute 的把手，
+ * 由 TableView 的 hover 事件把它移到目前那一列的 y。
+ *   · 不能放在 `.grid` 裡：`.grid { overflow-x: auto }` 會把 `left: -32px` 裁掉／生出捲軸；
+ *   · 不能放在列裡：列住在 VirtualList 的垂直捲動容器，`left` 一樣被裁。
+ */
+/* 07c-db-row-hover 實測（`cols 07c-db-row-hover light 45 80`）：
+   Notion 的 ⠿ 兩排點落在裁切座標 x11..18，裁切原點是 `box.x - 48`
+   ⇒ 把手中心在 `box.x - 33.5`。18px 寬的框放在 -44 時兩排點的中心正好落在 x14.5。
+   （同一張圖裡 Notion 還有一顆 x42..57 的勾選框，那是列選取 UI ——
+     它會把名稱欄文字往右推 20px，我們沒有列選取功能，先不畫。） */
+.rowHandle {
+  position: absolute;
+  left: -44px;
+  z-index: 3;
   display: flex;
   align-items: center;
   justify-content: center;
-  flex: 0 0 32px;
-  width: 32px;
-}
-
-.rowHandle {
-  opacity: 0;
+  width: 18px;
+  height: var(--kn-db-row-h);
+  border-radius: var(--kn-radius-sm);
   color: var(--kn-color-text-tertiary);
+  pointer-events: auto;
   cursor: grab;
 }
 
-.row:hover .rowHandle {
-  opacity: 1;
+.rowHandle:hover {
+  background: var(--kn-color-surface-hover);
+  color: var(--kn-color-text-secondary);
 }
 
 .cellWrap {
@@ -219,7 +273,7 @@
   width: 100%;
   min-width: max-content;
   height: var(--kn-db-row-h);
-  padding: 0 8px 0 32px;
+  padding: 0 8px;
   border: 0;
   border-bottom: 1px solid var(--kn-db-line);
   background: transparent;
@@ -236,7 +290,7 @@
 }
 
 .loading {
-  padding: 8px 32px;
+  padding: 8px;
   color: var(--kn-color-text-tertiary);
   font-size: var(--kn-font-size-xs);
 }

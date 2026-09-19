@@ -68,7 +68,7 @@ export interface DatabaseController {
   deleteRow: (rowId: string) => Promise<void>;
   duplicateRow: (rowId: string) => Promise<void>;
 
-  applySchemaOps: (ops: SchemaOp[]) => Promise<void>;
+  applySchemaOps: (ops: SchemaOp[]) => Promise<string[]>;
   createOption: (propertyId: string, label: string) => Promise<string | null>;
   schemaError: string | null;
   clearSchemaError: () => void;
@@ -82,6 +82,9 @@ export function useDatabaseController(
   const snapshot = snapshotQuery.data;
   const views = useMemo(() => snapshot?.views ?? [], [snapshot]);
   const schema = snapshot?.collection.schema ?? {};
+  /** applySchemaOps 的相依陣列刻意不放 schema（會每次重建），所以用 ref 讀「當下」那份 */
+  const schemaRef = useRef<CollectionSchema>(schema);
+  schemaRef.current = schema;
 
   const [activeViewId, setActiveViewId] = useState<string | null>(initialViewId ?? null);
   const view = views.find((v) => v.id === activeViewId) ?? views[0];
@@ -248,12 +251,16 @@ export function useDatabaseController(
   /* ── schema ── */
 
   const applySchemaOps = useCallback(
-    async (ops: SchemaOp[]) => {
+    async (ops: SchemaOp[]): Promise<string[]> => {
       setSchemaError(null);
       try {
-        await api.patchSchemaOps(collectionId, ops);
+        const before = new Set(Object.keys(schemaRef.current));
+        const result = await api.patchSchemaOps(collectionId, ops);
         await snapshotQuery.refetch();
         await load(null);
+        // 新增出來的 propertyId 由後端產生（generatePropertyId），
+        // 只能從「前後 schema key 的差集」拿回來。
+        return Object.keys(result.collection.schema ?? {}).filter((id) => !before.has(id));
       } catch (error) {
         setSchemaError(error instanceof Error ? error.message : '欄位設定更新失敗');
         throw error;

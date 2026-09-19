@@ -19,8 +19,12 @@ export interface DatabaseContextValue {
   openRow: (rowId: string) => void;
   /** 以整頁開啟 */
   openRowPage: (rowId: string) => void;
-  /** 欄位的新增／改名／改型別／刪除（PATCH schema 的 ops 介面） */
-  applySchemaOps: (ops: SchemaOp[]) => Promise<void>;
+  /**
+   * 欄位的新增／改名／改型別／刪除（PATCH schema 的 ops 介面）。
+   * 回傳**這一批 ops 新增出來的 propertyId**（依序），呼叫端才能把新欄位
+   * 接到 `view.format.properties` 尾端、捲過去並聚焦（BUG-8 / 表頭 ＋ 新增欄位）。
+   */
+  applySchemaOps: (ops: SchemaOp[]) => Promise<string[]>;
   readOnly: boolean;
 }
 
@@ -32,7 +36,7 @@ const fallback: DatabaseContextValue = {
   createOption: async () => null,
   openRow: () => {},
   openRowPage: () => {},
-  applySchemaOps: async () => {},
+  applySchemaOps: async () => [],
   readOnly: true,
 };
 

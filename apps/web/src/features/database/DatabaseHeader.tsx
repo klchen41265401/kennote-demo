@@ -108,8 +108,7 @@ export function DatabaseHeader(props: DatabaseHeaderProps) {
     return () => ro.disconnect();
   }, [views]);
 
-  const shownViews = views.slice(0, visibleTabs);
-  const hiddenViews = views.slice(visibleTabs);
+  const { shownViews, hiddenViews } = splitViewTabs(views, view.id, visibleTabs);
 
   const viewDef = getViewType(view.type);
   const filterCount = countFilters(view.query?.filter);
@@ -148,6 +147,12 @@ export function DatabaseHeader(props: DatabaseHeaderProps) {
               onClick={(e) => {
                 if (v.id === view.id) open('viewMenu', e);
                 else props.onSelectView(v.id);
+              }}
+              /* BUG-7：右鍵一律開檢視選單（不用先把它點成作用中） */
+              onContextMenu={(e) => {
+                e.preventDefault();
+                if (v.id !== view.id) props.onSelectView(v.id);
+                open('viewMenu', e);
               }}
             >
               <span className={styles.tabIcon} aria-hidden="true">
@@ -303,22 +308,42 @@ export function DatabaseHeader(props: DatabaseHeaderProps) {
       <Popover open={panel?.kind === 'moreTabs'} anchor={panel?.anchor ?? null} onClose={close}>
         <div className={styles.tabMoreList} role="tablist" aria-label="其他檢視">
           {hiddenViews.map((v) => (
-            <button
-              key={v.id}
-              type="button"
-              role="tab"
-              aria-selected={v.id === view.id}
-              className={v.id === view.id ? styles.tabActive : styles.tab}
-              onClick={() => {
-                close();
-                props.onSelectView(v.id);
-              }}
-            >
-              <span className={styles.tabIcon} aria-hidden="true">
-                <UiIcon name={viewGlyph(v.type)} size={15} />
-              </span>
-              {v.name}
-            </button>
+            /* BUG-7：收起來的檢視也要有「改名 / 建立複本 / 刪除」的入口（⋯ 或右鍵）。
+               ⋯ 先把它選成作用中，再把浮層換成檢視選單 —— 錨點沿用「還有 N 個…」
+               那顆按鈕（它不會被卸載，換 anchor 到 ⋯ 自己會因為浮層重繪而失效）。 */
+            <div key={v.id} className={styles.tabMoreRow}>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={v.id === view.id}
+                className={v.id === view.id ? styles.tabActive : styles.tab}
+                onClick={() => {
+                  close();
+                  props.onSelectView(v.id);
+                }}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  props.onSelectView(v.id);
+                  setPanel((p) => (p ? { kind: 'viewMenu', anchor: p.anchor } : null));
+                }}
+              >
+                <span className={styles.tabIcon} aria-hidden="true">
+                  <UiIcon name={viewGlyph(v.type)} size={15} />
+                </span>
+                {v.name}
+              </button>
+              <button
+                type="button"
+                className={styles.tabMoreMenu}
+                aria-label={`${v.name} 的檢視選單`}
+                onClick={() => {
+                  props.onSelectView(v.id);
+                  setPanel((p) => (p ? { kind: 'viewMenu', anchor: p.anchor } : null));
+                }}
+              >
+                <UiIcon name="more" size={14} />
+              </button>
+            </div>
           ))}
           {!readOnly ? (
             <button
@@ -559,6 +584,32 @@ export function DatabaseHeader(props: DatabaseHeaderProps) {
       ) : null}
     </header>
   );
+}
+
+/**
+ * BUG-7：tab 列溢位時，**目前選中的檢視一定要留在可見清單裡**。
+ *
+ * 原本只是 `views.slice(0, visibleTabs)`，所以從「還有 N 個…」切到被收起來的檢視之後：
+ *   · 分頁列上一個 `aria-selected="true"` 的 tab 都沒有（看不出在哪個檢視）；
+ *   · 「改名 / 建立複本 / 刪除」的入口是「再點一次選中的 tab」，整組選單因此打不開。
+ *
+ * 作法照 Notion：把選中的那顆擠進最後一格，被擠掉的那個退到「還有 N 個…」。
+ * （`hiddenViews` 仍然保持原始順序，只是少了被擠進來的那一顆。）
+ */
+export function splitViewTabs<T extends { id: string }>(
+  views: T[],
+  activeViewId: string,
+  visibleTabs: number,
+): { shownViews: T[]; hiddenViews: T[] } {
+  const limit = Math.max(0, Math.min(visibleTabs, views.length));
+  const activeIndex = views.findIndex((v) => v.id === activeViewId);
+  if (activeIndex < 0 || activeIndex < limit) {
+    return { shownViews: views.slice(0, limit), hiddenViews: views.slice(limit) };
+  }
+  const active = views[activeIndex] as T;
+  const shownViews = [...views.slice(0, Math.max(0, limit - 1)), active];
+  const shownIds = new Set(shownViews.map((v) => v.id));
+  return { shownViews, hiddenViews: views.filter((v) => !shownIds.has(v.id)) };
 }
 
 /**

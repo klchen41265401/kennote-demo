@@ -14,6 +14,7 @@ import type {
   FieldType,
   RowGroup,
   ViewFormat,
+  ViewPropertyFormat,
   ViewQuery,
   ViewType,
 } from '@kennote/shared-types';
@@ -115,4 +116,59 @@ export function visibleProperties(
     out.push({ property, width: property === 'title' ? 320 : 160 });
   }
   return out.sort((a, b) => (a.property === 'title' ? -1 : b.property === 'title' ? 1 : 0));
+}
+
+/** 新欄位的預設寬度（跟後端 defaultViewFormat 一致） */
+export function defaultPropertyWidth(property: string): number {
+  return property === 'title' ? 320 : 160;
+}
+
+/**
+ * BUG-8：新增的欄位要接在 `format.properties` 的**尾端**。
+ *
+ * 原本 `visibleProperties()` 只把「format 沒列到的欄位」統統補在後面，
+ * 而那個順序是 `Object.keys(schema)` ＝ Postgres jsonb 的 key 排序
+ * （先比長度、再比 byte），所以剛加的欄位會插在中間，而且重整後才看得出來。
+ *
+ * 這一支把「目前的 properties」重新對齊 schema：
+ *   1. 保留既有順序（連同使用者調過的 width / visible）；
+ *   2. 丟掉 schema 已經沒有的欄位；
+ *   3. `appended` 裡的欄位一律移到**最後**（就是這次新增的那幾個）；
+ *   4. 其餘沒被列到的欄位補在 `appended` 之前。
+ *
+ * ⚠️ `appended` **不**檢查 schema：呼叫端拿到 propertyId 的當下
+ * （`applySchemaOps` 剛回來）本地的 schema 還是舊的一份。
+ * 後端 `applySchemaOps` 也跑同一套邏輯（service.ts 的 `alignViewProperties`），
+ * 兩邊結果一致，所以誰先誰後都不會打架。
+ */
+export function alignViewProperties(
+  format: ViewFormat | undefined,
+  schema: CollectionSchema,
+  appended: readonly string[] = [],
+): ViewPropertyFormat[] {
+  const configured = format?.properties ?? [];
+  const prior = new Map(configured.map((entry) => [entry.property, entry]));
+  const appendedIds = [...new Set(appended)];
+  const isAppended = new Set(appendedIds);
+
+  const seen = new Set<string>();
+  const out: ViewPropertyFormat[] = [];
+
+  for (const entry of configured) {
+    if (seen.has(entry.property) || isAppended.has(entry.property)) continue;
+    if (!schema[entry.property]) continue;
+    seen.add(entry.property);
+    out.push(entry);
+  }
+  for (const property of Object.keys(schema)) {
+    if (seen.has(property) || isAppended.has(property)) continue;
+    seen.add(property);
+    out.push({ property, visible: true, width: defaultPropertyWidth(property) });
+  }
+  for (const property of appendedIds) {
+    if (seen.has(property)) continue;
+    seen.add(property);
+    out.push(prior.get(property) ?? { property, visible: true, width: defaultPropertyWidth(property) });
+  }
+  return out;
 }

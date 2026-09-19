@@ -140,6 +140,38 @@
   width: 100%;
 }
 
+/** BUG-7：下拉裡的每個檢視 = 「檢視名稱」＋ 右端的 ⋯（改名／複製／刪除的入口） */
+.tabMoreRow {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.tabMoreRow .tab,
+.tabMoreRow .tabActive {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.tabMoreMenu {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: var(--kn-radius-sm);
+  background: transparent;
+  color: var(--kn-color-text-tertiary);
+  cursor: pointer;
+}
+
+.tabMoreMenu:hover {
+  background: var(--kn-color-surface-hover);
+  color: var(--kn-color-text);
+}
+
 /**
  * Notion 的 view tab 是**膠囊**（作用中＝淺灰底 + 圓角 6px），不是底線 tab
  * ——見 07n-db-view-tabs-light.png。高度 28px、字級 14px、icon 16px。

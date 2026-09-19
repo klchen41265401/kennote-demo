@@ -24,13 +24,36 @@
   grid-template-columns: repeat(auto-fill, minmax(460px, 1fr));
 }
 
+/* 第七輪（07g-db-gallery-dark 實測）：Notion 深色卡片的三個顏色跟區塊框線不同 ——
+   框線 rgb(44,44,43)（＝資料庫格線，不是區塊框線 rgb(56,56,54)）、
+   封面底 rgb(45,45,45)、內文區底 rgb(38,38,38)。kennote 原本三個都吃 --kn-color-bg-subtle。 */
+.grid {
+  --kn-gallery-line: var(--kn-editor-hairline, rgb(230, 229, 227));
+  --kn-gallery-cover: var(--kn-color-bg-subtle);
+  --kn-gallery-body: var(--kn-color-bg);
+}
+
+:global(:root[data-theme='dark']) .grid {
+  --kn-gallery-line: rgb(44, 44, 43);
+  --kn-gallery-cover: rgb(45, 45, 45);
+  --kn-gallery-body: rgb(38, 38, 38);
+}
+
+@media (prefers-color-scheme: dark) {
+  :global(:root:not([data-theme='light'])) .grid {
+    --kn-gallery-line: rgb(44, 44, 43);
+    --kn-gallery-cover: rgb(45, 45, 45);
+    --kn-gallery-body: rgb(38, 38, 38);
+  }
+}
+
 .card {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  border: 1px solid var(--kn-editor-hairline, rgb(230, 229, 227));
+  border: 1px solid var(--kn-gallery-line);
   border-radius: 6px;
-  background: var(--kn-color-bg);
+  background: var(--kn-gallery-body);
   box-shadow: 0 1px 2px rgba(15, 15, 15, 0.05);
   cursor: pointer;
 }
@@ -43,18 +66,21 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  /* Notion 實測：light 148 / dark 146（量測落在框線上的誤差），維持 148 */
   height: 148px;
   overflow: hidden;
-  background: var(--kn-color-bg-subtle);
+  background: var(--kn-gallery-cover);
 }
 
 .cover[data-empty='true'] {
-  background: var(--kn-color-bg-subtle);
+  background: var(--kn-gallery-cover);
 }
 
+/* 第七輪：Notion 的空封面是**純色佔位、沒有任何圖示**，
+   kennote 會在中央放一個文件 emoji（整片 32px 的深色像素，是 dark 差異的大頭）。
+   DOM 留著（`aria-hidden`，之後若要放真的封面圖示再開），視覺上先拿掉。 */
 .coverGlyph {
-  font-size: 32px;
-  opacity: 0.6;
+  display: none;
 }
 
 .fill {
@@ -70,8 +96,10 @@
 }
 
 .cardBody {
-  padding: 10px 12px;
-  border-top: 1px solid var(--kn-editor-hairline, rgb(230, 229, 227));
+  /* Notion 深色卡片內文區高 **39** ＝ 1px 上框線 ＋ 8 ＋ 標題行高 22 ＋ 8 */
+  padding: 8px 12px;
+  background: var(--kn-gallery-body);
+  border-top: 1px solid var(--kn-gallery-line);
 }
 
 .cardTitle {

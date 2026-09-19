@@ -8,6 +8,7 @@ import { FieldIcon, Menu, MenuItem, MenuLabel, Popover, UiIcon, reorder, useDrag
 import { useDatabaseContext } from './context';
 import { FieldConfigPopover } from './FieldConfigPopover';
 import { fieldTypeGroups, getFieldType } from './fields/types';
+import { alignViewProperties } from './views/types';
 import styles from './Builders.module.css';
 
 interface Props {
@@ -64,7 +65,11 @@ export function PropertyList({ schema, format, onChangeFormat }: Props) {
     let name = baseName;
     let n = 2;
     while (taken.has(name)) name = `${baseName} ${n++}`;
-    await applySchemaOps([{ op: 'add', definition: fieldType.defaultConfig(name) }]);
+    const added = await applySchemaOps([{ op: 'add', definition: fieldType.defaultConfig(name) }]);
+    // BUG-8：不接到 format.properties 尾端的話，順序會退回 jsonb 的 key 排序
+    if (added.length > 0) {
+      onChangeFormat({ ...format, properties: alignViewProperties(format, schema, added) });
+    }
   }
 
   return (
