@@ -19,6 +19,10 @@
   --kn-color-bg-sunken: #f0efed; /* --c-bacTer */
   --kn-color-surface: #ffffff; /* --c-bacEle / --c-popBac */
   --kn-color-surface-hover: rgba(42, 28, 0, 0.07); /* --ca-graBacSecTra */
+  /* 選單 / 浮層裡的**實色** hover 與膠囊底（Notion `--c-bacInt` / `--c-graBacInt`）——
+     實測 06-slash-menu / 07k / 07n 都是 rgb(244,243,243)，跟半透明的 surface-hover
+     （疊白之後 rgb(240,239,237)）差 4 階 */
+  --kn-color-menu-hover: #f4f3f3;
   --kn-color-surface-active: rgba(55, 53, 47, 0.1);
   --kn-color-overlay: rgba(15, 15, 15, 0.6); /* --ca-oveSmo */
 
@@ -195,6 +199,9 @@
   --kn-color-bg-sunken: rgb(20, 20, 20);
   --kn-color-surface: rgb(37, 37, 37);
   --kn-color-surface-hover: rgba(255, 255, 255, 0.055);
+  /* ⚠ dark 不能用 `--c-bacInt`(#262626)：那是深色的 sunken 底，拿來當 hover 幾乎看不見。
+     06-slash-menu-dark.png 實測反白是 rgb(49,49,48) ＝ 面板底 rgb(37,37,37) 疊 rgba(255,255,255,.055) */
+  --kn-color-menu-hover: rgba(255, 255, 255, 0.055);
   --kn-color-surface-active: rgba(255, 255, 255, 0.1);
   --kn-color-overlay: rgba(15, 15, 15, 0.6);
 
@@ -265,6 +272,9 @@
     --kn-color-bg-sunken: rgb(20, 20, 20);
     --kn-color-surface: rgb(37, 37, 37);
     --kn-color-surface-hover: rgba(255, 255, 255, 0.055);
+    /* ⚠ dark 不能用 `--c-bacInt`(#262626)：那是深色的 sunken 底，拿來當 hover 幾乎看不見。
+     06-slash-menu-dark.png 實測反白是 rgb(49,49,48) ＝ 面板底 rgb(37,37,37) 疊 rgba(255,255,255,.055) */
+  --kn-color-menu-hover: rgba(255, 255, 255, 0.055);
     --kn-color-surface-active: rgba(255, 255, 255, 0.1);
 
     --kn-color-text: rgb(240, 239, 237);

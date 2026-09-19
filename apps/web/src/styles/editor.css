@@ -1614,11 +1614,14 @@ body.kn-dragging { cursor: grabbing; user-select: none; }
   padding: 0;
 }
 
+/* 06-slash-menu-light.png 實測（第四輪）：面板上框線 y13、下框線 y373（高 **360**）；
+   捲動區 y14..331（**318**）、footer 分隔線 y332 + footer 40；
+   第一列的 hover 反白 y47..78 → 捲動區上內距 ＋ 群組標題共 33px。 */
 .kn-slash-scroll {
   flex: 1 1 auto;
-  max-height: 330px;
+  max-height: 318px;
   overflow-y: auto;
-  padding: var(--kn-space-2) 0;
+  padding: 7px 0 var(--kn-space-2);
   overscroll-behavior: contain;
 }
 
@@ -1640,24 +1643,26 @@ body.kn-dragging { cursor: grabbing; user-select: none; }
   border-top: 1px solid var(--kn-color-divider);
 }
 
-/* 列高 33px：量自 reference/notion-capture/06-slash-menu-light.png（列間距 33px） */
+/* 列高 **32px**：06-slash-menu-light.png 的第一列反白 y47..78（第四輪重量，先前寫的 33 多 1） */
 .kn-slash-item {
   display: flex;
   align-items: center;
   gap: 9px;
   margin: 0 var(--kn-space-2);
-  padding: 6px 8px;
+  /* 6px 會讓 21px 的行高疊出 33 —— 5px + min-height 32 才是實測的 32 */
+  padding: 5px 8px;
   border-radius: var(--kn-radius-sm);
   cursor: pointer;
   color: var(--kn-color-text);
   font-size: 14px;
   line-height: 21px;
-  min-height: 33px;
+  min-height: 32px;
   box-sizing: border-box;
 }
 
+/* 選單列的反白是**實色** rgb(244,243,243)（`--c-bacInt`），不是半透明的 surface-hover */
 .kn-slash-item[data-active='true'],
-.kn-slash-item:hover { background: var(--kn-color-surface-hover); }
+.kn-slash-item:hover { background: var(--kn-color-menu-hover); }
 .kn-slash-item[data-soon='true'] { color: var(--kn-color-text-tertiary); }
 
 .kn-slash-item-icon {
@@ -1728,12 +1733,13 @@ body.kn-dragging { cursor: grabbing; user-select: none; }
   font-weight: var(--kn-font-weight-medium);
 }
 
+/* footer 實測高 40（分隔線 y332、面板下框線 y373） */
 .kn-slash-footer {
   flex: 0 0 auto;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px var(--kn-space-4);
+  padding: 12px var(--kn-space-4);
   border-top: 1px solid var(--kn-color-divider);
   font-size: 12px;
   color: var(--kn-color-text-tertiary);

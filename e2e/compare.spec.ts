@@ -399,7 +399,8 @@ for (const theme of ['light', 'dark'] as Theme[]) {
         const box = await db.boundingBox();
         const size = refSize(view.code, theme)!;
         if (box) {
-          await clip(page, view.code, theme, { x: box.x - 48, y: box.y - 26, width: size.width, height: size.height });
+          // padY 26→13（第四輪）：tab 膠囊 28→32、標題下緣留白 6→15，資料庫本體整個往下 13px。
+          await clip(page, view.code, theme, { x: box.x - 48, y: box.y - 13, width: size.width, height: size.height });
           await shot(page, `${view.code}-full`, theme);
         }
       }
@@ -409,8 +410,10 @@ for (const theme of ['light', 'dark'] as Theme[]) {
       await centerBlock(page, db);
       const box = await db.boundingBox();
       if (box) {
+        // 裁切原點實測（第四輪）：Notion 的標題字身在裁切裡是 y29..50、左緣 x49；
+        // kennote 原本落在 y48..69 / x53 → padY 26→7、padX 48→44。
         await clip(page, '07n-db-view-tabs', theme, {
-          x: box.x - 48, y: box.y - 26, width: refSize('07n-db-view-tabs', theme)!.width, height: refSize('07n-db-view-tabs', theme)!.height,
+          x: box.x - 44, y: box.y - 7, width: refSize('07n-db-view-tabs', theme)!.width, height: refSize('07n-db-view-tabs', theme)!.height,
         });
 
         /* 07b：欄位標頭 hover */

@@ -21,9 +21,10 @@
   line-height: 1.2;
 }
 
-/** 內嵌時 Notion 也會顯示標題（未命名時是淺灰 placeholder「新資料庫」） */
+/** 內嵌時 Notion 也會顯示標題（未命名時是淺灰 placeholder「新資料庫」）。
+    07n 實測：標題字身 y29..50（＝ font-size 24），tab 膠囊上緣 y69 → 中間留 19px。 */
 .titleInline {
-  margin: 0 0 6px;
+  margin: 0 0 15px;
   padding: 0 2px;
   color: var(--kn-color-text);
   font-size: 24px;
@@ -40,7 +41,7 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--kn-space-4);
-  min-height: 34px;
+  min-height: 36px;
   padding-bottom: 4px;
   border-bottom: 1px solid var(--kn-color-divider);
 }
@@ -71,8 +72,8 @@
 .tabMore {
   display: inline-flex;
   align-items: center;
-  height: 28px;
-  padding: 0 8px;
+  height: 32px;
+  padding: 0 12px;
   border: 0;
   border-radius: var(--kn-radius-md);
   background: transparent;
@@ -96,6 +97,29 @@
   min-width: 180px;
 }
 
+.tabMoreAdd {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  height: 32px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--kn-radius-md);
+  background: transparent;
+  color: var(--kn-color-text-secondary);
+  font: inherit;
+  font-size: var(--kn-font-size-sm);
+  white-space: nowrap;
+  text-align: left;
+  cursor: pointer;
+}
+
+.tabMoreAdd:hover {
+  background: var(--kn-color-surface-hover);
+  color: var(--kn-color-text);
+}
+
 .tabMoreList .tab,
 .tabMoreList .tabActive {
   justify-content: flex-start;
@@ -106,13 +130,15 @@
  * Notion 的 view tab 是**膠囊**（作用中＝淺灰底 + 圓角 6px），不是底線 tab
  * ——見 07n-db-view-tabs-light.png。高度 28px、字級 14px、icon 16px。
  */
+/* 07n-db-view-tabs-light.png 實測：作用中的膠囊 x48..125（寬 **78**）、y69..100（高 **32**）、
+   底 rgb(244,243,243)；內距 12、icon 16、icon→文字 10。 */
 .tab,
 .tabActive {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  height: 28px;
-  padding: 0 8px;
+  gap: 10px;
+  height: 32px;
+  padding: 0 12px;
   border: 0;
   border-radius: var(--kn-radius-md);
   background: transparent;
@@ -129,7 +155,8 @@
 }
 
 .tabActive {
-  background: var(--kn-color-bg-sunken);
+  /* 實測 07n 的作用中膠囊底 rgb(244,243,243) ＝ `--c-bacInt` */
+  background: var(--kn-color-menu-hover);
   color: var(--kn-color-text);
   font-weight: var(--kn-font-weight-medium);
 }
@@ -148,8 +175,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
   border: 0;
   border-radius: var(--kn-radius-sm);
   background: transparent;

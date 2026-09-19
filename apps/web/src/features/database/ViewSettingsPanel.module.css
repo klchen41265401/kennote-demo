@@ -8,7 +8,8 @@
   flex-direction: column;
   /* 面板寬 292（07m-db-settings-light.png 量到 x13..304）；Popover 要帶 `flush` */
   width: 292px;
-  max-height: 560px;
+  /* Notion 的面板 07m 實測 y13..612 ＝ 高 **599**；560 會讓 flex 子層被壓扁 */
+  max-height: 600px;
   overflow-y: auto;
   color: var(--kn-color-text);
   font-size: var(--kn-font-size-sm);
@@ -18,7 +19,11 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 34px;
+  /* 07m 實測：Notion 面板內緣 y14 → 名稱框上緣 y63 ＝ 49px
+     ＝ header 45 ＋ nameRow margin-top 2 ＋ (34-30)/2 置中 2。
+     ⚠ flex column + max-height 會把沒有 flex-shrink:0 的子層壓扁，量到的高度就不是這裡寫的 */
+  flex: 0 0 auto;
+  height: 45px;
   padding: 0 8px 0 12px;
 }
 
@@ -41,14 +46,16 @@
 }
 
 .iconButton:hover {
-  background: var(--kn-color-surface-hover);
+  background: var(--kn-color-menu-hover);
 }
 
 .nameRow {
   display: flex;
   align-items: center;
   gap: 6px;
-  height: 32px;
+  /* 名稱框 07m 實測 y63..92（border-box 30、填色 28） */
+  flex: 0 0 auto;
+  height: 34px;
   margin: 2px 12px 8px;
 }
 
@@ -56,8 +63,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: 30px;
+  height: 30px;
   border: 1px solid var(--kn-color-border);
   border-radius: 4px;
   color: var(--kn-color-text-secondary);
@@ -65,7 +72,7 @@
 
 .nameInput {
   flex: 1 1 auto;
-  height: 28px;
+  height: 30px;
   padding: 0 8px;
   border: 1px solid var(--kn-color-border);
   border-radius: 4px;
@@ -79,7 +86,13 @@
 .section {
   display: flex;
   flex-direction: column;
+  flex: 0 0 auto;
   padding: 3px 0;
+}
+
+/* Notion 的名稱框與第一組設定之間**沒有**分隔線（07m 實測 y93..312 全白），
+   只有組與組之間才有 */
+.section + .section {
   border-top: 1px solid var(--kn-color-divider);
 }
 
@@ -95,6 +108,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  flex: 0 0 auto;
   height: 29px;
   padding: 0 10px 0 12px;
   border: 0;
@@ -106,7 +120,7 @@
 }
 
 .row:hover:not(:disabled) {
-  background: var(--kn-color-surface-hover);
+  background: var(--kn-color-menu-hover);
 }
 
 .row:disabled {

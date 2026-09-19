@@ -84,13 +84,15 @@ export function DatabaseHeader(props: DatabaseHeaderProps) {
       if (!buttons.length) return;
       const widths = buttons.map((b) => b.offsetWidth + 2);
       const total = widths.reduce((a, b) => a + b, 0);
-      const plus = 28; // ＋ 新增檢視
+      const plus = 28; // ＋ 新增檢視（只有「全部放得下」時才留在 tab 列上）
       if (total <= el.clientWidth - plus) {
         setVisibleTabs(buttons.length);
         return;
       }
-      // 放不下才需要「還有 N 個…」的位子（實測 ~92px）
-      const limit = el.clientWidth - plus - 92;
+      // 放不下時 ＋ 會收進「還有 N 個…」的下拉（Notion 的 tab 列上沒有 ＋，
+      // 07n-db-view-tabs-light.png 實測：4 顆 tab ＋「還有 3 個…」，右邊直接接工具列），
+      // 所以這裡**不再**替 ＋ 留位子，只留「還有 N 個…」（實測 ~92px）。
+      const limit = el.clientWidth - 92;
       let used = 0;
       let fit = 0;
       for (const w of widths) {
@@ -174,7 +176,8 @@ export function DatabaseHeader(props: DatabaseHeaderProps) {
               還有 {hiddenViews.length} 個…
             </button>
           ) : null}
-          {!readOnly ? (
+          {/* Notion 的 tab 列在「有收合」時**不放 ＋**（它在「還有 N 個…」的下拉裡） */}
+          {!readOnly && !hiddenViews.length ? (
             <button
               type="button"
               className={styles.tabAdd}
@@ -317,6 +320,20 @@ export function DatabaseHeader(props: DatabaseHeaderProps) {
               {v.name}
             </button>
           ))}
+          {!readOnly ? (
+            <button
+              type="button"
+              className={styles.tabMoreAdd}
+              onClick={() =>
+                setPanel((p) => (p ? { kind: 'newView', anchor: p.anchor } : null))
+              }
+            >
+              <span className={styles.tabIcon} aria-hidden="true">
+                <UiIcon name="plus" size={15} />
+              </span>
+              新增檢視
+            </button>
+          ) : null}
         </div>
       </Popover>
 
