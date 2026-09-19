@@ -1,0 +1,14 @@
+.shell {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.placeholder {
+  padding: var(--kn-space-8);
+  color: var(--kn-color-text-tertiary);
+  font-size: var(--kn-font-size-sm);
+  text-align: center;
+}
