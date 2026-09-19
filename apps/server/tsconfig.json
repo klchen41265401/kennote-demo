@@ -2,6 +2,10 @@
   "extends": "@kennote/config/tsconfig/node.json",
   "compilerOptions": {
     "noUncheckedIndexedAccess": true,
+    // DOM 只用在型別層：@kennote/editor-core 的純函式（markdown 解析 / 行內序列化）
+    // 與瀏覽器端共用同一份原始碼，其中 view/dom-utils.ts 的簽章引用了 Document。
+    // server runtime 完全不碰 DOM（也沒有 DOM 相依）。
+    "lib": ["ES2022", "DOM"],
     "types": ["node"]
   },
   "include": ["src/**/*.ts", "test/**/*.ts", "build.mjs"]

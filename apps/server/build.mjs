@@ -16,6 +16,9 @@ await build({
   platform: 'node',
   target: 'node20',
   format: 'esm',
+  // @kennote/editor-core 的 exports 有 development 條件（指向 src/*.ts），
+  // 加上它才會從 TS 原始碼打包，而不是去找還沒 build 的 dist/。
+  conditions: ['development'],
   sourcemap: true,
   logLevel: 'info',
   external,

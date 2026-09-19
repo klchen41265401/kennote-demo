@@ -1,0 +1,50 @@
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kn-space-5);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kn-space-2);
+}
+
+.label {
+  font-size: var(--kn-font-size-xs);
+  font-weight: var(--kn-font-weight-medium);
+  color: var(--kn-color-text-secondary);
+}
+
+.hint {
+  font-size: var(--kn-font-size-xs);
+  line-height: 1.5;
+  color: var(--kn-color-text-tertiary);
+}
+
+.toggleRow {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kn-space-1);
+}
+
+.toggleLabel {
+  font-size: var(--kn-font-size-sm);
+  color: var(--kn-color-text);
+}
+
+.printNote {
+  margin: 0;
+  padding: var(--kn-space-4);
+  border-radius: var(--kn-radius-md);
+  background: var(--kn-color-bg-subtle);
+  font-size: var(--kn-font-size-xs);
+  line-height: 1.6;
+  color: var(--kn-color-text-secondary);
+}
+
+.footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--kn-space-3);
+}

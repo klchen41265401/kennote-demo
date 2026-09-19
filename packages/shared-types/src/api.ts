@@ -19,6 +19,13 @@ export interface HealthResponse {
   db: boolean;
   version: string;
   uptime: number;
+  /** M6：migration 是否落後（pending > 0 → status 為 degraded） */
+  migrations?: {
+    applied: number;
+    onDisk: number;
+    pending: number;
+    latest: string | null;
+  };
 }
 
 /* ── 工作區 ───────────────────────────────────────────── */

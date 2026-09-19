@@ -1,0 +1,163 @@
+/**
+ * 列印樣式表 —— 「匯出 PDF」的實作（ADR 0005）。
+ *
+ * 04 §8 M6 原訂用 Playwright 的 `page.pdf()`，但 server 容器內沒有瀏覽器，
+ * 也不該為了一個匯出格式而把映像檔從 180MB 變成 1.2GB。
+ * 改成：後端提供「自包含、可列印的 HTML」，前端用 `window.print()`
+ * 讓**使用者自己的瀏覽器**產生 PDF —— 字型、連字、CJK 斷行都是系統原生的，
+ * 品質反而比 headless Chromium 的預設字型好。
+ *
+ * 用法：在 main.tsx（或 App.tsx）`import './lib/print.css'` 一次即可。
+ * 元件不必做任何事；要讓某個區塊不印出來，加上 `data-print="hide"`。
+ */
+
+@media print {
+  /* ── 只印內容，介面一律隱藏 ───────────────────────── */
+  [data-print='hide'],
+  [data-kn-overlay],
+  [role='dialog'],
+  [role='menu'],
+  [role='tooltip'],
+  [role='toolbar'],
+  [role='alert'],
+  nav[aria-label='側邊欄'],
+  aside,
+  header button,
+  .kn-sidebar,
+  .kn-topbar,
+  .kn-block-handle,
+  .kn-bubble-menu,
+  .kn-slash-menu,
+  .kn-toast-region,
+  .kn-presence,
+  .kn-comments-panel,
+  .kn-overlay-root {
+    display: none !important;
+  }
+
+  @page {
+    margin: 16mm;
+  }
+
+  :root {
+    color-scheme: light;
+  }
+
+  html,
+  body {
+    height: auto !important;
+    overflow: visible !important;
+    background: #fff !important;
+    color: #000 !important;
+    font-size: 11pt;
+  }
+
+  /* app shell 的 flex/grid 版面在列印時要攤平，否則只會印出第一頁 */
+  #root,
+  #root > *,
+  main,
+  .kn-app,
+  .kn-main,
+  .kn-page-scroll {
+    display: block !important;
+    width: auto !important;
+    max-width: none !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    position: static !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    background: #fff !important;
+  }
+
+  #editor-host,
+  .kn-page-content {
+    max-width: none !important;
+    padding: 0 !important;
+  }
+
+  /* ── 內容排版：與匯出 HTML 的 @media print 規則保持一致 ── */
+  a {
+    color: #000 !important;
+    text-decoration: none !important;
+  }
+
+  /* 外部連結把網址印出來（紙本上點不了，但看得到） */
+  a[href^='http']::after {
+    content: ' (' attr(href) ')';
+    font-size: 9pt;
+    color: #555;
+    word-break: break-all;
+  }
+
+  .kn-heading,
+  h1,
+  h2,
+  h3 {
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+
+  .kn-code,
+  pre,
+  figure,
+  table,
+  blockquote,
+  .kn-callout,
+  .kn-image {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .kn-code,
+  pre,
+  .kn-callout,
+  th {
+    background: #f4f4f4 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  img,
+  video {
+    max-width: 100% !important;
+    break-inside: avoid;
+  }
+
+  table {
+    border-collapse: collapse;
+    width: 100%;
+  }
+
+  th,
+  td {
+    border: 1px solid #ccc;
+    padding: 4pt 6pt;
+  }
+
+  /* 摺疊區塊在紙上要全部展開 —— 印出來看不到的內容等於遺失 */
+  details {
+    display: block !important;
+  }
+
+  details > summary {
+    list-style: none;
+  }
+
+  details:not([open]) > *:not(summary) {
+    display: block !important;
+  }
+
+  /* 編輯器的游標／選取高亮不該出現在紙上 */
+  .kn-caret,
+  .kn-presence-cursor,
+  [data-kn-selected] {
+    background: none !important;
+    outline: none !important;
+  }
+
+  [contenteditable] {
+    caret-color: transparent;
+  }
+}

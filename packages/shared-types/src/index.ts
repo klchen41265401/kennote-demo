@@ -1,6 +1,7 @@
 export * from './richtext.js';
 export * from './block.js';
 export * from './operation.js';
+export * from './ot.js';
 export * from './page.js';
 export * from './auth.js';
 export * from './errors.js';

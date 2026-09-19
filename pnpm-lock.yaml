@@ -53,6 +53,9 @@ importers:
       '@fastify/websocket':
         specifier: ^11.0.2
         version: 11.3.1
+      '@kennote/editor-core':
+        specifier: workspace:*
+        version: link:../../packages/editor-core
       '@kennote/shared-types':
         specifier: workspace:*
         version: link:../../packages/shared-types

@@ -17,6 +17,7 @@ FROM base AS deps
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml* .npmrc ./
 COPY packages/config/package.json packages/config/
 COPY packages/shared-types/package.json packages/shared-types/
+COPY packages/editor-core/package.json packages/editor-core/
 COPY packages/ui/package.json packages/ui/
 COPY apps/server/package.json apps/server/
 RUN pnpm install --filter @kennote/server... --no-frozen-lockfile
