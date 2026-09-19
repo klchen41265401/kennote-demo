@@ -117,9 +117,15 @@ export function createHostRegistry(): BlockRegistry {
     'page',
     'table',
     'collectionView',
+    'audio',
+    'pdf',
+    'breadcrumb',
+    'button',
+    'syncedBlock',
   ];
+  const WITH_CHILDREN = new Set<BlockType>(['table', 'syncedBlock']);
   for (const type of reactTypes) {
-    registry.override(reactHosted(registry.get(type), type, type === 'table'));
+    registry.override(reactHosted(registry.get(type), type, WITH_CHILDREN.has(type)));
   }
 
   /* ── 2. 版面容器：children 由 editor-core 遞迴渲染 ─── */

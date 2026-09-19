@@ -57,6 +57,7 @@ export type BlockType =
   | 'heading1'
   | 'heading2'
   | 'heading3'
+  | 'heading4'
   | 'bulletedList'
   | 'numberedList'
   | 'todo'
@@ -77,7 +78,12 @@ export type BlockType =
   | 'tableRow'
   | 'collectionView'
   | 'embed'
-  | 'video';
+  | 'video'
+  | 'audio'
+  | 'pdf'
+  | 'breadcrumb'
+  | 'button'
+  | 'syncedBlock';
 
 export interface Block {
   id: string;

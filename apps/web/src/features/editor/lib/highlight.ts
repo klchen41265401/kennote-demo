@@ -56,6 +56,8 @@ export const CODE_LANGUAGES: { id: string; label: string }[] = [
   { id: 'latex', label: 'LaTeX' },
   { id: 'lua', label: 'Lua' },
   { id: 'markdown', label: 'Markdown' },
+  // Notion 的「程式碼 - Mermaid」：我們只做語法高亮，不渲染圖（不加 runtime 套件）
+  { id: 'mermaid', label: 'Mermaid' },
   { id: 'php', label: 'PHP' },
   { id: 'powershell', label: 'PowerShell' },
   { id: 'python', label: 'Python' },
@@ -287,7 +289,27 @@ const GENERIC_RULES: Rule[] = [
   { type: 'punctuation', re: /[{}[\]();,.]/y },
 ];
 
+/**
+ * Mermaid：只做詞法層——圖表型別、節點形狀、箭頭。
+ * **不渲染圖**（那要 runtime 套件），所以至少讓語法看起來有結構。
+ */
+const MERMAID_RULES: Rule[] = [
+  { type: 'plain', re: WS },
+  { type: 'comment', re: /%%[^\n]*/y },
+  { type: 'string', re: /"(?:[^"\n])*"?/y },
+  {
+    type: 'keyword',
+    re: kw(
+      'graph|flowchart|sequenceDiagram|classDiagram|stateDiagram|stateDiagram-v2|erDiagram|journey|gantt|pie|mindmap|timeline|gitGraph|quadrantChart|subgraph|end|participant|actor|note|loop|alt|opt|par|class|state|section|title|direction|click|style|linkStyle|classDef',
+    ),
+  },
+  { type: 'operator', re: /-{1,3}>{1,2}|={1,3}>|-\.->|<-{1,3}|\.\.\.|:::|--|\|/y },
+  { type: 'punctuation', re: /[{}[\]();,.]/y },
+  { type: 'number', re: NUMBER },
+];
+
 const RULES: Record<string, Rule[]> = {
+  mermaid: MERMAID_RULES,
   javascript: JS_RULES,
   typescript: JS_RULES,
   python: PY_RULES,

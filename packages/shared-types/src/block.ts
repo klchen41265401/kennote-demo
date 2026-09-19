@@ -6,6 +6,7 @@ export const BLOCK_TYPES = [
   'heading1',
   'heading2',
   'heading3',
+  'heading4',
   'bulletedList',
   'numberedList',
   'todo',
@@ -27,6 +28,11 @@ export const BLOCK_TYPES = [
   'collectionView',
   'embed',
   'video',
+  'audio',
+  'pdf',
+  'breadcrumb',
+  'button',
+  'syncedBlock',
 ] as const;
 
 export type BlockType = (typeof BLOCK_TYPES)[number];
@@ -144,6 +150,41 @@ export interface TableRowProps {
   /** 每個 cell 一段 RichText（table 的 content 欄位不使用） */
   cells: RichText[];
 }
+export type AudioProps = MediaProps;
+export type PdfProps = MediaProps;
+/** 麵包屑：顯示目前頁面在頁面樹中的路徑，沒有可調整的資料 */
+export interface BreadcrumbProps extends BaseProps {}
+
+/** 按鈕可以做的事（03 §6.2 button 的 actions） */
+export type ButtonAction =
+  | { type: 'insertBlocks'; blocks: ButtonTemplateBlock[]; position?: 'after' | 'pageEnd' }
+  | { type: 'openPage'; pageId: string | null };
+
+/** 按鈕要插入的樣板（遞迴，深度上限由後端 schema 把關） */
+export interface ButtonTemplateBlock {
+  type: BlockType;
+  props?: Record<string, unknown>;
+  content?: RichText;
+  children?: ButtonTemplateBlock[];
+}
+
+export interface ButtonProps extends BaseProps {
+  label: string;
+  icon?: string | null;
+  actions: ButtonAction[];
+}
+
+/**
+ * 同步區塊（01 §4.6 M3.6.7）。
+ * `syncedFrom = null` → 這一份是「原始區塊」，內容就是它的 children；
+ * `syncedFrom = <blockId>` → 這一份是「引用」，內容以原始區塊為準（唯讀）。
+ */
+export interface SyncedBlockProps extends BaseProps {
+  syncedFrom: string | null;
+  /** 引用跨頁時，記下原始區塊所在的頁面，才能直接載入 */
+  syncedFromPageId?: string | null;
+}
+
 export interface CollectionViewProps extends BaseProps {
   collectionId: string | null;
   viewIds: string[];
@@ -156,6 +197,7 @@ export interface BlockPropsMap {
   heading1: HeadingProps;
   heading2: HeadingProps;
   heading3: HeadingProps;
+  heading4: HeadingProps;
   bulletedList: BulletedListProps;
   numberedList: NumberedListProps;
   todo: TodoProps;
@@ -177,6 +219,11 @@ export interface BlockPropsMap {
   collectionView: CollectionViewProps;
   embed: EmbedProps;
   video: VideoProps;
+  audio: AudioProps;
+  pdf: PdfProps;
+  breadcrumb: BreadcrumbProps;
+  button: ButtonProps;
+  syncedBlock: SyncedBlockProps;
 }
 
 export type BlockProps = BlockPropsMap[BlockType];

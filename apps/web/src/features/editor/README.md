@@ -79,10 +79,15 @@ import { PageHeader } from './features/editor/PageHeader';
 | `blocks/externalRegistry.ts` | 給 `features/database` 的 runtime 擴充點 |
 | `blocks/uploadStatus.ts` | 上傳進度的本機 store（不進 model、不進同步） |
 | `renderers/MediaBlocks.tsx` | image / video / file / embed / bookmark |
+| `renderers/AdvancedBlocks.tsx` | audio / pdf / breadcrumb / button / syncedBlock |
 | `renderers/StructureBlocks.tsx` | page / column / table / toc / equation / collectionView |
 | `renderers/CodeChrome.tsx` | 語言選單、複製、行號、語法高亮層 |
-| `menus/SlashMenu.tsx` | `/` 指令選單（分組、中英關鍵字、鍵盤導覽） |
-| `menus/slashCommands.ts` | 指令表：block 型別 + 版面 + 行內 + 顏色 + 背景色 |
+| `menus/SlashMenu.tsx` | `/` 指令選單（分組 sticky、過濾攤平、鍵盤導覽、最近使用） |
+| `menus/slashCommands.ts` | **Notion 7.34 的 164 項指令表**（分組 / 順序 / 文案照抄，見 `SLASH-MENU.md`） |
+| `menus/PickerPopover.tsx` | 「連結到頁面」「資料來源的連結瀏覽模式」的頁面 / 資料庫選擇器 |
+| `lib/slash-actions.ts` | 指令的實作：多欄、表格、建資料庫、匯入、複製 / 刪除 |
+| `lib/embed-services.ts` | 嵌入的 52 個服務表 + 匯入的 11 個來源表 |
+| `lib/pinyin.ts` | 拼音首字母（`/csm` = 程式碼），自己列表不裝套件 |
 | `menus/BubbleMenu.tsx` | 選取文字後的格式工具列 + 連結輸入 |
 | `menus/BlockHandle.tsx` | 單一 gutter 實例（`+` 與 `⠿`） |
 | `menus/BlockMenu.tsx` | 轉換成 / 顏色 / 複製 / 複製連結 / 移動到 / 刪除 / 留言 |
@@ -91,7 +96,7 @@ import { PageHeader } from './features/editor/PageHeader';
 | `dnd/useBlockDrag.ts` | Pointer Events 拖曳：幽靈元素、指示線、自動捲動、拖成多欄 |
 | `keyboard/hostKeymap.ts` | Ctrl+K / Ctrl+Shift+1~9 / Ctrl+Enter / Ctrl+D / Ctrl+Shift+↑↓ / Cmd+A 三段式 |
 | `lib/floating.ts` | 自製定位引擎（flip + shift） |
-| `lib/highlight.ts` | 自研語法高亮 tokenizer（30 種語言清單，9 種有專屬規則） |
+| `lib/highlight.ts` | 自研語法高亮 tokenizer（32 種語言清單，15 種有專屬規則，含 Mermaid） |
 | `lib/embed.ts` | 嵌入白名單 + URL 安全檢查 |
 | `lib/mathml.ts` | LaTeX 子集 → MathML（不裝 KaTeX） |
 | `lib/model-helpers.ts` | 產生 Operation 的小工具（複製子樹、插 atom、搬移…） |
@@ -233,6 +238,7 @@ registerCreateDatabase(async ({ workspaceId, parentId }) => {
 | **自己寫 Popover / Toast / Icon / 定位引擎** | `packages/ui` 的對應元件由 UI 代理並行開發中，寫這一版時還沒 export。介面刻意對齊 02 §4.4 / §4.5，等它 export 之後改 import 即可（`ui/overlay.tsx`、`ui/toast.tsx`、`ui/icons.tsx`、`lib/floating.ts`、`dnd/drop-target.ts` 這五支是替換點）。 |
 | **`features/database` 用 runtime 註冊而不是 import** | 並行開發時直接 import 一個還不存在的模組會讓整個 typecheck 掛掉。註冊表讓兩邊完全解耦。 |
 | **rollback 在 WS 路徑改成「重抓 snapshot」** | `sync-client` 的 `onRollback` 只給被拒絕的 ops，沒有 inverse（inverse 只存在 editor-core 的 transaction 裡）。伺服器拒絕本來就代表有 bug，以伺服器為準重載是最保險的復原，也讓問題立刻現形。HTTP 後備路徑仍然是精準的 inverse rollback。 |
+| **`/` 的觸發與 query 由宿主自己算，不用 editor-core 的 triggers** | `input/triggers.ts` 的 `/` 前面必須是空白、query 有空白就關——兩條都和 Notion 不同，會讓 `/標題 1`、`/2 欄`、`/Google Drive` 打不完。那支檔案屬於 OT 代理，所以宿主沿用 `[[` 的做法自己聽 transaction（`Editor.tsx` 的 `recomputeSlash`）。 |
 | **`/` 選單的鍵盤事件掛在 `document` 的 capture 階段** | editor-core 在 trigger 開啟時會主動放行 ↑↓/Enter/Tab 給宿主，但事件仍會冒泡到編輯區。capture 讓選單先吃掉並 `stopPropagation()`。 |
 
 ---
@@ -240,15 +246,15 @@ registerCreateDatabase(async ({ workspaceId, parentId }) => {
 ## 7. 已知限制 / 尚未實作
 
 ### Block 型別
-- **synced block 未實作**（01 §4.6 M3.6.7 標為「極高」難度，規格也允許略過）。
+- **synced block 只有單向**：原始區塊可編輯，引用端是唯讀投影（見 `SLASH-MENU.md` §4）。
 - **table**：儲存格只有純文字（無 inline marks、無合併儲存格、無欄寬拖曳）；
   欄的增刪只能從尾端；沒有「插入到第 N 欄」。
 - **equation**：只支援 LaTeX 子集（見 `lib/mathml.ts` 開頭）。矩陣、對齊環境、
   `\begin{}` 系列一律原樣顯示。**行內公式插入後不能再點擊編輯**（要刪掉重插）。
 - **bookmark**：沒有 server unfurl 之前只顯示 URL 與網域。
 - **video**：自家上傳的影片直接 `<video>` 播，沒有轉檔、沒有縮圖。
-- **heading 可收合**（01 §4.4 M3.4.12）未實作 —— 需要「把後續同級區塊當成虛擬子節點」，
-  牽涉 editor-core 的結構模型，留給 M3。
+- **heading 可收合已實作**：`props.toggleable` + `props.collapsed`，收合的是它的子區塊
+  （與 Notion 的資料模型一致）。箭頭用 `data-heading-toggle`，理由見 `SLASH-MENU.md` §4。
 - **toggle 的收合狀態存在 `props.collapsed`（會同步）**，規格建議存 localStorage；
   改成本機狀態要等 editor-core 提供「本機 props」的概念。
 

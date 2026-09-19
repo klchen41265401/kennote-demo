@@ -77,17 +77,22 @@ const mediaSchema = z
 defineBlockType({ type: 'paragraph', schema: base, defaultProps: {} });
 defineBlockType({
   type: 'heading1',
-  schema: z.object({ color, toggleable: z.boolean().optional() }).strict(),
+  schema: z.object({ color, toggleable: z.boolean().optional(), collapsed: z.boolean().optional() }).strict(),
   defaultProps: {},
 });
 defineBlockType({
   type: 'heading2',
-  schema: z.object({ color, toggleable: z.boolean().optional() }).strict(),
+  schema: z.object({ color, toggleable: z.boolean().optional(), collapsed: z.boolean().optional() }).strict(),
   defaultProps: {},
 });
 defineBlockType({
   type: 'heading3',
-  schema: z.object({ color, toggleable: z.boolean().optional() }).strict(),
+  schema: z.object({ color, toggleable: z.boolean().optional(), collapsed: z.boolean().optional() }).strict(),
+  defaultProps: {},
+});
+defineBlockType({
+  type: 'heading4',
+  schema: z.object({ color, toggleable: z.boolean().optional(), collapsed: z.boolean().optional() }).strict(),
   defaultProps: {},
 });
 defineBlockType({ type: 'bulletedList', schema: base, defaultProps: {} });
@@ -99,7 +104,9 @@ defineBlockType({
 });
 defineBlockType({
   type: 'toggle',
-  schema: z.object({ color, defaultOpen: z.boolean().optional() }).strict(),
+  schema: z
+    .object({ color, defaultOpen: z.boolean().optional(), collapsed: z.boolean().optional() })
+    .strict(),
   defaultProps: {},
 });
 defineBlockType({ type: 'quote', schema: base, defaultProps: {} });
@@ -165,6 +172,23 @@ defineBlockType({
 });
 defineBlockType({
   type: 'file',
+  schema: mediaSchema.extend({
+    name: z.string().max(500).optional(),
+    size: z.number().nonnegative().optional(),
+  }),
+  defaultProps: {},
+  canHaveChildren: false,
+  hasInlineContent: false,
+});
+defineBlockType({
+  type: 'audio',
+  schema: mediaSchema,
+  defaultProps: {},
+  canHaveChildren: false,
+  hasInlineContent: false,
+});
+defineBlockType({
+  type: 'pdf',
   schema: mediaSchema.extend({
     name: z.string().max(500).optional(),
     size: z.number().nonnegative().optional(),
@@ -264,5 +288,72 @@ defineBlockType({
     .strict(),
   defaultProps: { collectionId: null, viewIds: [] },
   canHaveChildren: false,
+  hasInlineContent: false,
+});
+
+/* ── 進階（M2-C：斜線選單完整化）────────────────────── */
+defineBlockType({
+  type: 'breadcrumb',
+  schema: base,
+  defaultProps: {},
+  canHaveChildren: false,
+  hasInlineContent: false,
+});
+
+/**
+ * 按鈕的樣板是遞迴結構，用 z.lazy + 深度上限擋住惡意的深巢狀
+ * （後端不信任前端送來的任何東西：03 §9.3）。
+ */
+const MAX_TEMPLATE_DEPTH = 5;
+const templateBlockSchema = (depth: number): z.ZodType<Record<string, unknown>> =>
+  z
+    .object({
+      type: z.string().max(40),
+      props: z.record(z.unknown()).optional(),
+      content: richTextSchema.optional(),
+      children:
+        depth >= MAX_TEMPLATE_DEPTH
+          ? z.array(z.never()).max(0).optional()
+          : z.array(z.lazy(() => templateBlockSchema(depth + 1))).max(50).optional(),
+    })
+    .strict() as unknown as z.ZodType<Record<string, unknown>>;
+
+const buttonActionSchema = z.union([
+  z
+    .object({
+      type: z.literal('insertBlocks'),
+      blocks: z.array(templateBlockSchema(0)).max(50).default([]),
+      position: z.enum(['after', 'pageEnd']).optional(),
+    })
+    .strict(),
+  z.object({ type: z.literal('openPage'), pageId: z.string().uuid().nullable() }).strict(),
+]);
+
+defineBlockType({
+  type: 'button',
+  schema: z
+    .object({
+      color,
+      label: z.string().max(200).default('按鈕'),
+      icon: z.string().max(64).nullable().optional(),
+      actions: z.array(buttonActionSchema).max(10).default([]),
+    })
+    .strict(),
+  defaultProps: { label: '按鈕', actions: [] },
+  canHaveChildren: false,
+  hasInlineContent: false,
+});
+
+defineBlockType({
+  type: 'syncedBlock',
+  schema: z
+    .object({
+      color,
+      syncedFrom: z.string().uuid().nullable().default(null),
+      syncedFromPageId: z.string().uuid().nullable().optional(),
+    })
+    .strict(),
+  defaultProps: { syncedFrom: null },
+  canHaveChildren: true,
   hasInlineContent: false,
 });

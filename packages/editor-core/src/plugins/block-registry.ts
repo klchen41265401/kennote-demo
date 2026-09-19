@@ -176,7 +176,20 @@ function simpleTextBlock(input: SimpleDefInput): BlockDefinition {
     hasInlineContent: true,
     editable: true,
     splitBehavior: 'split',
-    convertibleTo: ['paragraph', 'heading1', 'heading2', 'heading3', 'bulletedList', 'numberedList', 'todo', 'toggle', 'quote', 'callout', 'code'],
+    convertibleTo: [
+      'paragraph',
+      'heading1',
+      'heading2',
+      'heading3',
+      'heading4',
+      'bulletedList',
+      'numberedList',
+      'todo',
+      'toggle',
+      'quote',
+      'callout',
+      'code',
+    ],
     render(_block, ctx) {
       return contentEl(ctx, input.tag, input.className, true);
     },
@@ -264,25 +277,80 @@ export function createDefaultRegistry(): BlockRegistry {
     [1, 20],
     [2, 30],
     [3, 40],
+    [4, 45],
   ] as const) {
-    registry.register(
-      simpleTextBlock({
-        type: `heading${level}` as BlockType,
-        label: `標題 ${level}`,
-        description: `第 ${level} 層標題`,
-        iconName: `heading-${level}`,
-        keywords: ['heading', `h${level}`, '標題', `標題${level}`, 'title'],
-        sortOrder: sort,
-        tag: `h${level + 1}` as keyof HTMLElementTagNameMap,
-        className: `kn-heading kn-heading-${level}`,
-        placeholder: `標題 ${level}`,
-        splitInto: 'paragraph',
-        shortcut: `Mod-Alt-${level}`,
-        htmlTag: `h${level}`,
-        mdPrefix: `${'#'.repeat(level)} `,
-        markdownShortcut: [{ pattern: new RegExp(`^[#\\uff03]{${level}}${FW}$`) }],
-      }),
-    );
+    const heading = simpleTextBlock({
+      type: `heading${level}` as BlockType,
+      label: `標題 ${level}`,
+      description: `第 ${level} 層標題`,
+      iconName: `heading-${level}`,
+      keywords: ['heading', `h${level}`, '標題', `標題${level}`, 'title'],
+      sortOrder: sort,
+      tag: `h${Math.min(level + 1, 6)}` as keyof HTMLElementTagNameMap,
+      className: `kn-heading kn-heading-${level}`,
+      placeholder: `標題 ${level}`,
+      splitInto: 'paragraph',
+      shortcut: `Mod-Alt-${level}`,
+      htmlTag: `h${level}`,
+      mdPrefix: `${'#'.repeat(level)} `,
+      markdownShortcut: [
+        { pattern: new RegExp(`^[#\uff03]{${level}}${FW}$`) },
+        // 「### >」= 可收合的標題（Notion 的「摺疊標題 1~4」）
+        {
+          pattern: new RegExp(`^[#\uff03]{${level}}${FW}[>\uff1e]${FW}$`),
+          getProps: () => ({ toggleable: true }),
+        },
+      ],
+    });
+
+    /**
+     * 可收合的標題（01 §4.4 M3.4.12 / Notion 的「摺疊標題 1~4」）。
+     * 資料層只有 `props.toggleable` + `props.collapsed`，型別仍然是 heading，
+     * 所以「標題 2 ⇄ 摺疊標題 2」互轉不會動到內容，也不必新增 block type。
+     *
+     * 箭頭刻意用 `data-heading-toggle` 而不是 `data-toggle-arrow`：
+     * input/controller.ts 看到 `data-toggle-arrow` 會把 block 轉成 `toggle`，
+     * 那會毀掉標題。宿主層改聽 `data-heading-toggle`（features/editor/Editor.tsx）。
+     */
+    const headingRender = heading.render;
+    heading.render = (block, ctx) => {
+      if (!block.props.toggleable) return headingRender.call(heading, block, ctx);
+      const wrapper = el(ctx.doc, 'div', { class: `kn-heading-toggle kn-heading-toggle-${level}` });
+      const collapsed = Boolean(block.props.collapsed);
+      const arrow = el(ctx.doc, 'span', {
+        class: 'kn-toggle-arrow',
+        contenteditable: 'false',
+        'data-heading-toggle': 'true',
+        role: 'button',
+        'aria-expanded': collapsed ? 'false' : 'true',
+      });
+      arrow.textContent = collapsed ? '▸' : '▾';
+      wrapper.appendChild(arrow);
+      wrapper.appendChild(
+        contentEl(
+          ctx,
+          `h${Math.min(level + 1, 6)}` as keyof HTMLElementTagNameMap,
+          `kn-heading kn-heading-${level}`,
+          true,
+        ),
+      );
+      if (collapsed) wrapper.setAttribute('data-collapsed', 'true');
+      return wrapper;
+    };
+    heading.update = (main, prev, next) => {
+      // toggleable 切換會換掉整個 DOM 結構 → 回 false 讓 BlockView 重建
+      if (Boolean(prev.props.toggleable) !== Boolean(next.props.toggleable)) return false;
+      if (!next.props.toggleable) return true;
+      const arrow = main.querySelector<HTMLElement>('[data-heading-toggle]');
+      if (!arrow) return false;
+      const collapsed = Boolean(next.props.collapsed);
+      arrow.textContent = collapsed ? '▸' : '▾';
+      arrow.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+      if (collapsed) main.setAttribute('data-collapsed', 'true');
+      else main.removeAttribute('data-collapsed');
+      return true;
+    };
+    registry.register(heading);
   }
 
   registry.register(
@@ -554,6 +622,11 @@ export function createDefaultRegistry(): BlockRegistry {
     ['table', '表格', 'table', 'advanced', 300],
     ['tableRow', '表格列', 'table-row', 'advanced', 310],
     ['collectionView', '資料庫檢視', 'database', 'database', 320],
+    ['audio', '音訊', 'audio', 'media', 205],
+    ['pdf', 'PDF', 'pdf', 'media', 215],
+    ['breadcrumb', '頁面路徑', 'breadcrumb', 'advanced', 330],
+    ['button', '按鈕', 'button', 'advanced', 340],
+    ['syncedBlock', '同步區塊', 'synced', 'advanced', 350],
   ];
   for (const [type, label, icon, group, sortOrder] of placeholders) {
     registry.register(placeholderDefinition(type, label, icon, group, sortOrder, [type, label]));

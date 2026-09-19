@@ -9,13 +9,14 @@ import { plainTextToRichText, richTextToPlainText } from '@kennote/shared-types'
 import type { BlockRendererProps } from '../context';
 import { formatBytes, resolveMediaUrl } from '../../../lib/upload';
 import { domainOf, EMBED_SANDBOX, isDirectVideo, normalizeUrlInput, resolveEmbed, safeHref } from '../lib/embed';
+import { embedPlaceholder, getEmbedService } from '../lib/embed-services';
 import { Icon } from '../ui/icons';
 import { toast } from '../ui/toast';
 import { useUploadProgress } from '../blocks/uploadStatus';
 
 /* ── 共用：空狀態 / 上傳面板 ───────────────────────────── */
 
-interface MediaPanelProps {
+export interface MediaPanelProps {
   icon: ReactNode;
   label: string;
   accept?: string;
@@ -25,9 +26,13 @@ interface MediaPanelProps {
   onUrl(url: string): void;
   progress: number | null;
   disabled?: boolean;
+  /** 「上傳」分頁的按鈕文字（預設「選擇檔案」） */
+  uploadLabel?: string;
+  /** 「嵌入連結」分頁的送出按鈕文字（預設「嵌入」） */
+  submitLabel?: string;
 }
 
-function MediaPanel({
+export function MediaPanel({
   icon,
   label,
   accept,
@@ -37,6 +42,8 @@ function MediaPanel({
   onUrl,
   progress,
   disabled,
+  uploadLabel = '選擇檔案',
+  submitLabel = '嵌入',
 }: MediaPanelProps) {
   const [tab, setTab] = useState<'upload' | 'url'>(allowUpload ? 'upload' : 'url');
   const [url, setUrl] = useState('');
@@ -118,7 +125,7 @@ function MediaPanel({
             disabled={disabled}
             onClick={() => inputRef.current?.click()}
           >
-            選擇檔案
+            {uploadLabel}
           </button>
           <p className="kn-media-panel-hint">或把檔案拖進這個區塊</p>
         </div>
@@ -145,7 +152,7 @@ function MediaPanel({
             onPointerDown={(e) => e.stopPropagation()}
           />
           <button type="submit" className="kn-btn kn-btn--primary">
-            嵌入
+            {submitLabel}
           </button>
         </form>
       )}
@@ -155,7 +162,7 @@ function MediaPanel({
 
 /* ── 共用：說明文字 ────────────────────────────────────── */
 
-function Caption({ block, host }: Pick<BlockRendererProps, 'block' | 'host'>) {
+export function Caption({ block, host }: Pick<BlockRendererProps, 'block' | 'host'>) {
   const raw = (block.props as { caption?: unknown }).caption;
   const text = richTextToPlainText(Array.isArray(raw) ? (raw as never) : []);
   const ref = useRef<HTMLDivElement>(null);
@@ -210,7 +217,7 @@ function Caption({ block, host }: Pick<BlockRendererProps, 'block' | 'host'>) {
 
 /* ── 共用：上傳 hook ───────────────────────────────────── */
 
-function useUpload(host: BlockRendererProps['host'], blockId: string) {
+export function useUpload(host: BlockRendererProps['host'], blockId: string) {
   const [progress, setProgress] = useState<number | null>(null);
   // 貼上 / 拖放的上傳是在 Editor 層啟動的，進度從共用 store 來
   const external = useUploadProgress(blockId);
@@ -421,13 +428,14 @@ export function FileBlock({ block, host }: BlockRendererProps) {
 /* ── embed ─────────────────────────────────────────────── */
 
 export function EmbedBlock({ block, host }: BlockRendererProps) {
-  const props = block.props as { url?: string; height?: number };
+  const props = block.props as { url?: string; height?: number; service?: string };
+  const service = getEmbedService(props.service);
   if (!props.url) {
     return (
       <MediaPanel
-        icon={<Icon name="embed" />}
-        label="嵌入內容"
-        urlPlaceholder="貼上 YouTube / Figma / Google 地圖…網址"
+        icon={service?.icon ? <Icon name={service.icon} /> : <Icon name="embed" />}
+        label={service ? `嵌入 ${service.label}` : '嵌入內容'}
+        urlPlaceholder={embedPlaceholder(service)}
         allowUpload={false}
         progress={null}
         disabled={host.readOnly}
@@ -452,7 +460,7 @@ export function EmbedBlock({ block, host }: BlockRendererProps) {
   );
 }
 
-function UnsupportedCard({ url }: { url: string }) {
+export function UnsupportedCard({ url }: { url: string }) {
   const href = safeHref(url);
   return (
     <div className="kn-embed-unsupported">
