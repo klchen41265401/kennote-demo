@@ -300,9 +300,13 @@ test(
 
       // A 在來源上定義一個指向目標的 relation（A 自己兩邊都看得到，所以定義得成）
       const patch = await api(page, 'PATCH', `/api/databases/${source.collectionId}/schema`, {
-        properties: {
-          link: { type: 'relation', name: '業績', collectionId: target.collectionId },
-        },
+        ops: [
+          {
+            op: 'add',
+            propertyId: 'link',
+            definition: { type: 'relation', name: '業績', collectionId: target.collectionId },
+          },
+        ],
       });
       expect([200, 201]).toContain(patch.status);
 
