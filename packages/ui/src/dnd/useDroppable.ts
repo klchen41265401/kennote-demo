@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useRef } from 'react';
 import { useDndController, useDragState } from './DndProvider.js';
+import { useNodeRegistration } from './useNodeRegistration.js';
 import type { DropResult } from './controller.js';
 import type { ComputeDropTargetOptions, DropItemRect, DropTarget, Point } from './computeDropTarget.js';
 
@@ -17,6 +18,7 @@ export interface UseDroppableOptions {
 }
 
 export interface UseDroppableResult {
+  /** 身分穩定（useCallback 空相依），可以安心放進 deps。 */
   setNodeRef: (node: HTMLElement | null) => void;
   /** 指標目前是否在這個 zone 上。 */
   isOver: boolean;
@@ -29,19 +31,17 @@ export function useDroppable(options: UseDroppableOptions): UseDroppableResult {
   const { id, accepts, orientation = 'vertical', itemSelector, dropOptions, resolveDrop, getScrollContainer, onDrop } =
     options;
   const controller = useDndController();
-  const cleanupRef = useRef<(() => void) | null>(null);
   const latest = useRef({ dropOptions, resolveDrop, getScrollContainer, onDrop });
   latest.current = { dropOptions, resolveDrop, getScrollContainer, onDrop };
 
   const acceptsKey = accepts.join(',');
   const hasResolver = Boolean(resolveDrop);
 
-  const setNodeRef = useCallback(
-    (node: HTMLElement | null) => {
-      cleanupRef.current?.();
-      cleanupRef.current = null;
-      if (!node) return;
-      cleanupRef.current = controller.registerZone(node, {
+  // 與 useDraggable 同理：ref callback 只記住節點，註冊／反註冊以 effect 為準，
+  // 否則 React 18 StrictMode 的 setup → cleanup → setup 會把 zone 註銷掉（ref 不會再跑）。
+  const setNodeRef = useNodeRegistration(
+    (node) =>
+      controller.registerZone(node, {
         id,
         accepts: acceptsKey.split(',').filter(Boolean),
         orientation,
@@ -58,12 +58,9 @@ export function useDroppable(options: UseDroppableOptions): UseDroppableResult {
           : {}),
         getScrollContainer: () => latest.current.getScrollContainer?.() ?? null,
         onDrop: (result) => latest.current.onDrop?.(result),
-      });
-    },
+      }),
     [controller, id, acceptsKey, orientation, itemSelector, hasResolver],
   );
-
-  useEffect(() => () => cleanupRef.current?.(), []);
 
   const state = useDragState();
   const isOver = state.phase === 'dragging' && state.zoneId === id;

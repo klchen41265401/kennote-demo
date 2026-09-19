@@ -1,6 +1,7 @@
 import { useCallback, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
 import { makeRect, type RectLike } from '../positioning/index.js';
 import { Menu, type MenuProps } from './Menu.js';
+import { cloneTrigger } from './trigger.js';
 
 export interface UseContextMenuResult {
   /** 掛到目標元素的 onContextMenu。 */
@@ -51,6 +52,12 @@ export interface ContextMenuProps extends Omit<MenuProps, 'anchor' | 'trigger' |
   disabled?: boolean;
   /** 包住 children 的容器 className。 */
   className?: string;
+  /**
+   * `true` 時把 `onContextMenu` 用 cloneElement 直接合併到（單一）子元素上，
+   * 不再多包一層 div —— 子元素自己對 contextmenu 做 stopPropagation() 時也收得到。
+   * 給了 className 或 children 不是單一元素時會自動退回包一層 div。
+   */
+  asChild?: boolean;
 }
 
 /**
@@ -62,15 +69,23 @@ export function ContextMenu({
   menu,
   disabled = false,
   className,
+  asChild = false,
   placement = 'bottom-start',
   ...menuProps
 }: ContextMenuProps): JSX.Element {
   const ctx = useContextMenu();
+  const onContextMenu = disabled ? undefined : ctx.onContextMenu;
+  const cloned =
+    asChild && !className
+      ? cloneTrigger(children, { props: { onContextMenu }, compose: ['onContextMenu'] })
+      : null;
   return (
     <>
-      <div className={className} onContextMenu={disabled ? undefined : ctx.onContextMenu}>
-        {children}
-      </div>
+      {cloned ?? (
+        <div className={className} onContextMenu={onContextMenu}>
+          {children}
+        </div>
+      )}
       <Menu
         open={ctx.open}
         onOpenChange={ctx.setOpen}

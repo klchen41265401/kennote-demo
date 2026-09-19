@@ -396,6 +396,113 @@ describe('Tooltip', () => {
       vi.useRealTimers();
     }
   });
+
+  it('回歸：子元素原本的事件 handler 不會被蓋掉', () => {
+    vi.useFakeTimers();
+    try {
+      const onPointerEnter = vi.fn();
+      render(
+        <Tooltip content="粗體">
+          <button onPointerEnter={onPointerEnter}>B</button>
+        </Tooltip>,
+      );
+      fireEvent.pointerEnter(screen.getByText('B'));
+      expect(onPointerEnter).toHaveBeenCalledTimes(1);
+      act(() => {
+        vi.advanceTimersByTime(450);
+      });
+      expect(screen.getByRole('tooltip')).toBeTruthy();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe('回歸：Popover / Menu 的 trigger 不再包外層 span', () => {
+  it('trigger 內 stopPropagation() 也打得開', async () => {
+    render(
+      <Popover trigger={<button onClick={(e) => e.stopPropagation()}>開啟</button>}>
+        <p>內容</p>
+      </Popover>,
+    );
+    fireEvent.click(screen.getByText('開啟'));
+    expect(await screen.findByText('內容')).toBeTruthy();
+  });
+
+  it('Menu 的 trigger 內 stopPropagation() 也打得開', async () => {
+    render(
+      <Menu trigger={<button onClick={(e) => e.stopPropagation()}>更多</button>}>
+        <MenuItem>重新命名</MenuItem>
+      </Menu>,
+    );
+    fireEvent.click(screen.getByText('更多'));
+    expect(await screen.findByRole('menuitem', { name: '重新命名' })).toBeTruthy();
+  });
+
+  it('onClick / aria 直接掛在 trigger 元素上，沒有多包一層', async () => {
+    const { container } = render(
+      <Popover trigger={<button>開啟</button>}>
+        <p>內容</p>
+      </Popover>,
+    );
+    const btn = screen.getByText('開啟');
+    expect(container.firstElementChild).toBe(btn); // 不再有外層 <span>
+    expect(btn.getAttribute('aria-haspopup')).toBe('dialog');
+    expect(btn.getAttribute('aria-expanded')).toBe('false');
+    fireEvent.click(btn);
+    await screen.findByText('內容');
+    expect(btn.getAttribute('aria-expanded')).toBe('true');
+    expect(btn.getAttribute('aria-controls')).toBeTruthy();
+  });
+
+  it('保留 trigger 原本的 onClick，且 preventDefault() 可以擋掉開啟', async () => {
+    const onClick = vi.fn();
+    render(
+      <Popover trigger={<button onClick={onClick}>開啟</button>}>
+        <p>內容</p>
+      </Popover>,
+    );
+    fireEvent.click(screen.getByText('開啟'));
+    expect(onClick).toHaveBeenCalledTimes(1);
+    expect(await screen.findByText('內容')).toBeTruthy();
+
+    const onClickBlocked = vi.fn((e: { preventDefault: () => void }) => e.preventDefault());
+    render(
+      <Popover trigger={<button onClick={onClickBlocked}>攔截</button>}>
+        <p>不該出現</p>
+      </Popover>,
+    );
+    fireEvent.click(screen.getByText('攔截'));
+    expect(onClickBlocked).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText('不該出現')).toBeNull();
+  });
+
+  it('trigger 身上原本的 ref 仍然拿得到節點', () => {
+    function Harness(): JSX.Element {
+      const ref = useRef<HTMLButtonElement | null>(null);
+      return (
+        <>
+          <Popover trigger={<button ref={ref}>開啟</button>}>
+            <p>內容</p>
+          </Popover>
+          <span data-testid="tag">{ref.current ? 'got' : 'none'}</span>
+        </>
+      );
+    }
+    const { rerender } = render(<Harness />);
+    rerender(<Harness />);
+    expect(screen.getByTestId('tag').textContent).toBe('got');
+  });
+
+  it('trigger 不是單一元素時仍退回 span 錨點', async () => {
+    render(
+      <Popover trigger="純文字">
+        <p>內容</p>
+      </Popover>,
+    );
+    fireEvent.click(screen.getByText('純文字'));
+    expect(await screen.findByText('內容')).toBeTruthy();
+  });
 });
 
 describe('Select', () => {
@@ -482,6 +589,65 @@ describe('Resizable', () => {
     const handle = screen.getByRole('separator', { name: '調整大小' });
     fireEvent.keyDown(handle, { key: 'ArrowRight' });
     expect(onResizeEnd).toHaveBeenLastCalledWith(280);
+  });
+
+  // 回歸：`onResizeEnd?.(apply(...))` 在 onResizeEnd 為 undefined 時連參數都不求值，
+  // apply() 沒跑 → 鍵盤與雙擊「靜靜地」失效。
+  it('回歸：沒給 onResizeEnd 時，鍵盤調整仍然生效', () => {
+    const onResize = vi.fn();
+    render(
+      <Resizable defaultSize={260} min={180} max={400} step={20} onResize={onResize}>
+        <div>側邊欄</div>
+      </Resizable>,
+    );
+    const handle = screen.getByRole('separator', { name: '調整大小' });
+    fireEvent.keyDown(handle, { key: 'ArrowRight' });
+    expect(onResize).toHaveBeenLastCalledWith(280);
+    expect(handle.getAttribute('aria-valuenow')).toBe('280');
+
+    fireEvent.keyDown(handle, { key: 'ArrowLeft', shiftKey: true });
+    expect(handle.getAttribute('aria-valuenow')).toBe('200');
+    fireEvent.keyDown(handle, { key: 'Home' });
+    expect(handle.getAttribute('aria-valuenow')).toBe('180');
+    fireEvent.keyDown(handle, { key: 'End' });
+    expect(handle.getAttribute('aria-valuenow')).toBe('400');
+  });
+
+  it('回歸：沒給 onResizeEnd 時，雙擊把手仍然重設', () => {
+    render(
+      <Resizable defaultSize={260} min={180} max={400} resetSize={300}>
+        <div>側邊欄</div>
+      </Resizable>,
+    );
+    const handle = screen.getByRole('separator', { name: '調整大小' });
+    fireEvent.doubleClick(handle);
+    expect(handle.getAttribute('aria-valuenow')).toBe('300');
+  });
+
+  it('有給 onResizeEnd 時，拿到的是套用後的值（鍵盤與雙擊）', () => {
+    const onResize = vi.fn();
+    const onResizeEnd = vi.fn();
+    render(
+      <Resizable
+        defaultSize={260}
+        min={180}
+        max={400}
+        step={20}
+        resetSize={999}
+        onResize={onResize}
+        onResizeEnd={onResizeEnd}
+      >
+        <div>側邊欄</div>
+      </Resizable>,
+    );
+    const handle = screen.getByRole('separator', { name: '調整大小' });
+    fireEvent.keyDown(handle, { key: 'ArrowRight' });
+    expect(onResize).toHaveBeenLastCalledWith(280);
+    expect(onResizeEnd).toHaveBeenLastCalledWith(280);
+    // resetSize 超過 max 也要夾住
+    fireEvent.doubleClick(handle);
+    expect(onResizeEnd).toHaveBeenLastCalledWith(400);
+    expect(handle.getAttribute('aria-valuenow')).toBe('400');
   });
 });
 

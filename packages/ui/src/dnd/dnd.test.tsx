@@ -1,3 +1,4 @@
+import React from 'react';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DndProvider } from './DndProvider.js';
@@ -203,6 +204,116 @@ describe('useDraggable / useDroppable', () => {
       </DndProvider>,
     );
     expect(document.querySelectorAll('.kn-drag-layer')).toHaveLength(1);
+  });
+});
+
+describe('回歸：React 18 StrictMode 下不會把自己註銷', () => {
+  it('StrictMode 包起來仍然拖得動（來源與落點區都還在）', () => {
+    const onDrop = vi.fn();
+    render(
+      <React.StrictMode>
+        <DndProvider>
+          <List onDrop={onDrop} />
+        </DndProvider>
+      </React.StrictMode>,
+    );
+    setupRects();
+    const row = screen.getByTestId('row-a');
+
+    fireEvent(row, pointerEvent('pointerdown', { clientX: 110, clientY: 10 }));
+    fireEvent(window, pointerEvent('pointermove', { clientX: 110, clientY: 20 }));
+    expect(dragController.getSnapshot().phase).toBe('dragging'); // 來源沒被註銷
+    fireEvent(window, pointerEvent('pointermove', { clientX: 105, clientY: 82 }));
+    tick();
+    fireEvent(window, pointerEvent('pointerup', { clientX: 105, clientY: 82 }));
+
+    // zone 也沒被註銷 → 落點算得出來
+    expect(onDrop).toHaveBeenCalledTimes(1);
+    expect((onDrop.mock.calls[0]![0] as DropResult).target).toMatchObject({ id: 'c', position: 'after' });
+  });
+
+  it('inline ref callback 每次 render 重新掛上，也不會把自己註銷', () => {
+    const onDrop = vi.fn();
+    function Harness(): JSX.Element {
+      const [, force] = React.useState(0);
+      return (
+        <DndProvider>
+          <button type="button" data-testid="rerender" onClick={() => force((n) => n + 1)}>
+            re-render
+          </button>
+          <List onDrop={onDrop} />
+        </DndProvider>
+      );
+    }
+    render(<Harness />);
+    act(() => {
+      screen.getByTestId('rerender').click();
+    });
+    setupRects();
+    const row = screen.getByTestId('row-a');
+    fireEvent(row, pointerEvent('pointerdown', { clientX: 110, clientY: 10 }));
+    fireEvent(window, pointerEvent('pointermove', { clientX: 110, clientY: 20 }));
+    expect(dragController.getSnapshot().phase).toBe('dragging');
+    fireEvent(window, pointerEvent('pointermove', { clientX: 105, clientY: 82 }));
+    tick();
+    fireEvent(window, pointerEvent('pointerup', { clientX: 105, clientY: 82 }));
+    expect(onDrop).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('回歸：setPointerCapture 的對象', () => {
+  it('捕獲在註冊的來源元素上，不是 React 合成事件的 currentTarget（#root）', () => {
+    const captured: Element[] = [];
+    const spy = vi
+      .spyOn(Element.prototype, 'setPointerCapture')
+      .mockImplementation(function setPointerCapture(this: Element) {
+        captured.push(this);
+      });
+    try {
+      render(
+        <DndProvider>
+          <List onDrop={vi.fn()} />
+        </DndProvider>,
+      );
+      setupRects();
+      const row = screen.getByTestId('row-a');
+      fireEvent(row, pointerEvent('pointerdown', { clientX: 110, clientY: 10 }));
+
+      expect(captured).toHaveLength(1);
+      expect(captured[0]).toBe(row);
+      // React 18 的原生監聽掛在 root container 上；那裡絕對不能被捕獲。
+      expect(captured[0]).not.toBe(row.closest('[data-reactroot]') ?? document.body.firstElementChild);
+      fireEvent(window, pointerEvent('pointerup', { clientX: 110, clientY: 10 }));
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('來源元素已離開文件時退回 event.target 的最近 Element', () => {
+    const captured: Element[] = [];
+    const spy = vi
+      .spyOn(Element.prototype, 'setPointerCapture')
+      .mockImplementation(function setPointerCapture(this: Element) {
+        captured.push(this);
+      });
+    try {
+      const controller = new DragController();
+      const detached = document.createElement('div'); // 沒有掛進文件
+      stubRect(detached, { top: 0, left: 0, width: 100, height: 28 });
+      controller.registerSource(detached, { id: 's', kind: 'block', getPayload: () => null });
+
+      const host = document.createElement('div');
+      document.body.appendChild(host);
+      const event = pointerEvent('pointerdown', { clientX: 10, clientY: 10 });
+      Object.defineProperty(event, 'target', { value: host });
+      controller.handlePointerDown('s', event as unknown as PointerEvent);
+
+      expect(captured).toEqual([host]);
+      controller.cancel();
+      host.remove();
+    } finally {
+      spy.mockRestore();
+    }
   });
 });
 

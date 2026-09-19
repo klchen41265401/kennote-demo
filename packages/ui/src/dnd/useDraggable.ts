@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, type PointerEvent as ReactPointerEvent } from 'react';
+import { useMemo, useRef, type PointerEvent as ReactPointerEvent } from 'react';
 import { useDndController, useDragState } from './DndProvider.js';
+import { useNodeRegistration } from './useNodeRegistration.js';
 import type { DropResult } from './controller.js';
 
 export interface UseDraggableOptions<P = unknown> {
@@ -16,7 +17,7 @@ export interface UseDraggableOptions<P = unknown> {
 }
 
 export interface UseDraggableResult {
-  /** 掛到「被拖動的整塊元素」上。 */
+  /** 掛到「被拖動的整塊元素」上。身分穩定（useCallback 空相依），可以安心放進 deps。 */
   setNodeRef: (node: HTMLElement | null) => void;
   /** 掛到 drag handle 上（可與 setNodeRef 同一個元素）。 */
   handleProps: {
@@ -31,18 +32,16 @@ export interface UseDraggableResult {
 export function useDraggable<P = unknown>(options: UseDraggableOptions<P>): UseDraggableResult {
   const { id, kind, data, disabled = false, getGhost, onDragStart, onDragEnd } = options;
   const controller = useDndController();
-  const nodeRef = useRef<HTMLElement | null>(null);
-  const cleanupRef = useRef<(() => void) | null>(null);
   const latest = useRef({ data, getGhost, onDragStart, onDragEnd, disabled });
   latest.current = { data, getGhost, onDragStart, onDragEnd, disabled };
 
-  const register = useCallback(
-    (node: HTMLElement | null) => {
-      cleanupRef.current?.();
-      cleanupRef.current = null;
-      nodeRef.current = node;
-      if (!node) return;
-      cleanupRef.current = controller.registerSource(node, {
+  /**
+   * 註冊走 useNodeRegistration（以 effect 為準）：ref callback 只記住節點。
+   * 這樣 React 18 StrictMode 的 setup → cleanup → setup 不會把自己註銷掉。
+   */
+  const setNodeRef = useNodeRegistration(
+    (node) =>
+      controller.registerSource(node, {
         id,
         kind,
         get disabled() {
@@ -52,12 +51,9 @@ export function useDraggable<P = unknown>(options: UseDraggableOptions<P>): UseD
         ...(latest.current.getGhost ? { getGhost: latest.current.getGhost } : {}),
         onDragStart: () => latest.current.onDragStart?.(),
         onDragEnd: (result) => latest.current.onDragEnd?.(result),
-      });
-    },
+      }),
     [controller, id, kind],
   );
-
-  useEffect(() => () => cleanupRef.current?.(), []);
 
   const state = useDragState();
   const isDragging = state.phase === 'dragging' && state.sourceId === id;
@@ -66,6 +62,7 @@ export function useDraggable<P = unknown>(options: UseDraggableOptions<P>): UseD
     () => ({
       onPointerDown: (e: ReactPointerEvent<HTMLElement>) => {
         if (disabled) return;
+        // 指標捕獲的對象交給 controller 決定（註冊的節點），不要用合成事件的 currentTarget。
         controller.handlePointerDown(id, e.nativeEvent);
       },
       // touch-action: none 讓觸控裝置把手勢交給我們，而不是捲動頁面。
@@ -75,5 +72,5 @@ export function useDraggable<P = unknown>(options: UseDraggableOptions<P>): UseD
     [controller, disabled, id],
   );
 
-  return { setNodeRef: register, handleProps, isDragging };
+  return { setNodeRef, handleProps, isDragging };
 }

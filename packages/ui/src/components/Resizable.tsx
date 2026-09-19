@@ -136,7 +136,11 @@ export function Resizable({
         className={cx(styles['resizeHandle'], handleClass)}
         onPointerDown={onPointerDown}
         onDoubleClick={() => {
-          if (resetSize !== undefined) onResizeEnd?.(apply(resetSize));
+          if (resetSize === undefined) return;
+          // ⚠️ 先求值再呼叫：寫成 `onResizeEnd?.(apply(x))` 時，onResizeEnd 為 undefined
+          // 會讓整個呼叫（含參數）不被求值 —— apply() 不會跑，重設就靜靜地失效。
+          const next = apply(resetSize);
+          onResizeEnd?.(next);
         }}
         onKeyDown={(e) => {
           if (disabled) return;
@@ -149,7 +153,9 @@ export function Resizable({
           else if (e.key === 'End') delta = max - size;
           else return;
           e.preventDefault();
-          onResizeEnd?.(apply(size + delta));
+          // 同上：apply() 一定要先跑（它才是真正改尺寸的人）。
+          const next = apply(size + delta);
+          onResizeEnd?.(next);
         }}
       />
     </div>

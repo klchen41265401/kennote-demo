@@ -193,7 +193,8 @@ z-index（§2.6，`OVERLAY_Z_INDEX`）：`dropdown 300 / toolbar 400 / modal 500
 |---|---|---|---|
 | `open` / `defaultOpen` / `onOpenChange` | | | 受控或非受控 |
 | `anchor` | `Element \| RectLike \| (() => …)` | trigger 元素 | **支援 DOMRect**，浮動工具列／slash menu 用 |
-| `trigger` | `ReactNode` | — | 會包在 inline-flex span 並接上 onClick / aria |
+| `trigger` | `ReactNode` | — | **asChild 語意**：`onClick` / `aria-*` / `ref` 用 `cloneElement` 直接合併到 trigger 元素上 |
+| `asChild` | `boolean` | `true` | `false` 時改回「包一層 inline-flex span」；trigger 不是單一元素時也會自動退回 |
 | `placement` / `offset` / `flip` / `shift` / `padding` / `matchWidth` / `arrow` | 同 `computePosition` | |
 | `level` | `OverlayLevel` | `'dropdown'` | 決定 z-index |
 | `closeOnOutside` / `closeOnEsc` / `trapFocus` | `boolean` | `true` / `true` / `false` | |
@@ -202,6 +203,12 @@ z-index（§2.6，`OVERLAY_Z_INDEX`）：`dropdown 300 / toolbar 400 / modal 500
 | `role` | `'dialog' \| 'menu' \| 'listbox' \| 'tooltip' \| 'none'` | `'dialog'` | 內容自帶 role 時傳 `'none'` |
 | `haspopup` | `'dialog' \| 'menu' \| 'listbox' \| false` | 由 `role` 推導 | trigger 的 `aria-haspopup` |
 | `padded` | `boolean` | `true` | 選單自行控制內距時設 `false` |
+
+trigger 的 `onClick` **掛在 trigger 元素本身**，不是包住它的 `<span>`：
+包一層 span 的寫法等於要求 trigger 內不能 `stopPropagation()`（例如同一列既要導頁、
+又有自己的 ⋯ 按鈕時很常見），一擋掉浮層就永遠打不開。
+trigger 原本的 `onClick` 會先被呼叫，它若 `preventDefault()` 就不會 toggle；
+原本的 `ref` 也會被保留（兩邊都拿得到節點）。
 
 ```tsx
 // 浮動工具列：錨定於選取範圍，捲動時持續追蹤
@@ -282,6 +289,9 @@ focus trap + scroll lock + `role="dialog"` / `aria-modal` / `aria-labelledby`；
 </ContextMenu>
 ```
 
+預設會包一層 `<div className={className}>` 收 `onContextMenu`；`asChild`（給了 `className` 時無效）
+改成把 `onContextMenu` 直接合併到單一子元素上 —— 子元素自己對 contextmenu `stopPropagation()` 時也收得到。
+
 需要更細控制時：`const ctx = useContextMenu()` → `{ onContextMenu, anchor, open, setOpen, openAt, close }`，
 再自行渲染 `<Menu anchor={ctx.anchor} open={ctx.open} onOpenChange={ctx.setOpen}>`。
 
@@ -294,6 +304,10 @@ focus trap + scroll lock + `role="dialog"` / `aria-modal` / `aria-labelledby`；
 | `placement` / `offset` | | `'top'` / `6` |
 | `delay` | `number` | `400`（`TOOLTIP_OPEN_DELAY`），關閉延遲 `100` |
 | `disabled` | `boolean` | `false` |
+
+`children` 是單一元素時用 `cloneElement` 合併（asChild 語意），
+子元素原本的 `onPointerEnter` / `onPointerLeave` / `onFocus` / `onBlur` / `ref` 都會保留；
+不是單一元素時才退回包一層 `<span>`。
 
 跨元件共享的 delay group：目前有 tooltip 開著、或上一個關掉未滿 300ms，就免延遲直接顯示。
 觸控裝置（`pointer: coarse`）不顯示。永遠 z-index 700，不搶焦點。
@@ -346,6 +360,8 @@ toast.dismiss(id);
 
 Pointer Events + `setPointerCapture`，拖曳中加 `html.kn-dragging` 禁止文字選取；
 把手可聚焦，←→/↑↓/Home/End 可用鍵盤調整（`role="separator"` + `aria-valuenow`）。
+`onResize` / `onResizeEnd` 拿到的都是**夾在 min/max 之後**的值；兩者都是選用的，
+鍵盤調整與雙擊重設不需要 `onResizeEnd` 也會生效（非受控時尺寸自己會更新）。
 
 ---
 
@@ -419,6 +435,19 @@ Pointer Events + `setPointerCapture`，拖曳中加 `html.kn-dragging` 禁止文
 
 落點項目需要 `data-kn-dnd-item` + `data-id`（可選 `data-depth`、`data-accepts-children`）；
 `SortableList` 會自動加上。
+
+兩個 `setNodeRef` 的身分都是**穩定的**（`useCallback` 空相依），可以安心放進 `deps`。
+註冊／反註冊以 **effect** 為準，ref callback 只記住節點 ——
+React 18 StrictMode 的「setup → cleanup → setup」不會重跑 ref callback，
+若註冊寫在 ref、反註冊寫在 effect cleanup，第二次 setup 前就會把自己註銷掉。
+同理，inline ref callback 每次 render 造成的 `ref(null)` → `ref(同一節點)` 也不會重註冊
+（否則會在拖曳中把 zone 的 rect 快取清掉）。
+
+指標捕獲（`setPointerCapture`）一律打在 **`registerSource()` 當時登記的元素**上，
+**不能**用事件的 `currentTarget`：呼叫端交過來的是 React 合成事件的 `nativeEvent`，
+而 React 18 的原生監聽掛在 root container，`currentTarget` 會是 `#root` ——
+指標被 root 捕獲後，整個應用的 `pointerup` / `click` 都會被重新指派過去（點了沒反應）。
+想改捕獲在把手上時，用 `dragController.handlePointerDown(id, event, handleEl)` 的第三個參數。
 
 行為：桌機移動 > 5px、觸控長按 400ms（期間移動則取消，讓使用者還能捲動）；
 rAF 迴圈中「先寫 DOM、再讀快取」，零 `getBoundingClientRect`；邊緣 60px 內自動捲動（二次曲線加速）；
@@ -521,6 +550,14 @@ template、import、export、expand、collapse、external-link、sync、emoji、
     維持設計 token 的單一真實來源，不在 `packages/ui` 複製一份會漂移的副本。
 15. **CSS Modules 用 `composes`（`Menu.module.css` 的 `.option`）。**
     Vite 原生支援；vitest 以 `css: false` 跑，class 名走 proxy，不影響測試。
+16. **trigger 一律走 `cloneElement`（asChild），不包外層 `<span>`。**
+    掛在外層 span 的 `onClick` 收的是冒泡上來的事件，trigger 內只要 `stopPropagation()`
+    浮層就永遠打不開；包一層也會多一個 inline-flex 盒子干擾版面。
+    共用工具在 `components/trigger.ts`（handler 組合 + ref 合併），`Popover` / `Tooltip` / `ContextMenu` 共用。
+17. **DnD 的註冊以 effect 為準、指標捕獲打在註冊的元素上。**
+    註冊寫在 ref callback 會被 React 18 StrictMode 的 setup → cleanup → setup 註銷掉（ref 不會重跑）；
+    捕獲用事件的 `currentTarget` 會打在 React 的 root container 上，讓整個應用的 click 失效。
+    細節見 `dnd/useNodeRegistration.ts` 的註解。
 
 ## 尚未實作
 

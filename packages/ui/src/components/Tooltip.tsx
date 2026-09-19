@@ -1,12 +1,9 @@
 import {
-  cloneElement,
-  isValidElement,
   useCallback,
   useEffect,
   useId,
   useRef,
   useState,
-  type ReactElement,
   type ReactNode,
   type RefObject,
 } from 'react';
@@ -14,6 +11,7 @@ import { OverlayPortal } from '../overlay/OverlayRoot.js';
 import { OVERLAY_Z_INDEX } from '../overlay/stack.js';
 import type { Placement } from '../positioning/index.js';
 import { useFloating } from './useFloating.js';
+import { cloneTrigger } from './trigger.js';
 import { Kbd } from './Kbd.js';
 import styles from './Popover.module.css';
 import { cx } from './cx.js';
@@ -83,6 +81,10 @@ export function Tooltip({
     shift: true,
   });
 
+  const setAnchorNode = useCallback((node: HTMLElement | null) => {
+    anchorRef.current = node;
+  }, []);
+
   const clear = useCallback(() => {
     if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = null;
@@ -130,23 +132,18 @@ export function Tooltip({
     return () => document.removeEventListener('keydown', onKey, true);
   }, [open, hide]);
 
-  const trigger = isValidElement(children) ? (
-    cloneElement(children as ReactElement<Record<string, unknown>>, {
-      ref: (node: HTMLElement | null) => {
-        anchorRef.current = node;
-        const original = (children as unknown as { ref?: unknown }).ref;
-        if (typeof original === 'function') original(node);
-        else if (original && typeof original === 'object') {
-          (original as { current: HTMLElement | null }).current = node;
-        }
-      },
+  // props 直接合併到子元素上（asChild 語意）；子元素原本的 handler 會先被呼叫，不會被蓋掉。
+  const trigger = cloneTrigger(children, {
+    props: {
       onPointerEnter: show,
       onPointerLeave: hide,
       onFocus: show,
       onBlur: hide,
       'aria-describedby': open ? id : undefined,
-    })
-  ) : (
+    },
+    ref: setAnchorNode,
+    compose: ['onPointerEnter', 'onPointerLeave', 'onFocus', 'onBlur'],
+  }) ?? (
     <span
       ref={anchorRef as RefObject<HTMLSpanElement>}
       onPointerEnter={show}

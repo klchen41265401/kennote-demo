@@ -17,6 +17,7 @@ import { createFocusTrap } from '../overlay/focus-trap.js';
 import type { OverlayLevel } from '../overlay/stack.js';
 import type { AutoUpdateOptions, Placement } from '../positioning/index.js';
 import { useFloating, type FloatingAnchor } from './useFloating.js';
+import { cloneTrigger } from './trigger.js';
 import styles from './Popover.module.css';
 import { cx } from './cx.js';
 
@@ -33,8 +34,17 @@ export interface PopoverProps {
    *  - 回傳上述兩者的函式（每次重新定位時呼叫）
    */
   anchor?: FloatingAnchor;
-  /** 觸發元素；會被包在一個 inline-flex 的 span 裡並接上 onClick / aria。 */
+  /**
+   * 觸發元素。onClick / aria-* / ref 會用 cloneElement **直接合併到這個元素上**
+   * （asChild 語意），所以 trigger 內部即使 stopPropagation() 也照常開得起來。
+   * 原本的 onClick 會先被呼叫；它若 preventDefault() 就不會 toggle。
+   */
   trigger?: ReactNode;
+  /**
+   * `false` 時改回「包一層 inline-flex span」的舊行為（trigger 不是單一元素時也會自動退回）。
+   * 預設 `true`。
+   */
+  asChild?: boolean;
   placement?: Placement;
   offset?: number;
   flip?: boolean;
@@ -75,6 +85,7 @@ export function Popover(props: PopoverProps): JSX.Element {
     onOpenChange,
     anchor,
     trigger,
+    asChild = true,
     placement = 'bottom-start',
     offset = 6,
     flip = true,
@@ -99,7 +110,7 @@ export function Popover(props: PopoverProps): JSX.Element {
   const [uncontrolled, setUncontrolled] = useState(defaultOpen);
   const isControlled = controlledOpen !== undefined;
   const open = isControlled ? controlledOpen : uncontrolled;
-  const triggerRef = useRef<HTMLSpanElement | null>(null);
+  const triggerRef = useRef<HTMLElement | null>(null);
   const floatingElRef = useRef<HTMLDivElement | null>(null);
   const id = useId();
 
@@ -155,22 +166,40 @@ export function Popover(props: PopoverProps): JSX.Element {
     [floating, overlay],
   );
 
-  const triggerNode = trigger ? (
-    <span
-      ref={triggerRef}
-      className={styles['anchor']}
-      onClick={() => setOpen(!open)}
-      aria-expanded={open}
-      aria-haspopup={
-        haspopup === false
-          ? undefined
-          : (haspopup ?? (role === 'none' || role === 'tooltip' ? undefined : role))
-      }
-      aria-controls={open ? id : undefined}
-    >
-      {trigger}
-    </span>
-  ) : null;
+  const triggerAria = {
+    'aria-expanded': open,
+    'aria-haspopup':
+      haspopup === false
+        ? undefined
+        : (haspopup ?? (role === 'none' || role === 'tooltip' ? undefined : role)),
+    'aria-controls': open ? id : undefined,
+  };
+  const toggle = useCallback(() => setOpen(!open), [setOpen, open]);
+  const setTriggerNode = useCallback((node: HTMLElement | null) => {
+    triggerRef.current = node;
+  }, []);
+
+  /**
+   * ⚠️ 開關用的 onClick 必須掛在 trigger 元素本身，不能掛在包住它的 <span>：
+   * 外層 span 收的是冒泡上來的事件，trigger 內部只要 stopPropagation()（很常見，
+   * 例如一列同時有導頁與 ⋯ 按鈕），選單就永遠打不開。
+   */
+  const clonedTrigger = asChild
+    ? cloneTrigger(trigger, {
+        props: { ...triggerAria, onClick: toggle },
+        ref: setTriggerNode,
+        compose: ['onClick'],
+      })
+    : null;
+
+  const triggerNode =
+    clonedTrigger ??
+    (trigger ? (
+      // trigger 不是單一 React 元素（字串、fragment…）時才需要一個實體錨點。
+      <span ref={setTriggerNode} className={styles['anchor']} onClick={toggle} {...triggerAria}>
+        {trigger}
+      </span>
+    ) : null);
 
   return (
     <>

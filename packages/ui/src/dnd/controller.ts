@@ -104,7 +104,7 @@ export class DragController {
   private grabOffset: Point = { x: 0, y: 0 };
   private pointer: Point = { x: 0, y: 0 };
   private pointerId = -1;
-  private captureEl: HTMLElement | null = null;
+  private captureEl: Element | null = null;
   private holdTimer: ReturnType<typeof setTimeout> | null = null;
   private raf = 0;
   private ghost: HTMLElement | null = null;
@@ -151,7 +151,12 @@ export class DragController {
 
   // ── 互動入口：把這個掛到 drag handle 的 onPointerDown ──
 
-  handlePointerDown(sourceId: string, event: PointerEvent): void {
+  /**
+   * 掛到 drag handle 的 onPointerDown。
+   * @param captureTarget 可選：要拿指標捕獲的元素（例如只想捕獲在把手上）。
+   *   沒給就用 registerSource() 當時記下來的來源元素。
+   */
+  handlePointerDown(sourceId: string, event: PointerEvent, captureTarget?: Element | null): void {
     if (this.state.phase !== 'idle') return;
     const source = this.sources.get(sourceId);
     if (!source || source.spec.disabled) return;
@@ -165,12 +170,21 @@ export class DragController {
     const rect = source.el.getBoundingClientRect();
     this.grabOffset = { x: event.clientX - rect.left, y: event.clientY - rect.top };
 
-    const captureEl = event.currentTarget instanceof HTMLElement ? event.currentTarget : source.el;
+    /**
+     * ⚠️ 不能用 event.currentTarget 決定捕獲對象。
+     * 呼叫端交給我們的是 React 合成事件的 nativeEvent，而 React 18 的原生監聽掛在
+     * root container 上 —— currentTarget 會是 `#root`，指標被 root 捕獲之後
+     * 整個應用的 pointerup / mouseup / click 都會被重新指派過去（點了沒反應）。
+     * 捕獲對象一律用「呼叫端註冊的來源元素」（或呼叫端明講的把手）。
+     */
+    const captureEl = resolveCaptureTarget(captureTarget, source.el, event);
     this.captureEl = captureEl;
-    try {
-      captureEl.setPointerCapture(event.pointerId);
-    } catch {
-      /* jsdom / 不支援時忽略 */
+    if (captureEl) {
+      try {
+        captureEl.setPointerCapture(event.pointerId);
+      } catch {
+        /* jsdom / 不支援時忽略 */
+      }
     }
 
     window.addEventListener('pointermove', this.onPointerMove, true);
@@ -404,6 +418,23 @@ export class DragController {
       this.holdTimer = null;
     }
   }
+}
+
+/**
+ * 指標捕獲對象：呼叫端明講的把手 → 註冊的來源元素 → event.target 的最近 Element。
+ * 只接受還在文件裡的元素（已被移除的節點捕獲不到指標）。
+ */
+function resolveCaptureTarget(
+  explicit: Element | null | undefined,
+  sourceEl: HTMLElement,
+  event: PointerEvent,
+): Element | null {
+  if (explicit instanceof Element && explicit.isConnected) return explicit;
+  if (sourceEl.isConnected) return sourceEl;
+  const target = event.target;
+  if (target instanceof Element) return target;
+  if (target instanceof Node) return target.parentElement;
+  return null;
 }
 
 function defaultGhost(source: HTMLElement): HTMLElement {
