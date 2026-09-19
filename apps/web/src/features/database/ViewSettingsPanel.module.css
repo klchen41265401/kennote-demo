@@ -6,9 +6,8 @@
 .panel {
   display: flex;
   flex-direction: column;
-  /* 面板寬 292（07m-db-settings-light.png 量到 x13..304）；-8px 抵銷 .popover 的統一內距 */
+  /* 面板寬 292（07m-db-settings-light.png 量到 x13..304）；Popover 要帶 `flush` */
   width: 292px;
-  margin: -8px;
   max-height: 560px;
   overflow-y: auto;
   color: var(--kn-color-text);

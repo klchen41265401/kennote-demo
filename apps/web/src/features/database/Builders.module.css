@@ -311,9 +311,8 @@
   display: flex;
   flex-direction: column;
   /* 面板寬 292（07k-db-filter-light.png 量到 x13..304）；
-     -8px 是抵銷 _fallback 的 .popover 統一內距，Notion 這張浮層沒有外距。 */
+     Notion 這張浮層沒有外距 → Popover 要帶 `flush`（拿掉 .popover 的 8px 內距）。 */
   width: 292px;
-  margin: -8px;
   color: var(--kn-color-text);
 }
 

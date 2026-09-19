@@ -46,10 +46,60 @@
 }
 
 .tabs {
+  position: relative;
+  /* 一定要 flex:1，不然收合之後 nav 跟著內容縮小 → 下一輪量到更窄 → 收更多（會自己震盪收到只剩 1 顆） */
+  flex: 1 1 auto;
   display: flex;
   align-items: center;
   gap: 2px;
-  overflow-x: auto;
+  min-width: 0;
+  overflow: hidden;
+}
+
+/** 量寬度用的影子清單（見 DatabaseHeader 的 measureTabs）：不佔版面也不能被看到 */
+.tabsGhost {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: flex;
+  gap: 2px;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/** 「還有 N 個…」：Notion 的溢出收合按鈕（07n-db-view-tabs-light.png，淺灰字、無底） */
+.tabMore {
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--kn-radius-md);
+  background: transparent;
+  color: var(--kn-color-text-secondary);
+  font: inherit;
+  font-size: var(--kn-font-size-sm);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.tabMore:hover {
+  background: var(--kn-color-surface-hover);
+  color: var(--kn-color-text);
+}
+
+/** 收起來的檢視在浮層裡仍然是 role="tab"（e2e 展開後照樣點得到） */
+.tabMoreList {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 180px;
+}
+
+.tabMoreList .tab,
+.tabMoreList .tabActive {
+  justify-content: flex-start;
+  width: 100%;
 }
 
 /**

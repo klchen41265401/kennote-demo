@@ -119,7 +119,7 @@ async function clipBlock(
   code: string,
   theme: Theme,
   target: Locator,
-  opts: { padX?: number; padY?: number } = {},
+  opts: { padX?: number; padY?: number; dy?: number } = {},
 ): Promise<void> {
   const size = refSize(code, theme);
   if (!size) throw new Error(`找不到參考圖 ${code}`);
@@ -129,9 +129,11 @@ async function clipBlock(
   // Notion 的裁切左緣 = 文字左緣 − 22；kennote 的 boundingBox 是 wrapper，
   // 文字還要再往內 2px（.kn-block-main 的 padding-left），所以這裡扣 20 才對齊。
   const padX = opts.padX ?? 20;
+  // dy：上下相鄰 block 不一樣時，bbox 置中會讓內容差幾 px（見 05-06），用實測值直接補。
+  const dy = opts.dy ?? 0;
   await clip(page, code, theme, {
     x: box.x - padX,
-    y: opts.padY !== undefined ? box.y - opts.padY : box.y + box.height / 2 - size.height / 2,
+    y: (opts.padY !== undefined ? box.y - opts.padY : box.y + box.height / 2 - size.height / 2) + dy,
     width: size.width,
     height: size.height,
   });
@@ -180,6 +182,32 @@ async function scrollTo(page: Page, top: number): Promise<void> {
   await page.waitForTimeout(350);
 }
 
+/**
+ * 切到某個檢視。tab 列放不下時 Notion（與 kennote）會收成「還有 N 個…」下拉，
+ * 收起來的檢視在那個浮層裡仍然是 `role="tab"`（但 portal 到 body，不在 `db` 底下）——
+ * 所以先找列上的，找不到就展開下拉再找一次。
+ */
+async function selectView(page: Page, db: Locator, name: RegExp): Promise<boolean> {
+  const inBar = db.getByRole('tab', { name }).first();
+  if (await inBar.count()) {
+    await inBar.click();
+    await page.waitForTimeout(900);
+    return true;
+  }
+  const more = db.getByRole('button', { name: /還有 \d+ 個/ }).first();
+  if (!(await more.count())) return false;
+  await more.click();
+  await page.waitForTimeout(400);
+  const inMenu = page.getByRole('tab', { name }).first();
+  if (!(await inMenu.count())) {
+    await page.keyboard.press('Escape');
+    return false;
+  }
+  await inMenu.click();
+  await page.waitForTimeout(900);
+  return true;
+}
+
 /** 等圖片與字體都載完，不然截圖會抓到半張圖 */
 async function settle(page: Page): Promise<void> {
   await page.waitForTimeout(500);
@@ -196,13 +224,14 @@ async function settle(page: Page): Promise<void> {
 
 /* ── 每種 block 的代號 → 選擇器 ─────────────────────────── */
 
-const BLOCKS: { code: string; selector: string; nth?: number; padX?: number }[] = [
+const BLOCKS: { code: string; selector: string; nth?: number; padX?: number; dy?: number }[] = [
   { code: '05-01-paragraph', selector: '.kn-block--paragraph', nth: 0 },
   { code: '05-02-heading1', selector: '.kn-block--heading1' },
   { code: '05-03-heading2', selector: '.kn-block--heading2' },
   { code: '05-04-heading3', selector: '.kn-block--heading3' },
   { code: '05-05-todo-unchecked', selector: '.kn-block--todo', nth: 0 },
-  { code: '05-06-todo-checked', selector: '.kn-block--todo', nth: 1 },
+  // dy +2：上一個 block 在兩邊的高度不同，bbox 置中會讓文字低 2px（實測 N y21..36 / K y23..38）
+  { code: '05-06-todo-checked', selector: '.kn-block--todo', nth: 1, dy: 2 },
   { code: '05-07-bulleted-list', selector: '.kn-block--bulletedList', nth: 0 },
   { code: '05-08-numbered-list', selector: '.kn-block--numberedList', nth: 0 },
   { code: '05-09-toggle', selector: '.kn-block--toggle' },
@@ -290,7 +319,10 @@ for (const theme of ['light', 'dark'] as Theme[]) {
         continue;
       }
       await page.mouse.move(1380, 860);
-      await clipBlock(page, spec.code, theme, target, spec.padX !== undefined ? { padX: spec.padX } : {});
+      await clipBlock(page, spec.code, theme, target, {
+        ...(spec.padX !== undefined ? { padX: spec.padX } : {}),
+        ...(spec.dy !== undefined ? { dy: spec.dy } : {}),
+      });
     }
 
     /* 06f-block-hover：block hover 時左側的 + 與 ⋮⋮
@@ -335,10 +367,12 @@ for (const theme of ['light', 'dark'] as Theme[]) {
       if (await menu.count()) {
         const box = await menu.boundingBox();
         const size = refSize('06-slash-menu', theme)!;
-        // Notion 的特寫把「觸發那一行」也框進去：浮層左上角落在裁切圖的 (24, 33)
+        // Notion 的特寫把「觸發那一行」也框進去。實測（reference/tools/measure.mjs colseg）：
+        // Notion 的面板左上角框線落在裁切圖的 **(13, 13)**（面板 y13..374＝高 362），
+        // 第一輪寫的 (24, 33) 是目測，害最佳位移一路頂到 +6,+6 的搜尋上限。
         if (box) {
           await clip(page, '06-slash-menu', theme, {
-            x: box.x - 24, y: box.y - 33, width: size.width, height: size.height,
+            x: box.x - 13, y: box.y - 13, width: size.width, height: size.height,
           });
         }
       }
@@ -352,13 +386,12 @@ for (const theme of ['light', 'dark'] as Theme[]) {
     const db = page.locator('.kn-block--collectionView').first();
     if (await db.count()) {
       for (const view of DB_VIEWS) {
-        const tab = db.getByRole('tab', { name: view.tab }).first();
-        if (await tab.count()) {
-          await tab.click();
-          await page.waitForTimeout(900);
-        } else if (view.code.startsWith('07i')) {
-          console.warn('⚠ 找不到「時程表」tab —— 後端還沒有 timeline 視圖型別，略過 07i');
-          continue;
+        if (!(await selectView(page, db, view.tab))) {
+          if (view.code.startsWith('07i')) {
+            console.warn('⚠ 找不到「時程表」tab —— 後端還沒有 timeline 視圖型別，略過 07i');
+            continue;
+          }
+          console.warn(`⚠ 找不到 tab ${view.tab}`);
         }
         await settle(page);
         await page.mouse.move(1380, 860);
@@ -372,11 +405,7 @@ for (const theme of ['light', 'dark'] as Theme[]) {
       }
 
       // 回表格視圖做互動狀態
-      const tableTab = db.getByRole('tab', { name: /^表格$/ }).first();
-      if (await tableTab.count()) {
-        await tableTab.click();
-        await page.waitForTimeout(900);
-      }
+      await selectView(page, db, /^表格$/);
       await centerBlock(page, db);
       const box = await db.boundingBox();
       if (box) {
@@ -397,10 +426,16 @@ for (const theme of ['light', 'dark'] as Theme[]) {
         /* 07k / 07l / 07m：篩選 / 排序 / 設定浮層 */
         // Notion 的裁切把浮層外面的陰影也框進去：面板左上角落在 (13,17)（07m 是 (13,13)）。
         // 直接用 pb.x / pb.y 會整張差 13~17px，最佳位移一路頂到 ±6 的搜尋上限。
+        // ⚠️ 這三張的浮層帶 `flush`（Popover 沒有 8px 內距），pb 就是面板本身 ——
+        //    padX/padY 直接等於 Notion 面板在裁切圖裡的座標（實測 07k/07l 面板 x13..304 / 上緣 y17；07m 上緣 y13）。
+        // ⚠️ 07m 的參考圖有 624px 高，浮層若開在畫面中段，clip() 會把 y 夾到 900-624=276，
+        //    整張差 6px（第二輪那個一直修不掉的 -6,-6 就是這樣來的）。先把資料庫捲到上緣。
+        await db.evaluate((el) => el.scrollIntoView({ block: 'start', behavior: 'instant' as ScrollBehavior }));
+        await page.waitForTimeout(250);
         for (const [code, label, padX, padY] of [
-          ['07k-db-filter', '篩選', 17, 21],
-          ['07l-db-sort', '排序', 17, 21],
-          ['07m-db-settings', '設定', 17, 17],
+          ['07k-db-filter', '篩選', 13, 17],
+          ['07l-db-sort', '排序', 13, 17],
+          ['07m-db-settings', '設定', 13, 13],
         ] as [string, string, number, number][]) {
           const button = db.getByRole('button', { name: label }).first();
           if (!(await button.count())) continue;
@@ -574,8 +609,10 @@ const KNOWN_GAPS = [
   '| `05-19-subpage` | **Notion 那張參考圖拍壞了** —— 267×58 的裁切框落在側邊欄上，裡面是「上線部署 / 測試與 QA」兩列側邊欄項目，根本沒拍到子頁面 block。kennote 這張拍的是真正的子頁面連結，兩邊永遠對不起來。 |',
   '| `05-21-image` | 同一張 Unsplash 照片，但 Notion 依 `aspectRatio` 裁切、kennote 是 `max-width:100%` 等比縮放 → 高度差約 30px，差異集中在上下兩條帶狀。 |',
   '| `07o-db-row-peek` | 整窗截圖，兩邊頁面內容不同（Notion 那頁是空資料庫）。結構（右側滑出面板 + 屬性清單 + 分隔線 + 正文）已經對齊。 |',
-  '| `07i-db-timeline-*` | **kennote 沒有時程表視圖**：`shared-types` 的 `VIEW_TYPES` 只有 table/board/list/gallery/calendar。這是功能缺口，不是樣式差。 |',
+
   '| `07j-db-proptype-menu` | kennote 的型別選單沒有「整合」那一組，入口也在欄位設定裡而不是表頭 `+`。未納入比對。 |',
+  '',
+  '> `07i-db-timeline` 從第三輪開始已經納入比對（時程表視圖 + 遠端後端跑完 migration 0060）。',
   '',
   '### 二、比對過程中發現的產品缺陷（不是樣式問題）',
   '',

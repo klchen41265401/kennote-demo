@@ -11,6 +11,13 @@ export interface PopoverProps {
   placement?: 'bottom-start' | 'bottom-end' | 'right-start';
   /** 最小寬度；不給就跟著內容 */
   minWidth?: number;
+  /**
+   * 去掉浮層自己的 8px 內距，讓子元件自己控制寬度與留白。
+   * Notion 的篩選 / 排序 / 設定面板是「滿版」的（面板邊緣就是浮層邊緣），
+   * 以前靠子元件 `margin: -8px` 抵銷，但 `.popover` 有 `overflow: auto`，
+   * 負外距會被裁掉 → 實測面板只有 284 寬而不是 292。
+   */
+  flush?: boolean;
   className?: string;
 }
 
@@ -22,6 +29,7 @@ export function Popover({
   children,
   placement = 'bottom-start',
   minWidth,
+  flush,
   className,
 }: PopoverProps) {
   const ref = useRef<HTMLDivElement>(null);
@@ -71,7 +79,7 @@ export function Popover({
   return createPortal(
     <div
       ref={ref}
-      className={`${styles.popover} ${className ?? ''}`}
+      className={`${styles.popover} ${flush ? styles.popoverFlush : ''} ${className ?? ''}`}
       style={{ top: position.top, left: position.left, minWidth }}
       role="dialog"
     >

@@ -13,6 +13,11 @@
   font-size: var(--kn-font-size-sm);
 }
 
+/** 滿版浮層：面板自己畫留白（篩選 / 排序 / 設定） */
+.popoverFlush {
+  padding: 0;
+}
+
 .menu {
   display: flex;
   flex-direction: column;

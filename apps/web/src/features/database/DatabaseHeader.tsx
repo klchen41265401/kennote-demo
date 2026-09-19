@@ -6,7 +6,7 @@
  * 工具列的按鈕由 **view registry 的能力宣告** 決定要不要顯示，
  * 這裡沒有任何 `if (viewType === 'board')`（04 §10.3）。
  */
-import { useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import type {
   CollectionSchema,
   CollectionView,
@@ -58,13 +58,56 @@ type PanelKind =
   | 'viewMenu'
   | 'newView'
   | 'automation'
-  | 'ai';
+  | 'ai'
+  | 'moreTabs';
 
 export function DatabaseHeader(props: DatabaseHeaderProps) {
   const { schema, views, view, search, readOnly } = props;
   const [panel, setPanel] = useState<{ kind: PanelKind; anchor: HTMLElement } | null>(null);
   const [renaming, setRenaming] = useState(false);
   const [searchOpen, setSearchOpen] = useState(search !== '');
+  const tabsRef = useRef<HTMLElement>(null);
+  /** tab 列放得下幾個（其餘收進「還有 N 個…」）—— 見 measureTabs */
+  const [visibleTabs, setVisibleTabs] = useState(views.length);
+
+  /**
+   * Notion 的 tab 列放不下就收成「還有 N 個…」（UI-SPEC §8.1，07n-db-view-tabs-light.png
+   * 裡 7 個檢視只露 4 個）。這裡照做：量每顆 tab 的實際寬度，扣掉 ＋ 與「還有…」的位子。
+   */
+  useLayoutEffect(() => {
+    const nav = tabsRef.current;
+    if (!nav) return;
+    function measure() {
+      const el = tabsRef.current;
+      if (!el) return;
+      const buttons = [...el.querySelectorAll<HTMLElement>('[data-tab]')];
+      if (!buttons.length) return;
+      const widths = buttons.map((b) => b.offsetWidth + 2);
+      const total = widths.reduce((a, b) => a + b, 0);
+      const plus = 28; // ＋ 新增檢視
+      if (total <= el.clientWidth - plus) {
+        setVisibleTabs(buttons.length);
+        return;
+      }
+      // 放不下才需要「還有 N 個…」的位子（實測 ~92px）
+      const limit = el.clientWidth - plus - 92;
+      let used = 0;
+      let fit = 0;
+      for (const w of widths) {
+        if (used + w > limit) break;
+        used += w;
+        fit += 1;
+      }
+      setVisibleTabs(Math.max(1, fit));
+    }
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(nav);
+    return () => ro.disconnect();
+  }, [views]);
+
+  const shownViews = views.slice(0, visibleTabs);
+  const hiddenViews = views.slice(visibleTabs);
 
   const viewDef = getViewType(view.type);
   const filterCount = countFilters(view.query?.filter);
@@ -91,11 +134,14 @@ export function DatabaseHeader(props: DatabaseHeaderProps) {
       )}
 
       <div className={styles.bar}>
-        <nav className={styles.tabs} aria-label="檢視">
-          {views.map((v) => (
+        <nav className={styles.tabs} aria-label="檢視" role="tablist" ref={tabsRef}>
+          {shownViews.map((v) => (
             <button
               key={v.id}
               type="button"
+              role="tab"
+              data-tab=""
+              aria-selected={v.id === view.id}
               className={v.id === view.id ? styles.tabActive : styles.tab}
               onClick={(e) => {
                 if (v.id === view.id) open('viewMenu', e);
@@ -108,6 +154,26 @@ export function DatabaseHeader(props: DatabaseHeaderProps) {
               {v.name}
             </button>
           ))}
+          {/* 量寬度用的影子清單：不佔版面，只讓 measureTabs 讀得到每顆 tab 的實際寬 */}
+          <span className={styles.tabsGhost} aria-hidden="true">
+            {views.map((v) => (
+              <span key={v.id} data-tab="" className={styles.tab}>
+                <span className={styles.tabIcon}>
+                  <UiIcon name={viewGlyph(v.type)} size={15} />
+                </span>
+                {v.name}
+              </span>
+            ))}
+          </span>
+          {hiddenViews.length ? (
+            <button
+              type="button"
+              className={styles.tabMore}
+              onClick={(e) => open('moreTabs', e)}
+            >
+              還有 {hiddenViews.length} 個…
+            </button>
+          ) : null}
           {!readOnly ? (
             <button
               type="button"
@@ -230,6 +296,30 @@ export function DatabaseHeader(props: DatabaseHeaderProps) {
       </div>
 
       {/* ── 浮層 ── */}
+      {/* 「還有 N 個…」：收起來的檢視仍然是 role="tab"，這樣 e2e 展開後照樣點得到 */}
+      <Popover open={panel?.kind === 'moreTabs'} anchor={panel?.anchor ?? null} onClose={close}>
+        <div className={styles.tabMoreList} role="tablist" aria-label="其他檢視">
+          {hiddenViews.map((v) => (
+            <button
+              key={v.id}
+              type="button"
+              role="tab"
+              aria-selected={v.id === view.id}
+              className={v.id === view.id ? styles.tabActive : styles.tab}
+              onClick={() => {
+                close();
+                props.onSelectView(v.id);
+              }}
+            >
+              <span className={styles.tabIcon} aria-hidden="true">
+                <UiIcon name={viewGlyph(v.type)} size={15} />
+              </span>
+              {v.name}
+            </button>
+          ))}
+        </div>
+      </Popover>
+
       <Popover
         open={panel?.kind === 'automation'}
         anchor={panel?.anchor ?? null}
@@ -261,6 +351,7 @@ export function DatabaseHeader(props: DatabaseHeaderProps) {
         anchor={panel?.anchor ?? null}
         onClose={close}
         placement="bottom-end"
+        flush
       >
         <FilterBuilder
           schema={schema}
@@ -274,6 +365,7 @@ export function DatabaseHeader(props: DatabaseHeaderProps) {
         anchor={panel?.anchor ?? null}
         onClose={close}
         placement="bottom-end"
+        flush
       >
         <SortBuilder
           schema={schema}
@@ -332,6 +424,7 @@ export function DatabaseHeader(props: DatabaseHeaderProps) {
         anchor={panel?.anchor ?? null}
         onClose={close}
         placement="bottom-end"
+        flush
       >
         {panel ? (
           <ViewSettingsPanel
