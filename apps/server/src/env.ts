@@ -37,6 +37,7 @@ const DESCRIPTIONS: Record<string, string> = {
   FEATURE_REALTIME: '是否啟用 WebSocket 即時同步',
   FEATURE_PUBLIC_SHARE: '是否啟用公開分享連結',
   FEATURE_OT: '是否啟用自建 OT（M6 才打開）',
+  FEATURE_OPEN_LOGIN: '開放登入：登入頁不輸入或隨便輸入都能進（自動建立帳號／訪客）。公開對外時請設 false',
   RATE_LIMIT_MAX: '每個時間窗的最大請求數（寫入端點）',
   RATE_LIMIT_WINDOW: '速率限制時間窗，例 1 minute',
 };
@@ -110,6 +111,7 @@ export const EnvSchema = z.object({
   FEATURE_REALTIME: boolish(true),
   FEATURE_PUBLIC_SHARE: boolish(false),
   FEATURE_OT: boolish(false),
+  FEATURE_OPEN_LOGIN: boolish(true),
 
   RATE_LIMIT_MAX: intWithDefault(100),
   RATE_LIMIT_WINDOW: z.string().default('1 minute'),

@@ -3,7 +3,7 @@
  * 不用 zustand / redux —— check-deps.ts 會在 CI 擋下那些套件。
  */
 import type { AuthSessionResponse, AuthUser, MeResponse, WorkspaceSummary } from '@kennote/shared-types';
-import { API_ROUTES } from '@kennote/shared-types';
+import { API_ROUTES, type OpenLoginResponse } from '@kennote/shared-types';
 import { clearQueryCache, createStore, useStore } from '@kennote/ui';
 import { api, setAccessToken, setUnauthorizedHandler } from '../lib/api-client';
 
@@ -59,6 +59,17 @@ export async function login(email: string, password: string): Promise<void> {
   const session = await api.post<AuthSessionResponse>(API_ROUTES.login, { email, password });
   clearQueryCache();
   applySession(session);
+}
+
+/** 開放登入：不輸入或隨便輸入都能進（伺服器 FEATURE_OPEN_LOGIN） */
+export async function openLogin(email: string, password: string): Promise<OpenLoginResponse> {
+  const session = await api.post<OpenLoginResponse>(API_ROUTES.authOpen, {
+    ...(email ? { email } : {}),
+    ...(password ? { password } : {}),
+  });
+  clearQueryCache();
+  applySession(session);
+  return session;
 }
 
 export async function register(email: string, password: string, name?: string): Promise<void> {

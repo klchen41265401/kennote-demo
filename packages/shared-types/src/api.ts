@@ -142,6 +142,7 @@ export const API_ROUTES = {
   refresh: '/api/auth/refresh',
   me: '/api/auth/me',
   authProviders: '/api/auth/providers',
+  authOpen: '/api/auth/open',
   workspaces: '/api/workspaces',
   workspaceTree: (id: string) => `/api/workspaces/${id}/tree`,
   workspaceMembers: (id: string) => `/api/workspaces/${id}/members`,

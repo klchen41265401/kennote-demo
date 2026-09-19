@@ -88,6 +88,47 @@ export async function login(
   return issueSession(identity.user_id, client);
 }
 
+/**
+ * 開放登入（FEATURE_OPEN_LOGIN）：
+ *  - 沒給 email → 建立一個訪客帳號並登入
+ *  - email 不存在 → 直接用給的資料註冊（密碼太短就補到最低長度）
+ *  - email 存在且密碼正確 → 一般登入
+ *  - email 存在但密碼錯 → 不洩漏帳號、也不放行既有帳號：改以訪客身分進入
+ */
+export async function openLogin(
+  input: { email?: string; password?: string; name?: string },
+  client: ClientInfo,
+): Promise<SessionBundle & { mode: 'login' | 'register' | 'guest'; note?: string }> {
+  const email = input.email?.trim().toLowerCase() ?? '';
+  const password = input.password ?? '';
+  const looksLikeEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+
+  const guest = async (note?: string) => {
+    const id = Math.random().toString(36).slice(2, 10);
+    const bundle = await register(
+      { email: `guest-${id}@guest.kennote.local`, password: `guest-${id}-${Date.now()}`, name: input.name?.trim() || '訪客' },
+      client,
+    );
+    return { ...bundle, mode: 'guest' as const, ...(note ? { note } : {}) };
+  };
+
+  if (!looksLikeEmail) return guest(email ? '輸入的不是電子郵件，已以訪客身分進入' : undefined);
+
+  const identity = await repo.findLocalIdentity(email);
+  if (!identity) {
+    const safePassword = password.length >= 8 ? password : `${password}${'kennote!'.repeat(2)}`.slice(0, 32);
+    const bundle = await register({ email, password: safePassword, name: input.name }, client);
+    return { ...bundle, mode: 'register' as const, note: '已自動建立帳號' };
+  }
+  const ok = password.length > 0 && identity.password_hash != null && (await verifyPassword(identity.password_hash, password));
+  if (ok) {
+    await repo.touchLastSeen(identity.user_id);
+    const bundle = await issueSession(identity.user_id, client);
+    return { ...bundle, mode: 'login' as const };
+  }
+  return guest('密碼不符，已以訪客身分進入');
+}
+
 /** 發一組新的 access + refresh（全新登入 → 新的 session 家族） */
 async function issueSession(
   userId: string,

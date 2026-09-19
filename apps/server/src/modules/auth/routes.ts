@@ -1,11 +1,18 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { env } from '../../env.js';
 import { AppError } from '../../lib/errors.js';
 import { clientInfo, requireUser } from '../../plugins/auth.js';
 import { PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH } from './password.js';
 import { listAuthProviders } from './providers/registry.js';
 import * as service from './service.js';
 import { REFRESH_COOKIE_NAME, refreshCookieOptions } from './tokens.js';
+
+const openSchema = z.object({
+  email: z.string().max(320).optional(),
+  password: z.string().max(PASSWORD_MAX_LENGTH).optional(),
+  name: z.string().max(100).optional(),
+});
 
 const registerSchema = z.object({
   email: z.string().email('請輸入有效的電子郵件').max(320),
@@ -55,6 +62,24 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     });
   });
 
+  // 開放登入：不輸入或隨便輸入都能進（FEATURE_OPEN_LOGIN）
+  app.post('/open', writeRateLimit, async (req, reply) => {
+    if (!env.FEATURE_OPEN_LOGIN) throw new AppError('NOT_FOUND');
+    const input = openSchema.parse(req.body ?? {});
+    const bundle = await service.openLogin(input, clientInfo(req));
+    void reply.setCookie(REFRESH_COOKIE_NAME, bundle.refreshToken, refreshCookieOptions());
+    return reply.send({
+      data: {
+        accessToken: bundle.accessToken,
+        expiresIn: bundle.expiresIn,
+        user: bundle.user,
+        workspaces: bundle.workspaces,
+        mode: bundle.mode,
+        ...(bundle.note ? { note: bundle.note } : {}),
+      },
+    });
+  });
+
   app.post('/refresh', { config: { rateLimit: { max: 60, timeWindow: '1 minute' } } }, async (req, reply) => {
     const token = req.cookies[REFRESH_COOKIE_NAME];
     if (!token) throw new AppError('REFRESH_TOKEN_MISSING');
@@ -89,6 +114,6 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
 
   /** 登入頁用：目前啟用了哪些外部登入方式（Google / LINE 插槽） */
   app.get('/providers', async (_req, reply) => {
-    return reply.send({ data: listAuthProviders() });
+    return reply.send({ data: { providers: listAuthProviders(), openLogin: env.FEATURE_OPEN_LOGIN } });
   });
 }

@@ -120,3 +120,22 @@
   font-size: var(--kn-font-size-xs);
   text-align: center;
 }
+
+.guest {
+  margin-top: 8px;
+  width: 100%;
+  height: 36px;
+  border: 1px solid var(--kn-color-border);
+  border-radius: var(--kn-radius-md);
+  background: var(--kn-color-surface);
+  color: var(--kn-color-text);
+  font-size: var(--kn-font-size-md);
+  cursor: pointer;
+}
+.guest:hover:not(:disabled) {
+  background: var(--kn-color-surface-hover);
+}
+.guest:disabled {
+  opacity: 0.6;
+  cursor: default;
+}

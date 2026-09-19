@@ -48,6 +48,19 @@ export interface AuthSessionResponse {
   workspaces: WorkspaceSummary[];
 }
 
+/** 開放登入（FEATURE_OPEN_LOGIN）：登入頁不輸入或隨便輸入都能進 */
+export interface OpenLoginRequest {
+  email?: string;
+  password?: string;
+  name?: string;
+}
+
+export interface OpenLoginResponse extends AuthSessionResponse {
+  /** 'login' 既有帳號密碼正確；'register' 自動建立；'guest' 以訪客身分進入 */
+  mode: 'login' | 'register' | 'guest';
+  note?: string;
+}
+
 export interface MeResponse {
   user: AuthUser;
   workspaces: WorkspaceSummary[];
