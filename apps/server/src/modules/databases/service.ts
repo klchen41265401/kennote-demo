@@ -37,6 +37,7 @@ import { sql, type Sql } from '../../db/sql.js';
 import { AppError, pageNotFound, workspaceNotFound } from '../../lib/errors.js';
 import { getMemberRole } from '../workspaces/repo.js';
 import * as pagesRepo from '../pages/repo.js';
+import { generateKeyBetween } from '../../lib/fractional.js';
 import {
   computeRowProperties,
   schemaHasComputed,
@@ -1329,12 +1330,20 @@ export async function reorderRow(
   }
 
   const updated = await withTransaction(async (tx) => {
-    const sortKey = await pagesRepo.computeSortKey(
-      collection.workspace_id,
-      collection.page_id,
-      afterId,
-      tx,
-    );
+    // 注意：pages 的 computeSortKey/listSiblings 會排除 collection_id 不為空的頁面，
+    // 資料列的兄弟必須改用「同一個 collection 的列」來算。
+    const siblings = await repo.listRowSortKeys(collectionId, tx);
+    let sortKey: string;
+    if (afterId === null) {
+      const first = siblings.find((s) => s.id !== rowId);
+      sortKey = generateKeyBetween(null, first ? first.sort_key : null);
+    } else {
+      const others = siblings.filter((s) => s.id !== rowId);
+      const idx = others.findIndex((s) => s.id === afterId);
+      const before = idx === -1 ? (others[others.length - 1]?.sort_key ?? null) : others[idx]!.sort_key;
+      const after = idx === -1 ? null : (others[idx + 1]?.sort_key ?? null);
+      sortKey = generateKeyBetween(before, after);
+    }
     const ok = await repo.updateRowSortKey(tx, rowId, collectionId, sortKey);
     if (!ok) throw new AppError('ROW_NOT_FOUND');
     const row = await repo.findRow(rowId, collectionId, tx);

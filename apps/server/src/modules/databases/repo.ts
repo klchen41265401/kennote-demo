@@ -591,3 +591,15 @@ export async function setRowPropertiesRaw(
      WHERE id = ${rowId}
   `);
 }
+
+/** 同一個 collection 的列（含自己）依 sort_key 排序，給拖曳排序算 fractional key 用 */
+export async function listRowSortKeys(
+  collectionId: string,
+  conn: Queryable = db,
+): Promise<Array<{ id: string; sort_key: string }>> {
+  return conn.query<{ id: string; sort_key: string }>(sql`
+    SELECT id, sort_key FROM pages
+     WHERE collection_id = ${collectionId} AND is_database = FALSE AND deleted_at IS NULL
+     ORDER BY sort_key ASC, id ASC
+  `);
+}
