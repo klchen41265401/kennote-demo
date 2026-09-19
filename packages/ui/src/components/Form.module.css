@@ -1,0 +1,293 @@
+/* Input / Switch / Checkbox / Select trigger */
+
+/* ── Input ── */
+.field {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0 8px;
+  border: 1px solid var(--kn-ui-border);
+  border-radius: var(--kn-ui-overlay-radius);
+  background: var(--kn-color-bg, #fff);
+  color: var(--kn-ui-text);
+  transition:
+    border-color var(--kn-ui-motion-fast) var(--kn-ui-ease),
+    box-shadow var(--kn-ui-motion-fast) var(--kn-ui-ease);
+}
+
+.fieldSm {
+  height: 28px;
+  font-size: var(--kn-ui-item-font-size);
+}
+
+.fieldMd {
+  height: 32px;
+  font-size: var(--kn-ui-item-font-size);
+}
+
+.field:focus-within {
+  border-color: var(--kn-color-accent, #2383e2);
+  box-shadow: var(--kn-ui-focus-ring);
+}
+
+.fieldInvalid {
+  border-color: var(--kn-color-danger, #e03e3e);
+}
+
+.fieldInvalid:focus-within {
+  box-shadow: 0 0 0 2px var(--kn-color-danger-subtle, rgba(224, 62, 62, 0.25));
+}
+
+.fieldDisabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.fieldFilled {
+  border-color: transparent;
+  background: var(--kn-ui-hover-bg);
+}
+
+.input {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  line-height: 1.4;
+  appearance: none;
+}
+
+.input:focus {
+  outline: none;
+}
+
+.input::placeholder {
+  color: var(--kn-ui-text-tertiary);
+}
+
+.affix {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  color: var(--kn-ui-text-tertiary);
+}
+
+.inputWrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+}
+
+.label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--kn-ui-text-secondary);
+}
+
+.hint {
+  font-size: 12px;
+  color: var(--kn-ui-text-tertiary);
+}
+
+.error {
+  font-size: 12px;
+  color: var(--kn-color-danger, #e03e3e);
+}
+
+/* ── Switch ── */
+.switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+  font-size: var(--kn-ui-item-font-size);
+  color: var(--kn-ui-text);
+}
+
+.switchInput {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  margin: 0;
+}
+
+.switchTrack {
+  position: relative;
+  flex: none;
+  width: 30px;
+  height: 18px;
+  border-radius: 9px;
+  background: rgba(55, 53, 47, 0.24);
+  transition: background-color var(--kn-ui-motion-normal) var(--kn-ui-ease);
+}
+
+.switchSm .switchTrack {
+  width: 26px;
+  height: 16px;
+  border-radius: 8px;
+}
+
+.switchThumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  transition: transform var(--kn-ui-motion-normal) var(--kn-ui-ease);
+}
+
+.switchSm .switchThumb {
+  width: 12px;
+  height: 12px;
+}
+
+.switchInput:checked + .switchTrack {
+  background: var(--kn-color-accent, #2383e2);
+}
+
+.switchInput:checked + .switchTrack > .switchThumb {
+  transform: translateX(12px);
+}
+
+.switchSm .switchInput:checked + .switchTrack > .switchThumb {
+  transform: translateX(10px);
+}
+
+.switchInput:focus-visible + .switchTrack {
+  box-shadow: var(--kn-ui-focus-ring);
+}
+
+.switchInput:disabled + .switchTrack {
+  opacity: 0.45;
+}
+
+.switchDisabled {
+  cursor: not-allowed;
+}
+
+:root[data-theme='dark'] .switchTrack {
+  background: rgba(255, 255, 255, 0.24);
+}
+
+/* ── Checkbox ── */
+.checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+  font-size: var(--kn-ui-item-font-size);
+  color: var(--kn-ui-text);
+}
+
+.checkboxInput {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  margin: 0;
+}
+
+.checkboxBox {
+  position: relative;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border: 1.5px solid var(--kn-color-border-strong, rgba(55, 53, 47, 0.35));
+  border-radius: 3px;
+  background: transparent;
+  color: transparent;
+  transition:
+    background-color var(--kn-ui-motion-fast) var(--kn-ui-ease),
+    border-color var(--kn-ui-motion-fast) var(--kn-ui-ease);
+}
+
+.checkboxInput:checked + .checkboxBox,
+.checkboxInput:indeterminate + .checkboxBox {
+  background: var(--kn-color-accent, #2383e2);
+  border-color: var(--kn-color-accent, #2383e2);
+  color: #fff;
+}
+
+.checkboxInput:focus-visible + .checkboxBox {
+  box-shadow: var(--kn-ui-focus-ring);
+}
+
+.checkboxInput:disabled + .checkboxBox {
+  opacity: 0.45;
+}
+
+.checkboxDisabled {
+  cursor: not-allowed;
+}
+
+/* ── Select trigger ── */
+.selectTrigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  width: 100%;
+  box-sizing: border-box;
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--kn-ui-border);
+  border-radius: var(--kn-ui-overlay-radius);
+  background: var(--kn-color-bg, #fff);
+  color: var(--kn-ui-text);
+  font: inherit;
+  font-size: var(--kn-ui-item-font-size);
+  text-align: left;
+  cursor: pointer;
+}
+
+.selectTriggerSm {
+  height: 28px;
+}
+
+.selectTrigger:hover:not([disabled]) {
+  background: var(--kn-ui-hover-bg);
+}
+
+.selectTrigger:focus {
+  outline: none;
+}
+
+.selectTrigger:focus-visible {
+  box-shadow: var(--kn-ui-focus-ring);
+}
+
+.selectTrigger[disabled] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.selectValue {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.selectPlaceholder {
+  color: var(--kn-ui-text-tertiary);
+}
+
+.selectChevron {
+  flex: none;
+  color: var(--kn-ui-text-tertiary);
+}

@@ -1,0 +1,108 @@
+.anchor {
+  display: inline-flex;
+}
+
+.surface {
+  box-sizing: border-box;
+  background: var(--kn-ui-overlay-bg);
+  border-radius: var(--kn-ui-overlay-radius);
+  box-shadow: var(--kn-ui-overlay-shadow);
+  color: var(--kn-ui-text);
+  font-size: var(--kn-ui-item-font-size);
+  overflow: auto;
+  overscroll-behavior: contain;
+  /* transform 不加 transition：重新定位時浮層「滑過去」看起來像故障（§4.5.3）。 */
+  will-change: opacity;
+}
+
+.surface:focus {
+  outline: none;
+}
+
+/* 進場：淡入 + 縮放 0.96→1（120ms），transform-origin 朝向錨點。 */
+.animate {
+  animation: kn-pop-in 120ms var(--kn-ui-ease);
+}
+
+.surface[data-side='bottom'] {
+  transform-origin: top center;
+}
+
+.surface[data-side='top'] {
+  transform-origin: bottom center;
+}
+
+.surface[data-side='left'] {
+  transform-origin: right center;
+}
+
+.surface[data-side='right'] {
+  transform-origin: left center;
+}
+
+@keyframes kn-pop-in {
+  from {
+    opacity: 0;
+    scale: 0.96;
+  }
+  to {
+    opacity: 1;
+    scale: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate {
+    animation: none;
+  }
+}
+
+.arrow {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  rotate: 45deg;
+  background: var(--kn-ui-overlay-bg);
+  box-shadow: var(--kn-ui-overlay-shadow);
+  z-index: -1;
+}
+
+.padded {
+  padding: 8px;
+}
+
+/* ── Tooltip ── */
+.tooltip {
+  box-sizing: border-box;
+  max-width: 280px;
+  padding: 4px 8px;
+  border-radius: var(--kn-ui-overlay-radius);
+  background: var(--kn-color-text, #37352f);
+  color: var(--kn-color-bg, #fff);
+  font-size: 12px;
+  line-height: 1.45;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  animation: kn-fade-in 90ms var(--kn-ui-ease);
+}
+
+.tooltipShortcut {
+  opacity: 0.6;
+}
+
+@keyframes kn-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tooltip {
+    animation: none;
+  }
+}

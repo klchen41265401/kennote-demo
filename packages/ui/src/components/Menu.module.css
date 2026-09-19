@@ -1,0 +1,200 @@
+.list {
+  display: flex;
+  flex-direction: column;
+  min-width: 180px;
+  padding: 4px;
+  box-sizing: border-box;
+}
+
+.list:focus {
+  outline: none;
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  box-sizing: border-box;
+  min-height: var(--kn-ui-item-height);
+  padding: 0 var(--kn-ui-item-padding-x);
+  border: 0;
+  border-radius: var(--kn-ui-item-radius);
+  background: none;
+  color: var(--kn-ui-text);
+  font-family: inherit;
+  font-size: var(--kn-ui-item-font-size);
+  line-height: 1.3;
+  text-align: left;
+  cursor: pointer;
+  user-select: none;
+  flex: none;
+}
+
+.item:focus {
+  outline: none;
+}
+
+/* hover 與鍵盤 active 走同一個視覺，避免「兩個高亮」 */
+.item:hover:not([data-disabled='true']),
+.item[data-active='true'] {
+  background: var(--kn-ui-hover-bg);
+}
+
+.item[data-disabled='true'] {
+  color: var(--kn-ui-text-tertiary);
+  cursor: not-allowed;
+}
+
+.item[data-danger='true'] {
+  color: var(--kn-color-danger, #e03e3e);
+}
+
+.itemIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 20px;
+  height: 20px;
+  color: var(--kn-ui-text-secondary);
+}
+
+.item[data-danger='true'] .itemIcon {
+  color: inherit;
+}
+
+.itemBody {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 3px 0;
+}
+
+.itemLabel {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.itemDescription {
+  font-size: 12px;
+  color: var(--kn-ui-text-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 右側快捷鍵欄 */
+.itemTrailing {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  margin-left: auto;
+  color: var(--kn-ui-text-tertiary);
+  font-size: 12px;
+}
+
+.itemCheck {
+  flex: none;
+  color: var(--kn-ui-text-secondary);
+}
+
+.separator {
+  height: 1px;
+  margin: 4px -4px;
+  background: var(--kn-ui-divider);
+  flex: none;
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+}
+
+.group + .group {
+  margin-top: 6px;
+}
+
+.groupLabel {
+  padding: 6px var(--kn-ui-item-padding-x) 4px;
+  color: var(--kn-ui-text-tertiary);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: none;
+  user-select: none;
+}
+
+/* ── 可搜尋選單（slash menu / 快速尋找）── */
+.searchable {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 260px;
+}
+
+.searchBox {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--kn-ui-divider);
+  color: var(--kn-ui-text-tertiary);
+  flex: none;
+}
+
+.searchInput {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: none;
+  color: var(--kn-ui-text);
+  font: inherit;
+  font-size: var(--kn-ui-item-font-size);
+}
+
+.searchInput:focus {
+  outline: none;
+}
+
+.searchInput::placeholder {
+  color: var(--kn-ui-text-tertiary);
+}
+
+.searchResults {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  min-height: 0;
+  padding: 4px;
+}
+
+.empty {
+  padding: 12px var(--kn-ui-item-padding-x);
+  color: var(--kn-ui-text-tertiary);
+  font-size: var(--kn-ui-item-font-size);
+  text-align: center;
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border-top: 1px solid var(--kn-ui-divider);
+  color: var(--kn-ui-text-tertiary);
+  font-size: 11px;
+  flex: none;
+}
+
+/* ── Select listbox ── */
+.option {
+  composes: item;
+}
+
+.option[aria-selected='true'] {
+  background: var(--kn-ui-selected-bg);
+}

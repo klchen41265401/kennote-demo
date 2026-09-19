@@ -1,0 +1,325 @@
+/* Spinner / Skeleton / Divider / Kbd / Avatar / Tabs / Resizable */
+
+/* ── Spinner ── */
+.spinner {
+  display: inline-block;
+  vertical-align: middle;
+  animation: kn-spin 700ms linear infinite;
+}
+
+.spinnerTrack {
+  opacity: 0.2;
+}
+
+@keyframes kn-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation-duration: 2s;
+  }
+}
+
+/* ── Skeleton ── */
+.skeleton {
+  display: block;
+  background: var(--kn-ui-hover-bg);
+  border-radius: var(--kn-ui-item-radius);
+  position: relative;
+  overflow: hidden;
+}
+
+.skeleton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, var(--kn-ui-hover-bg), transparent);
+  transform: translateX(-100%);
+  animation: kn-shimmer 1.4s infinite;
+}
+
+.skeletonText {
+  height: 1em;
+  border-radius: 3px;
+}
+
+.skeletonCircle {
+  border-radius: 50%;
+}
+
+@keyframes kn-shimmer {
+  to {
+    transform: translateX(100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton::after {
+    animation: none;
+  }
+}
+
+/* ── Divider ── */
+.divider {
+  border: 0;
+  margin: 0;
+  background: var(--kn-ui-divider);
+  flex: none;
+}
+
+.dividerHorizontal {
+  width: 100%;
+  height: 1px;
+}
+
+.dividerVertical {
+  width: 1px;
+  align-self: stretch;
+  min-height: 1em;
+}
+
+.dividerLabel {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--kn-ui-text-tertiary);
+  font-size: 12px;
+}
+
+.dividerLabel::before,
+.dividerLabel::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--kn-ui-divider);
+}
+
+/* ── Kbd ── */
+.kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 3px;
+  background: var(--kn-ui-hover-bg);
+  color: var(--kn-ui-text-tertiary);
+  font-family: var(--kn-font-sans, inherit);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.kbdGroup {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+/* ── Avatar ── */
+.avatar {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  overflow: hidden;
+  color: #fff;
+  font-weight: 500;
+  line-height: 1;
+  user-select: none;
+  background: var(--kn-color-block-gray, #787774);
+}
+
+.avatarRounded {
+  border-radius: var(--kn-ui-item-radius);
+}
+
+.avatarCircle {
+  border-radius: 50%;
+}
+
+.avatarImg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.avatarStack {
+  display: inline-flex;
+  align-items: center;
+}
+
+.avatarStack > .avatar {
+  box-shadow: 0 0 0 2px var(--kn-color-bg, #fff);
+}
+
+.avatarStack > .avatar + .avatar {
+  margin-left: -8px;
+}
+
+/* ── Tabs ── */
+.tabs {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.tabList {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  border-bottom: 1px solid var(--kn-ui-divider);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.tabList::-webkit-scrollbar {
+  display: none;
+}
+
+.tab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 8px;
+  border: 0;
+  background: none;
+  color: var(--kn-ui-text-secondary);
+  font-family: inherit;
+  font-size: var(--kn-ui-item-font-size);
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  border-radius: var(--kn-ui-item-radius) var(--kn-ui-item-radius) 0 0;
+}
+
+.tab:hover:not([disabled]) {
+  background: var(--kn-ui-hover-bg);
+  color: var(--kn-ui-text);
+}
+
+.tab:focus {
+  outline: none;
+}
+
+.tab:focus-visible {
+  box-shadow: var(--kn-ui-focus-ring);
+}
+
+.tab[aria-selected='true'] {
+  color: var(--kn-ui-text);
+}
+
+.tab[aria-selected='true']::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 2px;
+  background: var(--kn-ui-text);
+  border-radius: 1px;
+}
+
+.tab[disabled] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.tabPanel {
+  padding-top: 12px;
+  min-height: 0;
+}
+
+.tabPanel:focus {
+  outline: none;
+}
+
+/* ── Resizable ── */
+.resizable {
+  position: relative;
+  flex: none;
+}
+
+.resizeHandle {
+  position: absolute;
+  z-index: 2;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  touch-action: none;
+}
+
+.resizeHandle::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--kn-color-accent, #2383e2);
+  opacity: 0;
+  transition: opacity var(--kn-ui-motion-normal) var(--kn-ui-ease);
+}
+
+.resizeHandle:hover::after,
+.resizeHandle[data-resizing='true']::after,
+.resizeHandle:focus-visible::after {
+  opacity: 1;
+}
+
+.resizeHandle:focus {
+  outline: none;
+}
+
+.handleRight,
+.handleLeft {
+  top: 0;
+  bottom: 0;
+  width: 9px;
+  cursor: col-resize;
+}
+
+.handleRight {
+  right: -4px;
+}
+
+.handleLeft {
+  left: -4px;
+}
+
+.handleRight::after,
+.handleLeft::after {
+  left: 3px;
+  right: 3px;
+  inset-block: 0;
+}
+
+.handleBottom,
+.handleTop {
+  left: 0;
+  right: 0;
+  height: 9px;
+  cursor: row-resize;
+}
+
+.handleBottom {
+  bottom: -4px;
+}
+
+.handleTop {
+  top: -4px;
+}
+
+.handleBottom::after,
+.handleTop::after {
+  top: 3px;
+  bottom: 3px;
+  inset-inline: 0;
+}

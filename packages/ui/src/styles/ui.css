@@ -1,0 +1,200 @@
+/**
+ * @kennote/ui 的基底樣式。
+ *
+ * 只做三件事：
+ *   1. 宣告「元件層 token」（設計系統 §6.1 的 Layer 3）—— 全部由 apps/web 的 --kn-* 語意 token 衍生，
+ *      這樣深色模式自動跟著走，primitives 不需要自己判斷主題。
+ *   2. 浮層掛載點與拖曳層的全域規則。
+ *   3. 共用的 focus ring 與 reset。
+ *
+ * 用法：在 app 進入點 `import '@kennote/ui/styles.css'`（要放在 tokens.css 之後）。
+ */
+
+:root {
+  /* ── 浮層 ── */
+  --kn-ui-overlay-radius: 6px;
+  --kn-ui-overlay-radius-lg: 8px;
+  --kn-ui-overlay-bg: var(--kn-color-surface, #fff);
+  --kn-ui-overlay-shadow: var(
+    --kn-shadow-popover,
+    rgba(15, 15, 15, 0.05) 0 0 0 1px,
+    rgba(15, 15, 15, 0.1) 0 3px 6px,
+    rgba(15, 15, 15, 0.2) 0 9px 24px
+  );
+
+  /* ── 選單項（Notion：高 28px、字 14px）── */
+  --kn-ui-item-height: 28px;
+  --kn-ui-item-height-lg: 32px;
+  --kn-ui-item-font-size: 14px;
+  --kn-ui-item-padding-x: 8px;
+  --kn-ui-item-radius: 4px;
+
+  /* ── 互動底色（Notion 實測值）── */
+  --kn-ui-hover-bg: rgba(55, 53, 47, 0.08);
+  --kn-ui-active-bg: rgba(55, 53, 47, 0.16);
+  --kn-ui-selected-bg: rgba(35, 131, 226, 0.12);
+
+  /* ── 文字 ── */
+  --kn-ui-text: var(--kn-color-text, #37352f);
+  --kn-ui-text-secondary: var(--kn-color-text-secondary, #787774);
+  --kn-ui-text-tertiary: var(--kn-color-text-tertiary, #9b9a97);
+
+  /* ── 線條 ── */
+  --kn-ui-border: var(--kn-color-border, rgba(55, 53, 47, 0.16));
+  --kn-ui-divider: var(--kn-color-divider, rgba(55, 53, 47, 0.09));
+
+  /* ── 焦點環 ── */
+  --kn-ui-focus-ring: 0 0 0 2px var(--kn-color-focus-ring, rgba(35, 131, 226, 0.45));
+
+  /* ── 動效 ── */
+  --kn-ui-motion-fast: var(--kn-motion-fast, 90ms);
+  --kn-ui-motion-normal: var(--kn-motion-normal, 150ms);
+  --kn-ui-ease: var(--kn-motion-ease, cubic-bezier(0.2, 0, 0.2, 1));
+
+  /* ── 浮層層級（02 §2.6）。tokens.css 若已定義同名變數，以那邊為準。 ── */
+  --kn-ui-z-drag: 200;
+  --kn-ui-z-dropdown: 300;
+  --kn-ui-z-toolbar: 400;
+  --kn-ui-z-modal: 500;
+  --kn-ui-z-toast: 600;
+  --kn-ui-z-tooltip: 700;
+}
+
+:root[data-theme='dark'] {
+  --kn-ui-hover-bg: rgba(255, 255, 255, 0.055);
+  --kn-ui-active-bg: rgba(255, 255, 255, 0.1);
+  --kn-ui-selected-bg: rgba(35, 131, 226, 0.2);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --kn-ui-hover-bg: rgba(255, 255, 255, 0.055);
+    --kn-ui-active-bg: rgba(255, 255, 255, 0.1);
+    --kn-ui-selected-bg: rgba(35, 131, 226, 0.2);
+  }
+}
+
+/* ── 浮層掛載點（§4.7.1）─────────────────────────────── */
+
+#kn-overlay-root {
+  position: fixed;
+  inset: 0;
+  /* 沒有浮層時滑鼠可穿透 */
+  pointer-events: none;
+  z-index: var(--kn-z-dropdown, var(--kn-ui-z-dropdown));
+}
+
+#kn-overlay-root > * {
+  pointer-events: auto;
+}
+
+/* 拖曳層與 toast region 本身不吃事件，由子元素自行恢復。 */
+#kn-overlay-root > .kn-drag-layer,
+#kn-overlay-root > .kn-toast-region {
+  pointer-events: none;
+}
+
+#kn-overlay-root > .kn-toast-region > * {
+  pointer-events: auto;
+}
+
+/* ── 拖放（§4.6）────────────────────────────────────── */
+
+/* 拖曳中禁止文字選取 */
+html.kn-dragging,
+html.kn-dragging * {
+  user-select: none !important;
+  -webkit-user-select: none !important;
+  cursor: grabbing !important;
+}
+
+.kn-drag-ghost {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: var(--kn-ui-z-drag);
+  pointer-events: none;
+  opacity: 0.85;
+  border-radius: var(--kn-ui-overlay-radius);
+  background: var(--kn-ui-overlay-bg);
+  box-shadow: var(--kn-ui-overlay-shadow);
+  will-change: transform;
+}
+
+/* 整個 app 只有一條指示線 / 一個外框，由當前 zone 決定位置與形狀。 */
+.kn-drop-indicator {
+  background: var(--kn-color-accent, #2383e2);
+  border-radius: 1px;
+  pointer-events: none;
+}
+
+.kn-drop-indicator--box {
+  background: transparent;
+  border: 2px solid var(--kn-color-accent, #2383e2);
+  border-radius: var(--kn-ui-item-radius);
+}
+
+/* ── 共用 reset 與 focus ring ────────────────────────── */
+
+.kn-reset {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: inherit;
+  appearance: none;
+}
+
+.kn-focusable:focus {
+  outline: none;
+}
+
+.kn-focusable:focus-visible {
+  outline: none;
+  box-shadow: var(--kn-ui-focus-ring);
+}
+
+/* 捲動條：Notion 風格的細捲軸 */
+.kn-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--kn-ui-text-tertiary) transparent;
+}
+
+.kn-scroll::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.kn-scroll::-webkit-scrollbar-thumb {
+  background-clip: padding-box;
+  border: 3px solid transparent;
+  border-radius: 5px;
+  background-color: var(--kn-ui-text-tertiary);
+}
+
+.kn-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* 只給螢幕閱讀器 */
+.kn-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --kn-ui-motion-fast: 0ms;
+    --kn-ui-motion-normal: 0ms;
+  }
+}

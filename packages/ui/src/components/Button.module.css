@@ -1,0 +1,153 @@
+.button {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: 0;
+  border: 1px solid transparent;
+  border-radius: var(--kn-ui-overlay-radius);
+  font-family: inherit;
+  font-size: var(--kn-ui-item-font-size);
+  font-weight: 500;
+  line-height: 1.2;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+  appearance: none;
+  transition:
+    background-color var(--kn-ui-motion-fast) var(--kn-ui-ease),
+    border-color var(--kn-ui-motion-fast) var(--kn-ui-ease),
+    color var(--kn-ui-motion-fast) var(--kn-ui-ease);
+}
+
+.button:focus {
+  outline: none;
+}
+
+.button:focus-visible {
+  box-shadow: var(--kn-ui-focus-ring);
+}
+
+.button[disabled],
+.button[aria-disabled='true'] {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+/* ── sizes ── */
+.sm {
+  height: 28px;
+  padding: 0 8px;
+}
+
+.md {
+  height: 32px;
+  padding: 0 12px;
+}
+
+.iconOnly.sm {
+  width: 28px;
+  padding: 0;
+}
+
+.iconOnly.md {
+  width: 32px;
+  padding: 0;
+}
+
+.fullWidth {
+  width: 100%;
+}
+
+/* ── variants ── */
+.ghost {
+  background: transparent;
+  color: var(--kn-ui-text);
+}
+
+.ghost:hover:not([disabled]):not([aria-disabled='true']) {
+  background: var(--kn-ui-hover-bg);
+}
+
+.ghost:active:not([disabled]) {
+  background: var(--kn-ui-active-bg);
+}
+
+.subtle {
+  background: var(--kn-ui-hover-bg);
+  color: var(--kn-ui-text);
+}
+
+.subtle:hover:not([disabled]):not([aria-disabled='true']) {
+  background: var(--kn-ui-active-bg);
+}
+
+.primary {
+  background: var(--kn-color-accent, #2383e2);
+  color: var(--kn-color-text-on-accent, #fff);
+}
+
+.primary:hover:not([disabled]):not([aria-disabled='true']) {
+  background: var(--kn-color-accent-hover, #1a6fc4);
+}
+
+.danger {
+  background: transparent;
+  color: var(--kn-color-danger, #e03e3e);
+}
+
+.danger:hover:not([disabled]):not([aria-disabled='true']) {
+  background: var(--kn-color-danger-subtle, rgba(224, 62, 62, 0.12));
+}
+
+.outline {
+  background: transparent;
+  border-color: var(--kn-ui-border);
+  color: var(--kn-ui-text);
+}
+
+.outline:hover:not([disabled]):not([aria-disabled='true']) {
+  background: var(--kn-ui-hover-bg);
+}
+
+/* ── loading ── */
+.loading {
+  position: relative;
+  color: transparent !important;
+}
+
+.spinnerSlot {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--kn-ui-text);
+}
+
+.primary .spinnerSlot {
+  color: var(--kn-color-text-on-accent, #fff);
+}
+
+/* IconButton：最小點擊區。觸控裝置放大到 44x44（§4.7.4）。 */
+.iconButton {
+  position: relative;
+  flex: none;
+  color: var(--kn-ui-text-secondary);
+}
+
+.iconButton:hover:not([disabled]) {
+  color: var(--kn-ui-text);
+}
+
+@media (pointer: coarse) {
+  .iconButton::after {
+    content: '';
+    position: absolute;
+    inset: 50% auto auto 50%;
+    width: 44px;
+    height: 44px;
+    transform: translate(-50%, -50%);
+  }
+}

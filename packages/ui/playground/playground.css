@@ -1,0 +1,120 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--kn-color-bg);
+  color: var(--kn-color-text);
+  font-family: var(--kn-font-sans);
+  font-size: 14px;
+}
+
+.pg-shell {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 24px 24px 120px;
+}
+
+.pg-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  margin-bottom: 8px;
+  background: var(--kn-color-bg);
+  border-bottom: 1px solid var(--kn-color-divider);
+}
+
+.pg-title {
+  font-size: 18px;
+  font-weight: 600;
+  flex: 1;
+  margin: 0;
+}
+
+.pg-section {
+  padding: 20px 0;
+  border-bottom: 1px solid var(--kn-color-divider);
+}
+
+.pg-section > h2 {
+  margin: 0 0 12px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--kn-color-text-tertiary);
+}
+
+.pg-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.pg-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 8px;
+}
+
+.pg-icon-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 4px;
+  border-radius: 6px;
+  color: var(--kn-color-text-secondary);
+  font-size: 11px;
+  text-align: center;
+  word-break: break-all;
+}
+
+.pg-icon-cell:hover {
+  background: var(--kn-color-surface-hover);
+}
+
+.pg-box {
+  border: 1px solid var(--kn-color-border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.pg-tree-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 8px;
+  border-radius: 4px;
+  cursor: grab;
+}
+
+.pg-tree-row:hover {
+  background: var(--kn-color-surface-hover);
+}
+
+.pg-tree-row[data-dragging='true'] {
+  opacity: 0.35;
+}
+
+.pg-virtual-row {
+  display: flex;
+  align-items: center;
+  height: 100%;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--kn-color-divider);
+}
+
+.pg-sidebar {
+  height: 180px;
+  background: var(--kn-color-bg-subtle);
+  border-radius: 8px;
+  padding: 12px;
+}
