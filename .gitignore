@@ -9,3 +9,5 @@ coverage/
 playwright-report/
 test-results/
 .pnpm-store/
+reference/shots/
+reference/tools/node_modules/
