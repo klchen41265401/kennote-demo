@@ -187,7 +187,7 @@ test.beforeEach(async ({ page }) => {
  * 1. GET /api/files/:id 依頁面權限（第八輪 §4-1 的已知缺口）
  * ───────────────────────────────────────────────────────── */
 
-test.fixme('R9-1a 上傳時帶 pageId → 同工作區的 guest 拿不到私密頁面的附件', async ({
+test('R9-1a 上傳時帶 pageId → 同工作區的 guest 拿不到私密頁面的附件', async ({
   page,
   browser,
 }) => {
@@ -211,7 +211,7 @@ test.fixme('R9-1a 上傳時帶 pageId → 同工作區的 guest 拿不到私密�
   }
 });
 
-test.fixme('R9-1b 被授權 read 之後，同一個附件就讀得到（權限跟著頁面走）', async ({
+test('R9-1b 被授權 read 之後，同一個附件就讀得到（權限跟著頁面走）', async ({
   page,
   browser,
 }) => {
@@ -233,14 +233,14 @@ test.fixme('R9-1b 被授權 read 之後，同一個附件就讀得到（權限�
   }
 });
 
-test.fixme('R9-1c 不帶 pageId（頭像 / 舊資料）維持工作區成員限定的退路', async ({ page }) => {
+test('R9-1c 不帶 pageId（頭像 / 舊資料）維持工作區成員限定的退路', async ({ page }) => {
   const up = await uploadPng(page, null);
   expect(up.status, 'pageId 是選填').toBe(201);
   const mine = await api(page, 'GET', `/api/files/${up.id}`);
   expect(mine.status).toBe(200);
 });
 
-test.fixme('R9-1d 把附件塞進別人的頁面要被擋下（pageId 需要 edit）', async ({ page, browser }) => {
+test('R9-1d 把附件塞進別人的頁面要被擋下（pageId 需要 edit）', async ({ page, browser }) => {
   test.setTimeout(180_000);
   const pageId = await newPage(page, '別人的頁面 R9');
   const b = await secondAccount(browser);
@@ -301,7 +301,7 @@ function wsMessages(page: Page): Promise<Array<{ t: string; code?: string; permi
   );
 }
 
-test.fixme('R9-2a 撤權之後，已經連上的 WS 會收到 FORBIDDEN 並被踢出房間', async ({
+test('R9-2a 撤權之後，已經連上的 WS 會收到 FORBIDDEN 並被踢出房間', async ({
   page,
   browser,
 }) => {
@@ -351,7 +351,7 @@ test.fixme('R9-2a 撤權之後，已經連上的 WS 會收到 FORBIDDEN 並被�
   }
 });
 
-test.fixme('R9-2b 降級成 read → 不踢人，改送 synced{permission: read}', async ({
+test('R9-2b 降級成 read → 不踢人，改送 synced{permission: read}', async ({
   page,
   browser,
 }) => {
@@ -379,7 +379,7 @@ test.fixme('R9-2b 降級成 read → 不踢人，改送 synced{permission: read}
   }
 });
 
-test.fixme('R9-2c 權限被變更會收到 permission_changed 通知（第 7 種通知型別）', async ({
+test('R9-2c 權限被變更會收到 permission_changed 通知（第 7 種通知型別）', async ({
   page,
   browser,
 }) => {
@@ -418,7 +418,7 @@ test.fixme('R9-2c 權限被變更會收到 permission_changed 通知（第 7 種
  * 4. 列頁的種子段落由後端建（第一輪分診 §8-5）
  * ───────────────────────────────────────────────────────── */
 
-test.fixme('R9-4a createRow() 就種好一個空段落，snapshot 不再是 0 個 block', async ({ page }) => {
+test('R9-4a createRow() 就種好一個空段落，snapshot 不再是 0 個 block', async ({ page }) => {
   test.setTimeout(120_000);
   const ws = await wsId(page);
   const db = await api<{ collection: { id: string } }>(page, 'POST', '/api/databases', {
@@ -443,7 +443,7 @@ test.fixme('R9-4a createRow() 就種好一個空段落，snapshot 不再是 0 �
   expect(Object.keys(snap.data.recordMap.block)).toHaveLength(1);
 });
 
-test.fixme('R9-4b 開了列頁再重整，不會長出第二個空段落', async ({ page }) => {
+test('R9-4b 開了列頁再重整，不會長出第二個空段落', async ({ page }) => {
   test.setTimeout(180_000);
   const ws = await wsId(page);
   const db = await api<{ collection: { id: string } }>(page, 'POST', '/api/databases', {
