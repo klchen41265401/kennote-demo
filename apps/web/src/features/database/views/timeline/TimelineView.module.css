@@ -1,0 +1,301 @@
+/**
+ * 時程表（07i-db-timeline-light.png 實測）：
+ *   工具列 38px 高、刻度尺 28px、列高 37（跟表格視圖同一個節奏）、
+ *   週末那一欄淺灰底 rgb(249,248,247)、今天是紅色直線 + 頂端紅點。
+ */
+
+.wrapper {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding-bottom: 8px;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 38px;
+  padding: 0 2px;
+  font-size: var(--kn-font-size-sm);
+  color: var(--kn-color-text-secondary);
+}
+
+.collapse {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: var(--kn-radius-sm);
+  background: transparent;
+  color: var(--kn-color-text-tertiary);
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.collapse:hover {
+  background: var(--kn-color-surface-hover);
+}
+
+.range {
+  font-size: var(--kn-font-size-sm);
+  color: var(--kn-color-text);
+}
+
+.toolbarRight {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+}
+
+.manage,
+.scale,
+.today,
+.nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 26px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--kn-radius-sm);
+  background: transparent;
+  color: var(--kn-color-text-secondary);
+  font-size: var(--kn-font-size-sm);
+  cursor: pointer;
+}
+
+.manage {
+  border: 1px solid var(--kn-color-border);
+}
+
+.nav {
+  width: 26px;
+  padding: 0;
+  justify-content: center;
+  font-size: 15px;
+}
+
+.manage:hover,
+.scale:hover,
+.today:hover,
+.nav:hover {
+  background: var(--kn-color-surface-hover);
+}
+
+/* ── 本體 ───────────────────────────────────────────────── */
+
+.body {
+  display: flex;
+  min-height: 0;
+  border-top: 1px solid var(--kn-color-divider);
+}
+
+.table {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--kn-color-divider);
+  overflow: hidden;
+}
+
+.tableHead {
+  display: flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 8px;
+  font-size: var(--kn-font-size-xs);
+  color: var(--kn-color-text-tertiary);
+  border-bottom: 1px solid var(--kn-color-divider);
+}
+
+.tableRow,
+.add {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  border: 0;
+  border-bottom: 1px solid var(--kn-color-divider);
+  background: transparent;
+  color: var(--kn-color-text);
+  font-size: var(--kn-font-size-sm);
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.add {
+  color: var(--kn-color-text-tertiary);
+}
+
+.tableRow:hover,
+.add:hover {
+  background: var(--kn-color-surface-hover);
+}
+
+.scroller {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.grid {
+  position: relative;
+}
+
+/* ── 刻度尺 ─────────────────────────────────────────────── */
+
+.ruler {
+  display: flex;
+  height: 28px;
+  border-bottom: 1px solid var(--kn-color-divider);
+}
+
+.tick {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  font-size: var(--kn-font-size-xs);
+  color: var(--kn-color-text-tertiary);
+}
+
+.tick[data-weekend='true'] {
+  background: var(--kn-color-bg-subtle);
+}
+
+/** 今天：紅底白字的圓（Notion 的 07i 用 #eb5757 系的紅） */
+.tickToday {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 4px;
+  border-radius: var(--kn-radius-full);
+  background: var(--kn-color-danger);
+  color: #fff;
+}
+
+/* ── 長條區 ─────────────────────────────────────────────── */
+
+.lanes {
+  position: relative;
+  display: flex;
+}
+
+.column {
+  flex: 0 0 auto;
+  border-right: 1px solid var(--kn-color-divider);
+}
+
+.column[data-weekend='true'] {
+  background: var(--kn-color-bg-subtle);
+}
+
+.todayLine {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--kn-color-text-secondary);
+  pointer-events: none;
+}
+
+.todayLine::before {
+  content: '';
+  position: absolute;
+  top: -3px;
+  left: -2px;
+  width: 5px;
+  height: 5px;
+  border-radius: var(--kn-radius-full);
+  background: var(--kn-color-danger);
+}
+
+.bar {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 8px;
+  border-radius: var(--kn-radius-sm);
+  background: var(--kn-color-accent-subtle);
+  box-shadow: inset 0 0 0 1px var(--kn-color-accent);
+  color: var(--kn-color-text);
+  font-size: var(--kn-font-size-sm);
+  white-space: nowrap;
+  overflow: hidden;
+  cursor: grab;
+  user-select: none;
+}
+
+.barDragging {
+  cursor: grabbing;
+  opacity: 0.75;
+}
+
+.barLabel {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.handleStart,
+.handleEnd {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  cursor: col-resize;
+}
+
+.handleStart {
+  left: 0;
+}
+
+.handleEnd {
+  right: 0;
+}
+
+/* ── 空狀態 ─────────────────────────────────────────────── */
+
+.undated {
+  margin: 6px 2px 0;
+  font-size: var(--kn-font-size-sm);
+  color: var(--kn-color-text-tertiary);
+}
+
+.empty {
+  padding: var(--kn-space-6);
+  text-align: center;
+  color: var(--kn-color-text-secondary);
+}
+
+.hint {
+  font-size: var(--kn-font-size-sm);
+  color: var(--kn-color-text-tertiary);
+}
+
+.settings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kn-space-3);
+  padding: var(--kn-space-3);
+  min-width: 240px;
+}
+
+.settings label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: var(--kn-font-size-sm);
+  color: var(--kn-color-text-secondary);
+}

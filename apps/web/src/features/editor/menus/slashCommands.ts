@@ -92,7 +92,7 @@ export const BLOCK_BACKGROUNDS: { id: string; label: string; cssVar: string | nu
 
 /* ── Action ─────────────────────────────────────────────── */
 
-export type DatabaseViewKind = 'table' | 'board' | 'gallery' | 'list' | 'calendar';
+export type DatabaseViewKind = 'table' | 'board' | 'gallery' | 'list' | 'calendar' | 'timeline';
 
 export type SlashAction =
   /** 轉換目前 block / 在下方插入一個 block */
@@ -129,6 +129,8 @@ export interface SlashCommand {
   glyph?: string;
   /** 右側灰字：markdown 縮寫或快捷鍵 */
   hint?: string;
+  /** 名稱後面的灰字來源分組（Notion 的 `HTML · 嵌入區塊`），重名時用來消歧義 */
+  groupLabel?: string;
   /** 右側標籤：Notion 的「新」；我們另外用「即將推出」 */
   badge?: '新' | '即將推出';
   keywords: string[];
@@ -151,6 +153,7 @@ interface Input {
   description?: string;
   glyph?: string;
   hint?: string;
+  groupLabel?: string;
   badge?: '新' | '即將推出';
   keywords?: string[];
   swatchVar?: string | null;
@@ -178,6 +181,7 @@ function cmd(input: Input): SlashCommand {
   if (input.description !== undefined) command.description = input.description;
   if (input.glyph !== undefined) command.glyph = input.glyph;
   if (input.hint !== undefined) command.hint = input.hint;
+  if (input.groupLabel !== undefined) command.groupLabel = input.groupLabel;
   if (input.badge !== undefined) command.badge = input.badge;
   if (input.swatchVar !== undefined) command.swatchVar = input.swatchVar;
   return command;
@@ -237,6 +241,11 @@ const SUGGESTED: SlashCommand[] = [
     labelEn: 'HTML',
     description: '嵌入一段 HTML',
     icon: 'html',
+    // `_slash-menu-full.json` 第 2 項是 "HTML | · | 嵌入區塊 | 新"：
+    // 「· 嵌入區塊」緊接在名稱後面（灰字），標示這一項**原本屬於哪一組** ——
+    // 「建議」裡的項目都是別組的複本，重名時 Notion 就是這樣消歧義的。
+    // 它不是右側對齊的 hint（右側那格放的是徽章「新」）。
+    groupLabel: '嵌入區塊',
     badge: '新',
     keywords: ['html', 'iframe', 'embed', '嵌入', '網頁'],
     action: { kind: 'embed', service: 'html' },
@@ -301,6 +310,7 @@ const dbView = (
     description: `建立一個新的資料庫，並以${label.replace('瀏覽模式', '')}呈現`,
     icon,
     keywords: ['database', 'db', 'view', '資料庫', '瀏覽模式', ...(extra.keywords ?? [])],
+    // 佔位項目（還沒實作的瀏覽模式 / 圖表）標「即將推出」，其餘沿用 Notion 的徽章。
     ...(extra.badge ? { badge: extra.badge } : view === null ? { badge: '即將推出' as const } : {}),
     action: view ? { kind: 'database', view, mode: 'inline' } : { kind: 'soon', feature: label },
   });
@@ -316,7 +326,9 @@ const DATABASE: SlashCommand[] = [
     keywords: ['dashboard'],
   }),
   dbView('db:calendar', '日曆瀏覽模式', 'Calendar view', 'db-calendar', 'calendar', { keywords: ['calendar'] }),
-  dbView('db:timeline', '時間軸瀏覽模式', 'Timeline view', 'db-timeline', null, { keywords: ['timeline', 'gantt'] }),
+  dbView('db:timeline', '時間軸瀏覽模式', 'Timeline view', 'db-timeline', 'timeline', {
+    keywords: ['timeline', 'gantt', '時程', '甘特'],
+  }),
   dbView('db:map', '地圖瀏覽模式', 'Map view', 'db-map', null, { keywords: ['map'] }),
   dbView('db:barV', '垂直長條圖', 'Bar chart', 'chart-bar-v', null, { keywords: ['chart', 'bar'] }),
   dbView('db:barH', '水平長條圖', 'Horizontal bar chart', 'chart-bar-h', null, { keywords: ['chart', 'bar'] }),

@@ -300,7 +300,7 @@ export interface Collection {
   updatedAt: string;
 }
 
-export const VIEW_TYPES = ['table', 'board', 'list', 'gallery', 'calendar'] as const;
+export const VIEW_TYPES = ['table', 'board', 'list', 'gallery', 'calendar', 'timeline'] as const;
 export type ViewType = (typeof VIEW_TYPES)[number];
 
 export const VIEW_TYPE_LABELS: Record<ViewType, string> = {
@@ -309,6 +309,7 @@ export const VIEW_TYPE_LABELS: Record<ViewType, string> = {
   list: '清單',
   gallery: '圖庫',
   calendar: '日曆',
+  timeline: '時程表',
 };
 
 export type FilterOperator =
@@ -483,7 +484,29 @@ export interface ViewFormat {
   calendarDateProperty?: string | null;
   calendarShowWeekend?: boolean;
   listShowProperties?: boolean;
+
+  /* ── 時程表（Timeline）──
+     Notion 的時程表用「開始 / 結束」兩個日期欄位畫長條；只給開始時視為單日。
+     結束欄位留空 = 用同一個日期欄位的 `end`（date range）。 */
+  timelineStartProperty?: string | null;
+  timelineEndProperty?: string | null;
+  /** 橫軸刻度：一格代表一天 / 一週 / 一個月 */
+  timelineScale?: TimelineScale;
+  /** 左側可折疊的表格欄要不要展開 */
+  timelineShowTable?: boolean;
+  /** 左側表格欄寬（px） */
+  timelineTableWidth?: number;
 }
+
+/** 時程表橫軸刻度（`07i-db-timeline-light.png` 的「月 ⌄」下拉） */
+export const TIMELINE_SCALES = ['day', 'week', 'month'] as const;
+export type TimelineScale = (typeof TIMELINE_SCALES)[number];
+
+export const TIMELINE_SCALE_LABELS: Record<TimelineScale, string> = {
+  day: '日',
+  week: '週',
+  month: '月',
+};
 
 export interface CollectionView {
   id: string;

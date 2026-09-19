@@ -138,6 +138,13 @@ export function dateStartOf(value: FieldValue | undefined): string | null {
   return null;
 }
 
+/** 日期區間的結束值；沒有結束時回 null（呼叫端自行退回 start） */
+export function dateEndOf(value: FieldValue | undefined): string | null {
+  if (!value) return null;
+  if (value.type === 'date') return value.end ?? null;
+  return null;
+}
+
 export function idsOf(value: FieldValue | undefined): string[] {
   if (!value) return [];
   if (value.type === 'multiSelect') return value.optionIds;

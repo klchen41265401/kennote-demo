@@ -11,5 +11,6 @@ import './board/index';
 import './list/index';
 import './gallery/index';
 import './calendar/index';
+import './timeline/index';
 
 export * from './types';

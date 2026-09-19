@@ -4,6 +4,7 @@
  */
 import type { CollectionSchema, SortSpec, ViewQuery } from '@kennote/shared-types';
 import { FieldIcon, UiIcon, reorder, useDragHandle, useDropZone } from './_fallback';
+import { PropertyPicker } from './PropertyPicker';
 import { getFieldType } from './fields/types';
 import styles from './Builders.module.css';
 
@@ -20,6 +21,19 @@ export function SortBuilder({ schema, query, onChange }: Props) {
 
   function update(next: SortSpec[]) {
     onChange({ ...query, sort: next });
+  }
+
+  /** 還沒有排序條件時先給屬性清單（07l-db-sort-*），跟篩選同一個版型、沒有底部動作列 */
+  if (sorts.length === 0) {
+    return (
+      <PropertyPicker
+        ariaLabel="選擇要排序的屬性"
+        placeholder="排序方式"
+        schema={schema}
+        properties={sortable.map(([id]) => id)}
+        onSelect={(property) => update([{ property, direction: 'ascending' }])}
+      />
+    );
   }
 
   return (

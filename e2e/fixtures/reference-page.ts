@@ -37,8 +37,11 @@ export interface SeedResult {
   pageId: string;
   subPageId: string;
   collectionId: string;
-  /** viewId 依序：table / board / list / gallery / calendar */
-  viewIds: Record<'table' | 'board' | 'list' | 'gallery' | 'calendar', string>;
+  /** viewId 依序：table / board / list / gallery / calendar / timeline
+   *  （timeline 需要後端 `VIEW_TYPES` 也有 'timeline'；舊版後端會回 null） */
+  viewIds: Record<'table' | 'board' | 'list' | 'gallery' | 'calendar', string> & {
+    timeline: string | null;
+  };
   accessToken: string;
 }
 
@@ -286,6 +289,26 @@ export async function seedReferencePage(options: {
     type: 'calendar', name: '日曆',
     format: { calendarDateProperty: 'Due1', calendarShowWeekend: true, properties: propertyFormat },
   });
+  /**
+   * 時程表（07i-db-timeline-*）。
+   * `collection_view_type` 是 PostgreSQL enum，新增視圖型別要跑 `0060_timeline_view.sql`；
+   * 打到**還沒重新部署**的後端時 `z.enum(VIEW_TYPES)` 會直接 400，
+   * 所以這裡吞掉錯誤、回傳 null，讓其他截圖照常跑（compare 會列在「沒有比對到」）。
+   */
+  const timeline = await mkView({
+    type: 'timeline', name: '時程表',
+    format: {
+      timelineStartProperty: 'Due1',
+      timelineEndProperty: null,
+      timelineScale: 'month',
+      timelineShowTable: true,
+      timelineTableWidth: 200,
+      properties: propertyFormat,
+    },
+  }).catch((error: unknown) => {
+    console.warn('⚠ 後端還不認識 timeline 視圖（要跑 0060_timeline_view.sql 並重新部署）：' + String(error));
+    return null;
+  });
 
   /* 6. 六筆資料 */
   for (const row of rows(userId, baseDate)) {
@@ -387,7 +410,7 @@ export async function seedReferencePage(options: {
   // 07-* 內嵌資料庫
   ops.root('collectionView', {
     collectionId,
-    viewIds: [tableView.id, board.id, list.id, gallery.id, calendar.id],
+    viewIds: [tableView.id, board.id, list.id, gallery.id, calendar.id, ...(timeline ? [timeline.id] : [])],
   });
 
   await api.call(`/pages/${page.id}/transactions`, {
@@ -406,6 +429,7 @@ export async function seedReferencePage(options: {
       list: list.id,
       gallery: gallery.id,
       calendar: calendar.id,
+      timeline: timeline?.id ?? null,
     },
     accessToken: auth.accessToken,
   };

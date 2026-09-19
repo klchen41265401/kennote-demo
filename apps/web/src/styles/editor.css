@@ -72,12 +72,27 @@
 }
 
 /**
- * tokens.md §2「區塊垂直節奏」：相鄰 block 的 gap 量到 **0px**，
- * 所有行距都來自 wrapper 自己的 `padding: 3px 2px`（文字葉節點再 +2px）。
- * 所以這裡不能加 margin，否則每個 block 都會多出 1~2px，整頁累積成好幾十 px。
+ * ⭐ Notion 的 block 盒模型（`reference/notion-capture/dom/*.html` 的 inline style）：
+ * 每個 block 是「wrapper padding」＋「content-editable leaf padding」兩層，
+ * 上下留白要**兩層相加**才對：
+ *
+ * | block | wrapper | leaf | 內容高 | 總高 |
+ * |---|---|---|---|---|
+ * | 文字段落 | 6 / 6 | 2 / 2 | 24 | **40** |
+ * | 標題一 | 30 / 6 | 2 / 2 | 39 | 79 |
+ * | 標題二 | 26 / 6 | 2 / 2 | 31.2 | 67.2 |
+ * | 標題三 | 22 / 6 | 2 / 2 | 26 | 58 |
+ * | 項目/編號清單 | 1 / 1 | 2 / 2 | 24 | 30 |
+ * | 待辦 | 6 / 1 | 2 / 2 | 24 | 35 |
+ * | 折疊（標題列） | 1 / 6* | 2 / 2 | 24 | 29 + 子層 + 6 |
+ * | 引言 / 標註 / 程式碼 / 圖片 / 書籤 / 目錄 / 公式 / 表格 | 8 / 8 | 0 | — | — |
+ *
+ * kennote 只有一層 `.kn-block-main`，所以直接寫**合計值**。
+ * 第一輪把這裡寫成 `3px 2px`（= 相鄰 block gap 0），每個段落因此短了 10px，
+ * 捲到 `02b` 已經差 35px、捲到 `02c` 差一整個 block —— 這才是整頁垂直漂移的根因。
  */
 .kn-editor .kn-block-main {
-  padding: 3px 2px;
+  padding: 8px 2px;
   border-radius: var(--kn-radius-sm);
 }
 
@@ -111,24 +126,24 @@
 
 /* 字級 / 行高：tokens.md §1 的實測值（30/39、24/31.2、20/26、16/24） */
 .kn-block--heading1 .kn-block-main {
-  padding-top: 30px;
-  padding-bottom: 2px;
+  padding-top: 32px;
+  padding-bottom: 8px;
   font-size: 30px;
   font-weight: var(--kn-font-weight-semibold);
   line-height: 39px;
 }
 
 .kn-block--heading2 .kn-block-main {
-  padding-top: 21px;
-  padding-bottom: 2px;
+  padding-top: 28px;
+  padding-bottom: 8px;
   font-size: 24px;
   font-weight: var(--kn-font-weight-semibold);
   line-height: 31.2px;
 }
 
 .kn-block--heading3 .kn-block-main {
-  padding-top: 15px;
-  padding-bottom: 2px;
+  padding-top: 24px;
+  padding-bottom: 8px;
   font-size: 20px;
   font-weight: var(--kn-font-weight-semibold);
   line-height: 26px;
@@ -235,9 +250,33 @@
 
 /* ── todo ───────────────────────────────────────────────── */
 
-/** 待辦列高 28px、checkbox 16×16、圓角 1.5px（tokens.md §2 / §5） */
-.kn-block--todo .kn-block-main {
-  min-height: 28px;
+/**
+ * 清單 / 待辦 / 折疊的上下留白（dom/09-todo、10-bulleted-list、12-toggle）：
+ *   清單 1+2 / 2+1 = 3 / 3 → 總高 30
+ *   待辦 6+2 / 2+1 = 8 / 3 → 總高 35
+ *   折疊 1+2 / 2   = 3 / 2，剩下的 6px 由 block 自己在**子層之後**補
+ */
+.kn-editor .kn-block--bulletedList > .kn-block-main,
+.kn-editor .kn-block--numberedList > .kn-block-main {
+  padding-top: 3px;
+  padding-bottom: 3px;
+}
+
+/** 待辦列高 35px、checkbox 16×16、圓角 1.5px（tokens.md §2 / §5） */
+.kn-editor .kn-block--todo > .kn-block-main {
+  min-height: 35px;
+  padding-top: 8px;
+  padding-bottom: 3px;
+}
+
+.kn-editor .kn-block--toggle > .kn-block-main {
+  padding-top: 3px;
+  padding-bottom: 2px;
+}
+
+/** 折疊 wrapper 的 `padding-bottom: 6px` 在**子層之後**（dom/12-toggle.html） */
+.kn-editor .kn-block--toggle {
+  padding-bottom: 6px;
 }
 
 .kn-todo-checkbox {
@@ -309,27 +348,56 @@
  * callout 的圓角與程式碼區塊的 24/22 內距就全都消失了。
  */
 
-/** 引言左線：3px solid 主要文字色（_extra-*.json 的 quoteBar） */
+/**
+ * 引言左線：3px solid 主要文字色（_extra-*.json 的 quoteBar）。
+ *
+ * ⚠️ 上下的 8px 必須是 **margin 不是 padding** —— `dom/13-quote.html` 的
+ * `border-left` 在**內層** blockquote 上，所以粗線只有一行文字的高度（24px），
+ * 外層的 8/8 在粗線之外。寫成 padding 的話粗線會變成 40px 高。
+ * 文字左緣 = 粗線(3) + padding-inline(14) + leaf padding-inline(8) → +22。
+ */
+/**
+ * ⚠️ 上下的 8px 一律走**父層 `.kn-block--*` 的 padding**，不要用 margin：
+ * 相鄰 block 的上下 margin 會互相 collapse（只留較大的那個），
+ * 量出來就是「分隔線上下各短了 6px」。padding 不會 collapse。
+ */
+.kn-editor .kn-block--quote,
+.kn-editor .kn-block--callout,
+.kn-editor .kn-block--code {
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+
 .kn-editor .kn-quote {
   border-left: 3px solid var(--kn-color-text);
-  /* 逐像素量：Notion 的粗線在 +0~+2、文字在 +26（05-10-quote-light.png） */
-  padding-left: 21px;
-  /* block-main 有 2px 的左內距，粗線要再推回去才會落在內容欄左緣（05-10 量到 x=+0） */
+  padding: 0 0 0 22px;
   margin: 0 0 0 2px;
 }
 
 /** 標註：圓角 10px、內距 12px、底色 rgb(249,248,247) / dark rgb(56,56,54)（_extra-*.json） */
 .kn-editor .kn-callout {
-  gap: 8px;
+  gap: 0;
   padding: 12px;
+  margin: 0;
   border-radius: 10px;
   background: var(--kn-editor-callout-bg);
 }
 
+/**
+ * 標註裡面是一個完整的 text-block（`dom/15-callout.html`）：
+ * icon 欄 24px（emoji 16.8px、`margin-top: 7.5px`），文字欄自己還有 6+2 = 8px 內距，
+ * 所以文字左緣 = 框左緣 + 12 + 24 + 8 = +44，整塊高 = 12 + 40 + 12 = 64。
+ */
+.kn-editor .kn-callout > .kn-block-content {
+  padding: 8px;
+}
+
 .kn-callout-icon {
   flex: 0 0 auto;
-  width: 22px;
-  font-size: 16px;
+  width: 24px;
+  height: 24px;
+  margin-top: 7.5px;
+  font-size: 16.8px;
   line-height: 24px;
   text-align: center;
   cursor: pointer;
@@ -342,12 +410,20 @@
 
 /* ── 分隔線 ─────────────────────────────────────────────── */
 
-/** 分隔線：Notion 是一條 **1px 高的實心 bar**（704×1），不是 border（tokens.md §3.1） */
+/**
+ * 分隔線：Notion 是一條 **1px 高的實心 bar**（704×1），不是 border（tokens.md §3.1），
+ * 而且整個 block 只有 **13px 高**（`dom/14-divider.html` 的 `height: 13px`）。
+ */
+.kn-editor .kn-block--divider > .kn-block-main {
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+
 .kn-divider hr {
   border: none;
   height: 1px;
   background: var(--kn-editor-divider);
-  margin: 8px 0;
+  margin: 0;
 }
 
 /* ── block color（03 §6.2）──────────────────────────── */
@@ -433,7 +509,7 @@
   background: var(--kn-editor-code-bg);
   border-radius: 10px;
   padding: 24px 22px;
-  margin: 4px 0;
+  margin: 0;
   font-family: var(--kn-font-mono);
   font-size: 15px;
   line-height: 24px;
@@ -657,10 +733,12 @@
 .kn-image,
 .kn-video,
 .kn-embed {
-  margin: var(--kn-space-3) 0;
+  /* 上下的 8px 由 .kn-block-main 負責（dom/24-image.html 的 padding-block: 8px） */
+  margin: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--kn-space-2);
+  /* gap 會在「說明文字」收起來時照樣佔位，所以改由 .kn-caption 自己給 margin */
+  gap: 0;
 }
 
 .kn-image[data-align='center'] { align-items: center; }
@@ -751,14 +829,27 @@
   color: var(--kn-color-text-tertiary);
 }
 
+/**
+ * ⭐「新增說明文字」平常**不能佔位**：Notion 沒有說明文字時圖片就是圖片，
+ * 這顆按鈕原本即使 `opacity: 0` 也照吃 25px + 8px gap，
+ * 讓 `05-21-image` 的 block 比 Notion 高了 33px（圖片因此整個往上跑）。
+ */
 .kn-caption-add {
   opacity: 0;
+  height: 0;
+  padding: 0;
+  overflow: hidden;
   transition: opacity var(--kn-motion-fast) var(--kn-motion-ease);
 }
+
+.kn-caption { margin-top: 6px; }
 
 .kn-image:hover .kn-caption-add,
 .kn-video:hover .kn-caption-add,
 .kn-embed:hover .kn-caption-add {
+  height: auto;
+  padding: 2px 0;
+  margin-top: 6px;
   opacity: 1;
 }
 
@@ -818,14 +909,15 @@
  * DOM 順序是「先 body 後 cover」，所以用 row-reverse 翻過來。
  */
 .kn-editor .kn-bookmark {
-  min-height: 160px;
+  /* 卡片高 156 = 縮圖 154 + 上下框線（05-20-bookmark-light.png 量到 y22..177） */
+  height: 156px;
   display: flex;
   flex-direction: row-reverse;
   align-items: stretch;
   justify-content: flex-end;
   gap: 0;
   border: 1px solid var(--kn-editor-hairline);
-  border-radius: 4px;
+  border-radius: 10px;
   padding: 0;
   text-decoration: none;
   color: inherit;
@@ -835,20 +927,21 @@
 .kn-bookmark:hover { background: var(--kn-color-surface-hover); }
 .kn-bookmark-body {
   display: flex;
-  flex: 1 1 auto;
+  /* dom/23-bookmark.html：縮圖 `flex: 1 1 100px`、文字欄 `flex: 4 1 180px` */
+  flex: 4 1 180px;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
   min-width: 0;
-  padding: 14px 16px;
+  padding: 18px 24px 14px;
 }
 .kn-bookmark-title {
-  font-size: var(--kn-font-size-md);
-  font-weight: var(--kn-font-weight-semibold);
+  font-size: 17px;
+  font-weight: var(--kn-font-weight-medium);
   line-height: 22px;
 }
 .kn-bookmark-desc {
-  font-size: var(--kn-font-size-sm);
-  line-height: 20px;
+  font-size: 13px;
+  line-height: 18px;
   color: var(--kn-color-text-secondary);
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -858,22 +951,23 @@
 .kn-bookmark-favicon {
   display: inline-flex;
   align-items: center;
-  height: 20px;
-  margin-bottom: 6px;
+  height: 21.3px;
+  margin-bottom: 1px;
   color: var(--kn-color-text-secondary);
 }
 .kn-bookmark-url {
   margin-top: auto;
   padding-top: 12px;
-  font-size: var(--kn-font-size-sm);
+  font-size: 13px;
+  line-height: 18px;
   color: var(--kn-color-text-secondary);
   display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-/** Notion 的書籤縮圖固定 ~196px 寬、貼齊卡片左緣（05-20-bookmark-light.png） */
-.kn-bookmark-cover { flex: 0 0 196px; }
+/** Notion 的書籤縮圖 `flex: 1 1 100px`（704 寬的卡片裡大約 200px），貼齊卡片左緣 */
+.kn-bookmark-cover { flex: 1 1 100px; overflow: hidden; }
 .kn-bookmark-cover img { width: 100%; height: 100%; object-fit: cover; border-radius: var(--kn-radius-sm); }
 
 /* ── 子頁面 ─────────────────────────────────────────────── */
@@ -1017,22 +1111,22 @@
 
 /* ── 目錄 / 公式 / 資料庫佔位 ───────────────────────────── */
 
-/** 目錄：每一列高 30px、字級 16px、每層縮排 24px（05-16-toc-light.png 量到的） */
-.kn-toc { display: flex; flex-direction: column; padding: 4px 0; }
+/** 目錄：每列 6px 內距 + 14px/1.3 的字 = 30.2px 高，每層縮排 24px（dom/19-toc.html） */
+.kn-toc { display: flex; flex-direction: column; padding: 0; }
 
 .kn-toc-item {
   border: none;
   background: none;
   text-align: left;
   color: var(--kn-color-text);
-  padding: 3px 2px;
+  padding: 6px 2px;
   border-radius: var(--kn-radius-sm);
   cursor: pointer;
   text-decoration: underline;
   text-decoration-color: var(--kn-color-border);
   text-underline-offset: 3px;
-  font-size: var(--kn-font-size-md);
-  line-height: 24px;
+  font-size: 14px;
+  line-height: 1.3;
 }
 
 .kn-toc-item:hover { background: var(--kn-color-surface-hover); }
@@ -1041,7 +1135,8 @@
 .kn-toc--empty { color: var(--kn-color-text-tertiary); font-size: var(--kn-font-size-sm); }
 
 .kn-equation {
-  padding: var(--kn-space-4);
+  /* dom/18-equation.html：內層 `padding: 4px 8px`，上下的 8px 由 block-main 負責 */
+  padding: 4px 8px;
   text-align: center;
   border-radius: var(--kn-radius-md);
   cursor: pointer;
@@ -1808,6 +1903,27 @@ body.kn-dragging { cursor: grabbing; user-select: none; }
  * 同步區塊：Notion 平常**完全看不出來**（05-17-synced-light.png 就是一行普通段落），
  * 只有滑鼠移上去才會出現紅色外框；原本一直亮著一條藍邊 + 「同步區塊」徽章。
  */
+/**
+ * ⭐ `.kn-react-block--syncedBlock` 同時也是 `.kn-block-main`，但它**沒有內容**
+ * （內容是 sibling 的 `.kn-block-children`）。吃到泛用的 `padding: 8px 2px` 之後
+ * 會在子層上方憑空多出一條 16px 的空白帶 —— 這就是 `05-17` / `05-18` 量到的
+ * 「kennote 整塊往下 +3」的來源（bbox 中心被上方的空白拉高了）。
+ */
+.kn-editor .kn-block--syncedBlock > .kn-block-main,
+.kn-editor .kn-block--columnList > .kn-block-main {
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+/**
+ * 同步區塊的內容**不縮排**（`dom/20-synced-block.html`：transclusion 容器直接
+ * 塞一個 100% 寬的 text-block）。吃到泛用的 32px 縮排會整塊右移
+ * —— `05-17` 量到 Notion 文字在 x23、kennote 在 x55，差的就是這 32px。
+ */
+.kn-editor .kn-block--syncedBlock > .kn-block-children {
+  margin-left: 0;
+}
+
 .kn-block--syncedBlock {
   position: relative;
   border-radius: 3px;

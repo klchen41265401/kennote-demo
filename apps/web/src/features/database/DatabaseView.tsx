@@ -91,6 +91,9 @@ export function DatabaseView({
           onSearch={controller.setSearch}
           onCreateRow={() => void controller.createRow()}
           onExportCsv={() => void api.downloadCsv(collectionId, view.id)}
+          {...(inline && controller.snapshot.collection.pageId
+            ? { onExpand: () => navigate(`/page/${controller.snapshot?.collection.pageId ?? ''}`) }
+            : {})}
           onChangeViewType={(type) => {
             // 切換視圖型別時補上該型別的預設外觀（例如看板的欄寬）
             const def = getViewType(type);

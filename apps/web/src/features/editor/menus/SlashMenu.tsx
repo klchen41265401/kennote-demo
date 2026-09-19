@@ -268,7 +268,12 @@ function SlashItem({
       </span>
       <span className="kn-slash-item-label">
         {item.label}
-        {showGroup ? <span className="kn-slash-item-group"> · {COMMAND_GROUP_LABELS[item.group]}</span> : null}
+        {item.groupLabel ?? (showGroup ? COMMAND_GROUP_LABELS[item.group] : null) ? (
+          <span className="kn-slash-item-group">
+            {' · '}
+            {item.groupLabel ?? COMMAND_GROUP_LABELS[item.group]}
+          </span>
+        ) : null}
       </span>
       {item.badge ? (
         <span className="kn-slash-badge" data-tone={item.badge === '新' ? 'new' : 'soon'}>

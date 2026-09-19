@@ -15,12 +15,13 @@ import type {
   ViewQuery,
   ViewType,
 } from '@kennote/shared-types';
-import { VIEW_TYPE_LABELS, countFilters } from '@kennote/shared-types';
+import { countFilters } from '@kennote/shared-types';
 import { Menu, MenuItem, MenuLabel, MenuSeparator, Popover, UiIcon } from './_fallback';
 import { FilterBuilder } from './FilterBuilder';
 import { GroupSettings } from './GroupSettings';
 import { PropertyList } from './PropertyList';
 import { SortBuilder } from './SortBuilder';
+import { ViewSettingsPanel } from './ViewSettingsPanel';
 import { getViewType, listViewTypes, viewTypeAvailable } from './views/types';
 import styles from './DatabaseHeader.module.css';
 
@@ -43,9 +44,21 @@ export interface DatabaseHeaderProps {
   onSearch: (value: string) => void;
   onCreateRow: () => void;
   onExportCsv: () => void;
+  /** 內嵌資料庫的「⤢ 展開」：跳到承載這個 collection 的整頁 */
+  onExpand?: () => void;
 }
 
-type PanelKind = 'filter' | 'sort' | 'group' | 'properties' | 'layout' | 'more' | 'viewMenu' | 'newView';
+type PanelKind =
+  | 'filter'
+  | 'sort'
+  | 'group'
+  | 'properties'
+  | 'layout'
+  | 'more'
+  | 'viewMenu'
+  | 'newView'
+  | 'automation'
+  | 'ai';
 
 export function DatabaseHeader(props: DatabaseHeaderProps) {
   const { schema, views, view, search, readOnly } = props;
@@ -133,6 +146,29 @@ export function DatabaseHeader(props: DatabaseHeaderProps) {
             </button>
           ) : null}
 
+          {/**
+            * ⚡ 自動化 / ✨ AI：Notion 這兩顆在「排序」與「搜尋」之間（UI-SPEC §8.1）。
+            * 兩者都還沒實作，點開只給佔位選單 —— 但**版面要先對**，
+            * 少兩顆按鈕會讓右側整條工具列往右偏 56px。
+            */}
+          <button
+            type="button"
+            className={styles.toolButton}
+            aria-label="自動化"
+            onClick={(e) => open('automation', e)}
+          >
+            <UiIcon name="bolt" size={16} />
+          </button>
+
+          <button
+            type="button"
+            className={styles.toolButton}
+            aria-label="AI"
+            onClick={(e) => open('ai', e)}
+          >
+            <UiIcon name="sparkle" size={16} />
+          </button>
+
           {searchOpen ? (
             <input
               className={styles.search}
@@ -153,13 +189,25 @@ export function DatabaseHeader(props: DatabaseHeaderProps) {
             </button>
           )}
 
+          {/* ⤢ 展開：內嵌資料庫跳到整頁（Notion 在「搜尋」與「設定」之間） */}
+          {props.onExpand ? (
+            <button
+              type="button"
+              className={styles.toolButton}
+              aria-label="展開"
+              onClick={props.onExpand}
+            >
+              <UiIcon name="expand" size={16} />
+            </button>
+          ) : null}
+
           <button
             type="button"
             className={styles.toolButton}
             aria-label="設定"
             onClick={(e) => open('more', e)}
           >
-            <UiIcon name="more" size={16} />
+            <UiIcon name="settings" size={16} />
           </button>
 
           {/* Notion 是「新建 ⌄」的分段按鈕（07n-db-view-tabs-light.png），不是單純的「新增」 */}
@@ -182,6 +230,32 @@ export function DatabaseHeader(props: DatabaseHeaderProps) {
       </div>
 
       {/* ── 浮層 ── */}
+      <Popover
+        open={panel?.kind === 'automation'}
+        anchor={panel?.anchor ?? null}
+        onClose={close}
+        placement="bottom-end"
+      >
+        <Menu>
+          <MenuLabel>自動化</MenuLabel>
+          <MenuItem disabled>新增自動化…（即將推出）</MenuItem>
+          <MenuItem disabled>瀏覽自動化範本（即將推出）</MenuItem>
+        </Menu>
+      </Popover>
+
+      <Popover
+        open={panel?.kind === 'ai'}
+        anchor={panel?.anchor ?? null}
+        onClose={close}
+        placement="bottom-end"
+      >
+        <Menu>
+          <MenuLabel>AI</MenuLabel>
+          <MenuItem disabled>AI 自動填寫（即將推出）</MenuItem>
+          <MenuItem disabled>摘要這個資料庫（即將推出）</MenuItem>
+        </Menu>
+      </Popover>
+
       <Popover
         open={panel?.kind === 'filter'}
         anchor={panel?.anchor ?? null}
@@ -260,35 +334,31 @@ export function DatabaseHeader(props: DatabaseHeaderProps) {
         placement="bottom-end"
       >
         {panel ? (
-          <Menu ariaLabel="視圖設定">
-            <MenuItem
-              onSelect={() => setPanel({ kind: 'properties', anchor: panel.anchor })}
-              icon={<UiIcon name="eye" size={14} />}
-            >
-              屬性
-            </MenuItem>
-            {viewDef.supportsGrouping ? (
-              <MenuItem
-                onSelect={() => setPanel({ kind: 'group', anchor: panel.anchor })}
-                icon={<UiIcon name="group" size={14} />}
-              >
-                分組
-              </MenuItem>
-            ) : null}
-            <MenuItem onSelect={() => setPanel({ kind: 'layout', anchor: panel.anchor })}>
-              版面設定
-            </MenuItem>
-            <MenuSeparator />
-            <MenuItem
-              icon={<UiIcon name="download" size={14} />}
-              onSelect={() => {
-                close();
-                props.onExportCsv();
-              }}
-            >
-              匯出 CSV
-            </MenuItem>
-          </Menu>
+          <ViewSettingsPanel
+            view={view}
+            schema={schema}
+            views={views}
+            title={props.title}
+            viewGlyph={viewGlyph}
+            onClose={close}
+            onRename={() => {
+              close();
+              setRenaming(true);
+            }}
+            onOpen={(kind) => setPanel({ kind, anchor: panel.anchor })}
+            onCopyLink={() => {
+              close();
+              void navigator.clipboard?.writeText(`${window.location.href}#view=${view.id}`);
+            }}
+            onExportCsv={() => {
+              close();
+              props.onExportCsv();
+            }}
+            onSelectView={(viewId) => {
+              close();
+              props.onSelectView(viewId);
+            }}
+          />
         ) : null}
       </Popover>
 
@@ -386,13 +456,14 @@ export function DatabaseHeader(props: DatabaseHeaderProps) {
  * 不是 ▦▥☰ 這種全形方塊字 —— 後者在不同字體下大小/基線會亂跳。
  * packages/ui 的 icon 集本來就有 table/board/list/gallery/calendar 五個。
  */
-function viewGlyph(type: ViewType): 'table' | 'board' | 'list' | 'gallery' | 'calendar' {
+function viewGlyph(type: ViewType): 'table' | 'board' | 'list' | 'gallery' | 'calendar' | 'timeline' {
   const names = {
     table: 'table',
     board: 'board',
     list: 'list',
     gallery: 'gallery',
     calendar: 'calendar',
+    timeline: 'timeline',
   } as const;
   return names[type] ?? 'table';
 }

@@ -1,0 +1,142 @@
+/**
+ * 「瀏覽模式設定」面板。數字量自 07m-db-settings-light.png（315×624 的裁切）：
+ *   標題 y34..44、名稱列 y71..84，之後每一列間距固定 **29px**。
+ */
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  /* 面板寬 292（07m-db-settings-light.png 量到 x13..304）；-8px 抵銷 .popover 的統一內距 */
+  width: 292px;
+  margin: -8px;
+  max-height: 560px;
+  overflow-y: auto;
+  color: var(--kn-color-text);
+  font-size: var(--kn-font-size-sm);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 34px;
+  padding: 0 8px 0 12px;
+}
+
+.headerTitle {
+  color: var(--kn-color-text-secondary);
+  font-size: var(--kn-font-size-sm);
+}
+
+.iconButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: var(--kn-radius-sm);
+  background: transparent;
+  color: var(--kn-color-text-tertiary);
+  cursor: pointer;
+}
+
+.iconButton:hover {
+  background: var(--kn-color-surface-hover);
+}
+
+.nameRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  margin: 2px 12px 8px;
+}
+
+.nameIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--kn-color-border);
+  border-radius: 4px;
+  color: var(--kn-color-text-secondary);
+}
+
+.nameInput {
+  flex: 1 1 auto;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--kn-color-border);
+  border-radius: 4px;
+  background: var(--kn-color-bg-subtle);
+  color: var(--kn-color-text);
+  font: inherit;
+  text-align: left;
+  cursor: text;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  padding: 3px 0;
+  border-top: 1px solid var(--kn-color-divider);
+}
+
+.sectionLabel {
+  margin: 0;
+  padding: 6px 12px 2px;
+  color: var(--kn-color-text-tertiary);
+  font-size: var(--kn-font-size-xs);
+}
+
+/** 每一列 29px（07m 量到 108 / 137 / 166 / 194 / 223 / 252 / 281） */
+.row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 29px;
+  padding: 0 10px 0 12px;
+  border: 0;
+  background: transparent;
+  color: var(--kn-color-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.row:hover:not(:disabled) {
+  background: var(--kn-color-surface-hover);
+}
+
+.row:disabled {
+  color: var(--kn-color-text-tertiary);
+  cursor: default;
+}
+
+.rowIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  color: var(--kn-color-text-tertiary);
+  flex: 0 0 auto;
+}
+
+.rowLabel {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.rowValue {
+  flex: 0 0 auto;
+  max-width: 120px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--kn-color-text-tertiary);
+}

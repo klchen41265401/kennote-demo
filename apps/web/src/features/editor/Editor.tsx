@@ -540,6 +540,42 @@ export function Editor({
     return () => el.removeEventListener('pointerdown', onPointerDown, true);
   }, [host, readOnly]);
 
+  /**
+   * ⭐ 在「自己有 UI 的 React block」裡面點一下時，不要把整塊選起來。
+   *
+   * `editor-core` 的 input controller 看到 pointerdown 落在「沒有 inline content」的 block
+   * 上就會 `setSelection(blockSelection([id]))` —— 對圖片、書籤這種**整塊就是一個物件**的
+   * block 是對的，但內嵌資料庫（collectionView）、簡易表格、按鈕這幾種**裡面還有互動元件**，
+   * 點一顆工具列按鈕就讓整張表蓋上一層藍色半透明（`data-selected`）完全不是 Notion 的行為
+   * （07c / 07d / 07k…的截圖就是整張表被塗藍）。
+   *
+   * 不能在這裡 `stopPropagation()`：React 18 的事件監聽掛在 root container（本元素的祖先），
+   * 攔下來連元件自己的 onClick 都會消失。所以改成「讓它選，下一個 microtask 再取消」。
+   */
+  useEffect(() => {
+    const el = wrapperRef.current;
+    if (!el || !editor) return;
+    const INTERACTIVE = new Set(['collectionView', 'table', 'button', 'syncedBlock']);
+    const onPointerDown = (event: PointerEvent): void => {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      const container = target.closest('[data-kn-react-block]');
+      const type = container?.getAttribute('data-kn-react-block');
+      if (!type || !INTERACTIVE.has(type)) return;
+      const blockId = container?.closest('[data-block-id]')?.getAttribute('data-block-id');
+      const sel = editor.getSelection();
+      if (sel.type === 'block' && sel.blockIds.length === 1 && sel.blockIds[0] === blockId) {
+        editor.setSelection({ type: 'none' });
+      }
+    };
+    // ⚠️ 掛在 **bubble** 階段：editor-core 的監聽器掛在 editor root（本元素的子孫），
+    // bubble 是由內往外跑，所以這裡一定在它之後執行，看得到它剛設好的選取。
+    // 用 capture + queueMicrotask 不行 —— microtask checkpoint 會在「每個監聽器之間」
+    // 就排空，等於還是搶在 editor-core 前面跑。
+    el.addEventListener('pointerdown', onPointerDown);
+    return () => el.removeEventListener('pointerdown', onPointerDown);
+  }, [editor]);
+
   /* ── 多欄版面的整潔度：少於 2 欄就自動解散（Notion 行為）── */
   useEffect(() => {
     if (!host || readOnly) return;

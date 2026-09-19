@@ -158,10 +158,18 @@ describe('值的顯示與比較', () => {
 });
 
 describe('view registry', () => {
-  it('五種視圖都註冊了', () => {
+  it('六種視圖都註冊了', () => {
     expect(listViewTypes().map((v) => v.type).sort()).toEqual(
-      ['board', 'calendar', 'gallery', 'list', 'table'].sort(),
+      ['board', 'calendar', 'gallery', 'list', 'table', 'timeline'].sort(),
     );
+  });
+
+  it('時程表跟日曆一樣需要日期欄位', () => {
+    const timeline = getViewType('timeline');
+    expect(timeline.supportsSorting).toBe(true);
+    expect(timeline.supportsGrouping).toBe(false);
+    expect(viewTypeAvailable(timeline, schema)).toBe(true);
+    expect(viewTypeAvailable(timeline, { title: { name: '名稱', type: 'title' } })).toBe(false);
   });
 
   it('能力宣告決定工具列要不要顯示按鈕（不寫 if viewType===）', () => {

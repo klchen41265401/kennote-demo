@@ -303,3 +303,89 @@
   color: var(--kn-color-text-tertiary);
   font-size: var(--kn-font-size-xs);
 }
+
+/* ── 屬性選擇器（07k-db-filter / 07l-db-sort 的第一層）──────
+   數字全部量自 07k-db-filter-light.png，見 PropertyPicker.tsx 的註解。 */
+
+.picker {
+  display: flex;
+  flex-direction: column;
+  /* 面板寬 292（07k-db-filter-light.png 量到 x13..304）；
+     -8px 是抵銷 _fallback 的 .popover 統一內距，Notion 這張浮層沒有外距。 */
+  width: 292px;
+  margin: -8px;
+  color: var(--kn-color-text);
+}
+
+.pickerSearch {
+  height: 30px;
+  margin: 12px;
+  padding: 0 8px;
+  border: 1px solid var(--kn-color-border);
+  border-radius: 4px;
+  background: var(--kn-color-bg-subtle);
+  color: var(--kn-color-text);
+  font-size: var(--kn-font-size-sm);
+  font-family: inherit;
+  outline: none;
+}
+
+.pickerSearch:focus {
+  border-color: var(--kn-color-accent);
+  box-shadow: inset 0 0 0 1px var(--kn-color-accent);
+}
+
+.pickerSearch::placeholder {
+  color: var(--kn-color-text-tertiary);
+}
+
+.pickerList {
+  display: flex;
+  flex-direction: column;
+  max-height: 280px;
+  overflow-y: auto;
+  padding-bottom: 6px;
+}
+
+/** 屬性列高 28px（07k 量到 y70..97、98..125…） */
+.pickerItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 28px;
+  padding: 0 12px;
+  border: 0;
+  background: transparent;
+  color: var(--kn-color-text);
+  font-size: var(--kn-font-size-sm);
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.pickerItem:hover,
+.pickerItem:focus-visible {
+  background: var(--kn-color-surface-hover);
+  outline: none;
+}
+
+.pickerEmpty {
+  margin: 0;
+  padding: 6px 12px;
+  color: var(--kn-color-text-tertiary);
+  font-size: var(--kn-font-size-sm);
+}
+
+/** 底部動作列：分隔線 + 高 36 的一列（07k 量到 y189 的線、y190..225 的列） */
+.pickerFooter {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  height: 36px;
+  border-top: 1px solid var(--kn-color-divider);
+}
+
+.pickerFooter .pickerItem {
+  height: 100%;
+  color: var(--kn-color-text-secondary);
+}

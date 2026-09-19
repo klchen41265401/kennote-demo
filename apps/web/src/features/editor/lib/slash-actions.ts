@@ -157,6 +157,7 @@ const VIEW_LABELS: Record<DatabaseViewKind, string> = {
   gallery: '圖庫',
   list: '清單',
   calendar: '日曆',
+  timeline: '時程表',
 };
 
 /**

@@ -14,6 +14,7 @@ import type {
 } from '@kennote/shared-types';
 import { FILTER_OPERATOR_LABELS, isFilterGroup } from '@kennote/shared-types';
 import { FieldIcon, UiIcon } from './_fallback';
+import { PropertyPicker } from './PropertyPicker';
 import { getFieldType } from './fields/types';
 import {
   MAX_FILTER_DEPTH,
@@ -40,6 +41,30 @@ export function FilterBuilder({ schema, query, onChange }: Props) {
 
   function update(next: FilterGroup) {
     onChange({ ...query, filter: normalizeFilter(next) });
+  }
+
+  /**
+   * 還沒有任何條件時，Notion 先給一張**屬性清單**（07k-db-filter-*），
+   * 而不是空的條件編輯器；選了屬性才展開成 [欄位][運算子][值] 那一列。
+   */
+  if (root.filters.length === 0) {
+    return (
+      <PropertyPicker
+        ariaLabel="選擇要篩選的屬性"
+        placeholder="篩選條件…"
+        schema={schema}
+        properties={filterableProperties(schema)}
+        onSelect={(property) => {
+          const condition = defaultCondition(schema);
+          if (condition) update(addCondition(root, changeProperty(schema, condition, property)));
+        }}
+        footerLabel="新增進階篩選"
+        onFooter={() => {
+          const condition = defaultCondition(schema);
+          if (condition) update(addGroup(root, condition));
+        }}
+      />
+    );
   }
 
   return (

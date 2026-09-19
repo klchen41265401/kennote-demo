@@ -69,7 +69,11 @@ export type UiIconName =
   | 'board'
   | 'list'
   | 'gallery'
-  | 'calendar';
+  | 'calendar'
+  | 'timeline'
+  | 'bolt'
+  | 'sparkle'
+  | 'settings';
 
 const PATHS: Record<UiIconName, string> = {
   chevronDown: 'M3.5 6 8 10.5 12.5 6',
@@ -92,6 +96,12 @@ const PATHS: Record<UiIconName, string> = {
   list: 'M3 4.5h10M3 8h10M3 11.5h10',
   gallery: 'M3 3.5h4.5V8H3zM8.5 3.5H13V8H8.5zM3 9.5h4.5V13H3zM8.5 9.5H13V13H8.5z',
   calendar: 'M2.5 4.5h11v9h-11zM2.5 7.5h11M5.5 2.8v2.6M10.5 2.8v2.6',
+  // 時程表：左右各一條長條（甘特圖的縮影）
+  timeline: 'M2.5 3.5h11v9h-11zM4.5 6.5h5M6.5 9.5h5',
+  // 自動化（⚡）／AI（✨）／瀏覽模式設定（滑桿）—— UI-SPEC §8.1 的工具列順序
+  bolt: 'M9 2 4 9h3.5L7 14l5-7H8.5L9 2z',
+  sparkle: 'M8 2.5 9.2 6.3 13 7.5 9.2 8.7 8 12.5 6.8 8.7 3 7.5 6.8 6.3 8 2.5zM12.8 11.3l.5 1.4 1.4.5-1.4.5-.5 1.4-.5-1.4-1.4-.5 1.4-.5.5-1.4z',
+  settings: 'M2.5 5h11M2.5 11h11M6 3.2v3.6M10.5 9.2v3.6',
 };
 
 export function UiIcon({

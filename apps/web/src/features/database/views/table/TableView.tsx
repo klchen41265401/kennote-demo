@@ -48,7 +48,7 @@ export function TableView(props: ViewProps) {
 
   useEffect(() => {
     if (!resizing) return;
-    function onMove(e: MouseEvent) {
+    function onMove(e: PointerEvent) {
       if (!resizing) return;
       const next = Math.max(64, Math.min(720, resizing.startWidth + e.clientX - resizing.startX));
       setWidthOverride((prev) => ({ ...prev, [resizing.property]: next }));
@@ -61,11 +61,11 @@ export function TableView(props: ViewProps) {
       });
       setResizing(null);
     }
-    document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup', onUp);
+    document.addEventListener('pointermove', onMove);
+    document.addEventListener('pointerup', onUp);
     return () => {
-      document.removeEventListener('mousemove', onMove);
-      document.removeEventListener('mouseup', onUp);
+      document.removeEventListener('pointermove', onMove);
+      document.removeEventListener('pointerup', onUp);
     };
     // 相依陣列刻意手寫：只有這幾個值變了才該重跑
   }, [resizing]);
@@ -204,7 +204,17 @@ export function TableView(props: ViewProps) {
               }`}
               style={{ width: widthOf(column.property, column.width), left: frozen ? 32 : undefined }}
               onKeyDown={(e) => onCellKeyDown(e, { rowIndex, colIndex })}
-              onMouseDown={() => setActive({ rowIndex, colIndex })}
+              /**
+               * ⭐ 一定要用 `onPointerDown` 而**不是** `onMouseDown`。
+               *
+               * 內嵌資料庫住在編輯器裡，而 `editor-core` 的 input controller 在
+               * `pointerdown` 上看到「這個 block 沒有 inline content」（collectionView 就是）
+               * 就會 `event.preventDefault()` 去做整塊選取。依 Pointer Events 規範，
+               * 被取消的 pointerdown **不會再產生相容的 mousedown**，
+               * 所以 React 的 onMouseDown 在內嵌資料庫裡永遠收不到 ——
+               * 07d 的「儲存格選取態」因此一直畫不出來（藍框 + 右下角小方塊都在，只是沒人觸發）。
+               */
+              onPointerDown={() => setActive({ rowIndex, colIndex })}
             >
               <EditableCell
                 propertyId={column.property}
@@ -277,7 +287,7 @@ export function TableView(props: ViewProps) {
                   className={styles.resizeHandle}
                   role="separator"
                   aria-label={`調整 ${def.name} 欄寬`}
-                  onMouseDown={(e) => {
+                  onPointerDown={(e) => {
                     e.preventDefault();
                     setResizing({
                       property: column.property,

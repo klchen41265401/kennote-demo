@@ -120,7 +120,13 @@
   --kn-size-topbar: 44px;
   --kn-size-topbar-compact: 40px;
   /** 內容欄：文字實寬 708 + 左右各 6px 內距 = 720 */
-  --kn-size-content-width: 720px;
+  /**
+   * 內容欄 724 = 文字欄 704 + editor-host 的左右 8px + block-main 的左右 2px。
+   * 704 這個數字是量出來的：`05-11-divider-light.png` 的實心 bar 佔 x22..725，
+   * `05-21-image` 的圖片也是 704 寬。原本的 720 會讓文字欄只剩 700，
+   * 所有滿版元素（分隔線 / 程式碼 / 標註 / 圖片 / 書籤 / 表格）右緣都短 4px。
+   */
+  --kn-size-content-width: 724px;
   --kn-size-content-width-wide: 963px; /* 單一 block 的上限（「全寬」模式） */
   --kn-size-content-gutter: 96px;
   --kn-size-content-gutter-compact: 16px;

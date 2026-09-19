@@ -226,6 +226,8 @@ const DB_VIEWS: { code: string; tab: RegExp }[] = [
   { code: '07f-db-list', tab: /^清單$/ },
   { code: '07g-db-gallery', tab: /^圖庫$/ },
   { code: '07h-db-calendar', tab: /^日曆$/ },
+  // 時程表：後端還沒有 'timeline' 視圖型別時 seed 會跳過，這裡 tab 找不到就不拍
+  { code: '07i-db-timeline', tab: /^時程表$/ },
 ];
 
 /* ── 1. 建資料 ───────────────────────────────────────────── */
@@ -313,9 +315,16 @@ for (const theme of ['light', 'dark'] as Theme[]) {
 
     /* 06-slash-menu：空白行輸入 `/`（含灰字 placeholder「輸入以搜尋」） */
     {
-      // 用「第一段」而不是「最後一段」：最後一段可能在欄/折疊裡面，click 會落空
+      // 用「第一段」而不是「最後一段」：最後一段可能在欄/折疊裡面，click 會落空。
+      //
+      // ⚠️ 捲到**上緣**而不是正中央：斜線選單有 370px 高，錨點放在畫面中央的話
+      // 浮層下緣會超出 900px 的視窗，clip() 的 y 會被 clamp 到 900-高，
+      // 拍出來的根本不是浮層那一塊（第一輪的 06-slash-menu 就是這樣，數字沒有意義）。
       const anchor = page.locator('.kn-block--paragraph [contenteditable="true"]').first();
-      await centerBlock(page, page.locator('.kn-block--paragraph').first());
+      await page.locator('.kn-block--paragraph').first().evaluate((el) => {
+        el.scrollIntoView({ block: 'start', behavior: 'instant' as ScrollBehavior });
+      });
+      await page.waitForTimeout(200);
       await anchor.click();
       await page.keyboard.press('End');
       await page.keyboard.press('Enter');
@@ -347,6 +356,9 @@ for (const theme of ['light', 'dark'] as Theme[]) {
         if (await tab.count()) {
           await tab.click();
           await page.waitForTimeout(900);
+        } else if (view.code.startsWith('07i')) {
+          console.warn('⚠ 找不到「時程表」tab —— 後端還沒有 timeline 視圖型別，略過 07i');
+          continue;
         }
         await settle(page);
         await page.mouse.move(1380, 860);
@@ -383,11 +395,13 @@ for (const theme of ['light', 'dark'] as Theme[]) {
         }
 
         /* 07k / 07l / 07m：篩選 / 排序 / 設定浮層 */
-        for (const [code, label] of [
-          ['07k-db-filter', '篩選'],
-          ['07l-db-sort', '排序'],
-          ['07m-db-settings', '設定'],
-        ] as [string, string][]) {
+        // Notion 的裁切把浮層外面的陰影也框進去：面板左上角落在 (13,17)（07m 是 (13,13)）。
+        // 直接用 pb.x / pb.y 會整張差 13~17px，最佳位移一路頂到 ±6 的搜尋上限。
+        for (const [code, label, padX, padY] of [
+          ['07k-db-filter', '篩選', 17, 21],
+          ['07l-db-sort', '排序', 17, 21],
+          ['07m-db-settings', '設定', 17, 17],
+        ] as [string, string, number, number][]) {
           const button = db.getByRole('button', { name: label }).first();
           if (!(await button.count())) continue;
           await button.click();
@@ -395,7 +409,7 @@ for (const theme of ['light', 'dark'] as Theme[]) {
           const popover = page.locator('[role="dialog"], .kn-popover').last();
           const pb = await popover.boundingBox().catch(() => null);
           const size = refSize(code, theme)!;
-          if (pb) await clip(page, code, theme, { x: pb.x, y: pb.y, width: size.width, height: size.height });
+          if (pb) await clip(page, code, theme, { x: pb.x - padX, y: pb.y - padY, width: size.width, height: size.height });
           await page.keyboard.press('Escape');
           await page.waitForTimeout(300);
         }
@@ -531,6 +545,15 @@ function renderReadme(
   }
 
   lines.push(...KNOWN_GAPS);
+
+  /**
+   * 之後每一輪的手寫紀錄放在 `reference/shots/compare/NOTES-round*.md`，
+   * 這裡依檔名排序接到最後面 —— 要補紀錄就新增 / 修改那些 .md，不必再動這支 spec。
+   */
+  for (const file of readdirSync(COMPARE_DIR).filter((f) => /^NOTES-.*\.md$/.test(f)).sort()) {
+    lines.push('', readFileSync(resolve(COMPARE_DIR, file), 'utf8').trimEnd());
+  }
+
   return `${lines.join('\n')}\n`;
 }
 
@@ -580,7 +603,7 @@ const KNOWN_GAPS = [
   '   `AND p.is_database = FALSE`。**這次沒有動**：後端跑在遠端已建置好的映像檔上，改了也驗證不到，',
   '   而且不在這一輪視覺 QA 的範圍內。',
   '',
-  '### 三、修正紀錄（五輪）',
+  '### 三、修正紀錄（第一輪：五小輪）',
   '',
   '| 輪 | 改了什麼 | 代表性的數字變化（light，平均通道差） |',
   '|---|---|---|',
