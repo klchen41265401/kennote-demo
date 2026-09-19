@@ -113,8 +113,8 @@ async function insertBlock(
   text: string,
   parentId: string | null = null,
 ): Promise<string> {
-  const blockId = await page.evaluate(() => crypto.randomUUID());
-  const txId = await page.evaluate(() => crypto.randomUUID());
+  const blockId = await page.evaluate(() => (globalThis.crypto && 'randomUUID' in globalThis.crypto ? globalThis.crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => { const r = (Math.random() * 16) | 0; return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16); })));
+  const txId = await page.evaluate(() => (globalThis.crypto && 'randomUUID' in globalThis.crypto ? globalThis.crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => { const r = (Math.random() * 16) | 0; return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16); })));
   const res = await api(page, 'POST', `/api/pages/${pageId}/transactions`, {
     txId,
     pageId,
@@ -304,7 +304,7 @@ test('R11-3 編輯器的 block 選單不得再有「… 才會開放」的佔位
  * 2. 「移動到…」跨頁面搬移 block（**需部署**）
  * ───────────────────────────────────────────────────────── */
 
-test.fixme(
+test(
   'R11-4 block 跨頁搬移：來源頁刪掉、目標頁出現，**block id 不變**（需部署）',
   async ({ page }) => {
     test.setTimeout(180_000);
@@ -335,7 +335,7 @@ test.fixme(
   },
 );
 
-test.fixme(
+test(
   'R11-5 跨頁搬移：對來源頁沒有 edit 的人搬不動（需部署）',
   async ({ page, browser }) => {
     test.setTimeout(240_000);
@@ -362,7 +362,7 @@ test.fixme(
   },
 );
 
-test.fixme('R11-6 跨頁搬移：目標頁就是本頁時一律擋下（需部署）', async ({ page }) => {
+test('R11-6 跨頁搬移：目標頁就是本頁時一律擋下（需部署）', async ({ page }) => {
   test.setTimeout(180_000);
   const src = await newPage(page, 'R11 同頁檢查');
   const blockId = await insertBlock(page, src, '原地不動');
