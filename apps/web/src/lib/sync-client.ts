@@ -429,8 +429,13 @@ export class SyncClient {
       attempts: 0,
       order: nextOrder(this.now()),
     };
-    void this.queue
-      .put(queued)
+    // 順序一致性：delta 不進 debounce，但同頁若還有排隊中的結構變更（例如剛 Enter 產生的 block.insert、
+    // 或 / 選單的 block.update{blockType}），必須先把它們送出去，否則 delta 會先到伺服器而 BLOCK_NOT_FOUND。
+    // WS 單一連線 FIFO + 伺服器逐頁序列化，先送就先套用。
+    const ahead = entry.buffer.length > 0 ? this.flush(pageId) : Promise.resolve();
+    void ahead
+      .catch(() => undefined)
+      .then(() => this.queue.put(queued))
       .catch(() => undefined)
       .then(() => this.trySend(queued));
     return txId;
