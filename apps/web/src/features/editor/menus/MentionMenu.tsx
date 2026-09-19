@@ -43,10 +43,20 @@ function useMembers(workspaceId: string | null) {
   });
 }
 
+/**
+ * 本地時區的 `YYYY-MM-DD`。
+ *
+ * ⭐ BUG-13：不能用 `toISOString().slice(0, 10)` —— 那是 **UTC**。
+ * 台北是 UTC+8，每天早上 08:00 以前「今天」都會變成昨天。
+ */
+export function localDateISO(d: Date = new Date()): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 function dateItems(query: string): MentionItem[] {
   const today = new Date();
   const tomorrow = new Date(today.getTime() + 86400000);
-  const fmt = (d: Date): string => d.toISOString().slice(0, 10);
+  const fmt = localDateISO;
   const candidates = [
     { label: `今天（${fmt(today)}）`, value: fmt(today), keywords: ['today', '今天', '今日'] },
     { label: `明天（${fmt(tomorrow)}）`, value: fmt(tomorrow), keywords: ['tomorrow', '明天', '明日'] },
@@ -100,7 +110,9 @@ export function MentionMenu({ state, workspaceId, onClose, onSelect }: MentionMe
         group: '人員',
         label: m.user.name,
         icon: '👤',
-        atom: { atom: 'mention', data: { userId: m.userId, text: `@${m.user.name}` } } as InlineAtom,
+        // ⭐ BUG-15：`text` 只放名字。`@` 由 editor-core 的 `defaultAtomText()`
+        // 加（它對 mention 一律補 `@`），這邊再加一次就會渲染成「@@訪客」。
+        atom: { atom: 'mention', data: { userId: m.userId, text: m.user.name } } as InlineAtom,
       }));
 
     return [...people, ...pages, ...dateItems(state.query)];

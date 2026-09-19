@@ -30,6 +30,12 @@ export interface DropOptions {
   indentThreshold?: number;
   /** 靠近左右邊緣多少比例時，落點改成「成為新欄」 */
   columnEdgeRatio?: number;
+  /**
+   * 「成為新欄」還要求指標落在 block 的**垂直中間帶**，佔 block 高度的比例。
+   * 預設 0.5 = 上下各留 25% 給排序（before / after），與 Notion 一致：
+   * 指標貼在上下邊界時使用者要的是「換順序」，不是「開一欄」。
+   */
+  columnVerticalBand?: number;
   /** 不能當落點的 block（自己 + 自己的子孫） */
   forbidden?: Set<string>;
   /** 是否允許建立多欄 */
@@ -50,6 +56,7 @@ export function computeDropTarget(
 ): DropTarget | null {
   const indentThreshold = options.indentThreshold ?? 24;
   const columnEdgeRatio = options.columnEdgeRatio ?? 0.25;
+  const columnVerticalBand = options.columnVerticalBand ?? 0.5;
   const forbidden = options.forbidden ?? new Set<string>();
   const allowColumns = options.allowColumns ?? true;
 
@@ -70,7 +77,12 @@ export function computeDropTarget(
   }
 
   const width = hit.right - hit.left;
-  if (allowColumns && !hit.inColumn && width > 0) {
+  // ⭐ BUG-14：左右「開新欄」的判斷以前只看 X，於是指標貼在 block 上下邊界
+  //（使用者明明是要換順序）也會被判成 column-left/right，純排序幾乎拖不出來。
+  // 改成必須同時落在 block 的垂直中間帶裡，邊界那一圈永遠留給 before / after。
+  const halfBand = ((hit.bottom - hit.top) * columnVerticalBand) / 2;
+  const inVerticalBand = Math.abs(y - centerY(hit)) <= halfBand;
+  if (allowColumns && !hit.inColumn && width > 0 && inVerticalBand) {
     const edge = width * columnEdgeRatio;
     if (x > hit.right - edge) return { id: hit.id, position: 'column-right' };
     if (x < hit.left + edge && x >= hit.left) return { id: hit.id, position: 'column-left' };

@@ -27,7 +27,7 @@ import { SlashMenu } from './menus/SlashMenu';
 import { BubbleMenu } from './menus/BubbleMenu';
 import { BlockHandle } from './menus/BlockHandle';
 import { BlockMenu } from './menus/BlockMenu';
-import { MentionMenu, type MentionState } from './menus/MentionMenu';
+import { MentionMenu, localDateISO, type MentionState } from './menus/MentionMenu';
 import { PickerPopover } from './menus/PickerPopover';
 import type { DatabaseViewKind, SlashCommand } from './menus/slashCommands';
 import {
@@ -130,27 +130,20 @@ export function Editor({
       if (slashDismissedRef.current === `${payload.blockId}:${payload.triggerOffset}`) return;
       setSlashState(payload);
     });
-    const offMention = editor.on('mentionTrigger', (payload) => {
-      if (!payload.open) {
-        setMentionState((s) => (s?.mode === 'mention' ? null : s));
-        return;
-      }
-      setMentionState({
-        mode: 'mention',
-        blockId: payload.blockId,
-        triggerOffset: payload.triggerOffset,
-        triggerLength: 1,
-        query: payload.query,
-        rect: payload.rect ? rectFromDOMRect(payload.rect) : null,
-      });
-    });
+    /*
+     * ⭐ BUG-16：`@` 不再跟 editor-core 的 `mentionTrigger` 走。
+     *
+     * `triggers.ts` 只在「行首或空白後」才開，所以「談談@」這種**緊接在文字後面**
+     * 的 `@` 完全叫不出選單（Notion 是任何位置都開）；而且它看到 query 裡有空白
+     * 就把 trigger 收掉，人員名字有空格就打不完。那支檔案屬於 OT 代理，
+     * 所以改成跟 `[[` 同一套：開關與 query 都由宿主自己算（見下面的「行內觸發」）。
+     */
     const offReconcile = editor.on('reconcile', (payload) => {
       // 開發期把它當錯誤看：代表輸入管線有漏洞
       console.warn('[kennote] reconcile ' + JSON.stringify(payload));
     });
     return () => {
       offSlash();
-      offMention();
       offReconcile();
     };
   }, [editor]);
@@ -189,6 +182,49 @@ export function Editor({
     };
   }, [editor]);
 
+  /* ── ⭐ BUG-17：block selection 模式下鍵盤會整個失聯 ──────
+   *
+   * Escape 進 block selection 時，editor-core 會把原生 DOM selection 清掉，
+   * 於是 `document.activeElement` 掉回 `<body>`。可是它的 keydown listener
+   * 掛在 `view.root`（`.kn-editor[data-kn-root]`）上 —— 焦點在 body 時
+   * 事件根本不會經過那一層，Shift+↑ 擴選、Backspace 批次刪除、Tab 縮排
+   * 全部按了沒反應（選取的藍底還在，看起來像當掉）。
+   *
+   * editor-core 屬於 OT 代理，所以在宿主這一側補：一進 block 模式就把焦點
+   * 放回 editor 的 root（`tabIndex = -1`，mutation guard 的 `attributes: false`
+   * 不會把它判成非法變更），鍵盤事件就回得到 editor-core。
+   */
+  useEffect(() => {
+    if (!editor) return;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const focusRoot = (): void => {
+      if (editor.getSelection().type !== 'block') return;
+      const root = containerRef.current?.querySelector<HTMLElement>('[data-kn-root]');
+      if (!root) return;
+      // ⚠️ 不能用 `root.tabIndex !== -1` 判斷：一般的 div 讀出來本來就是 -1，
+      // 但那是「不可聚焦」的 -1，沒有 tabindex 屬性 focus() 會靜靜失敗。
+      if (!root.hasAttribute('tabindex')) root.setAttribute('tabindex', '-1');
+      const active = root.ownerDocument.activeElement;
+      if (active && root.contains(active)) return;
+      root.focus({ preventScroll: true });
+    };
+    // 立刻試一次 + 排到下一個 task 再試一次：
+    // 進 block 模式時 editor-core 會在同一輪裡清掉原生 selection，
+    // 只在事件當下 focus 會被後面那一手洗掉。
+    const keepFocus = (): void => {
+      focusRoot();
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(focusRoot, 0);
+    };
+    const offSel = editor.on('selectionChange', keepFocus);
+    const offTx = editor.on('transaction', keepFocus);
+    return () => {
+      if (timer) clearTimeout(timer);
+      offSel();
+      offTx();
+    };
+  }, [editor, containerRef]);
+
   /** 關閉選單並記住這個斜線已經被放棄了 */
   const closeSlash = useCallback(() => {
     setSlashState((current) => {
@@ -197,13 +233,15 @@ export function Editor({
     });
   }, []);
 
-  /* ── `[[` 頁面連結觸發 ──────────────────────────────── */
+  /* ── 行內觸發：`@` 提及 與 `[[` 頁面連結 ──────────────
+   * 兩個都由宿主自己算（理由見上面 BUG-16 的註解）。`[[` 先比，兩者不會互搶。
+   */
   useEffect(() => {
     if (!editor) return;
     const off = editor.on('transaction', (tx) => {
       if (tx.source !== 'user' && tx.source !== 'ime') return;
       setMentionState((current) => {
-        if (current?.mode === 'page') {
+        if (current) {
           // 更新 query / 關閉
           const sel = editor.getSelection();
           if (sel.type !== 'text' || sel.focus.blockId !== current.blockId) return null;
@@ -212,21 +250,35 @@ export function Editor({
           const block = editor.getBlock(current.blockId);
           if (!block) return null;
           const query = toOffsetText(rtSlice(block.content, start, sel.focus.offset));
-          if (/\n/.test(query)) return null;
+          if (/\n/.test(query) || [...query].length > 40) return null;
           const rect = editor.getSelectionRect();
           return { ...current, query, rect: rect ? rectFromDOMRect(rect) : current.rect };
         }
-        const before = textBeforeCaret(editor, 2);
-        if (!before || before.text !== '[[') return current;
-        const rect = editor.getSelectionRect();
-        return {
-          mode: 'page',
-          blockId: before.blockId,
-          triggerOffset: before.offset - 2,
-          triggerLength: 2,
-          query: '',
-          rect: rect ? rectFromDOMRect(rect) : null,
-        };
+        const two = textBeforeCaret(editor, 2);
+        if (two && two.text === '[[') {
+          const rect = editor.getSelectionRect();
+          return {
+            mode: 'page',
+            blockId: two.blockId,
+            triggerOffset: two.offset - 2,
+            triggerLength: 2,
+            query: '',
+            rect: rect ? rectFromDOMRect(rect) : null,
+          };
+        }
+        const one = textBeforeCaret(editor, 1);
+        if (one && MENTION_CHARS.includes(one.text)) {
+          const rect = editor.getSelectionRect();
+          return {
+            mode: 'mention',
+            blockId: one.blockId,
+            triggerOffset: one.offset - 1,
+            triggerLength: 1,
+            query: '',
+            rect: rect ? rectFromDOMRect(rect) : null,
+          };
+        }
+        return current;
       });
     });
     return off;
@@ -360,7 +412,7 @@ export function Editor({
         case 'inline': {
           const anchor = anchorRect();
           if (action.inline === 'date') {
-            const today = new Date().toISOString().slice(0, 10);
+            const today = localDateISO();
             insertAtom(host.editor, { atom: 'date', data: { date: today, text: today } });
             return;
           }
@@ -866,6 +918,8 @@ function insertEmojiAtCaret(host: EditorHostApi, emoji: string): void {
 /* ── slash 指令用的小工具 ───────────────────────────── */
 
 const SLASH_CHARS = ['/', '／', '、'];
+/** `@` 的觸發字元（與 editor-core `triggers.ts` 的 MENTION_CHARS 一致） */
+const MENTION_CHARS = ['@', '＠'];
 
 /** `"<blockId>:<offset>"` 這個位置現在還是不是一個斜線？ */
 function slashCharAt(editor: EditorHostApi['editor'], key: string): boolean {

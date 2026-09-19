@@ -220,6 +220,18 @@ describe('拖放落點計算', () => {
     expect(computeDropTarget(rects, 110, 20)).toEqual({ id: 'a', position: 'column-left' });
   });
 
+  // 第四輪 BUG-14：只看 X 的話，「拖到上下邊界換順序」全部會被吃成「開一欄」
+  it('靠左 / 右邊緣但貼在上下邊界 → 還是排序，不是開欄', () => {
+    // block a 的範圍是 0–40，中間帶是 10–30
+    expect(computeDropTarget(rects, 110, 2)).toEqual({ id: 'a', position: 'before' });
+    expect(computeDropTarget(rects, 690, 2)).toEqual({ id: 'a', position: 'before' });
+    expect(computeDropTarget(rects, 110, 38)).toEqual({ id: 'a', position: 'after' });
+    // 右下角落在縮排區（舊行為），重點是「不再是 column-right」
+    expect(computeDropTarget(rects, 690, 38)).toEqual({ id: 'a', position: 'child' });
+    // 中間帶裡面還是要開欄
+    expect(computeDropTarget(rects, 110, 20)).toEqual({ id: 'a', position: 'column-left' });
+  });
+
   it('已經在欄裡就不再允許建立欄', () => {
     const inColumn = rects.map((r) => ({ ...r, inColumn: true }));
     expect(computeDropTarget(inColumn, 690, 20)?.position).not.toBe('column-right');
