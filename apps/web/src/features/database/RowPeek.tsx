@@ -1,21 +1,25 @@
 /**
  * Row = Page（04 §8 M4 交付物 11）。
  *
- * 點一列打開側邊預覽（Notion 預設 side peek）：標題、屬性表（可編輯）、
- * 以及 **編輯器掛載點**：
+ * 點一列打開側邊預覽（Notion 預設 side peek）：標題、屬性表（可編輯），
+ * 底下是**真正的內容編輯器**。
  *
- *     <div id="editor-host-row" data-page-id="...">
+ * ⭐ 「列 = 頁面」：`row.id` 就是 pageId，所以這裡掛的是與整頁開啟
+ * （`routes/PageRoute.tsx`）**完全同一支** `<Editor>`：
+ *   · 初次資料走 `usePageSnapshot(rowId)` → `GET /api/pages/:id/snapshot`
+ *   · 變更走同一套同步層（sync-client / transport），peek 與整頁改同一份資料
+ *   · peek 關掉時整個 `<Editor>` 連同 `#editor-host-row` 一起卸載，
+ *     `useEditorHost` 的 cleanup 會把 editor-core 銷毀（不會留下孤兒監聽器）
+ *   · `key={row.id}` 保證換一列就重建編輯器，不會把上一列的內容帶過去
+ *   · 「以整頁開啟」導向 `/page/:rowId`（App.tsx 的路由），那裡是 `#editor-host`
  *
- * ⭐ 給編輯器代理的約定（README 有完整版）：
- *   · 這個 div 一定存在且只有一個（同一時間只會開一個 peek）
- *   · data-page-id 就是這一列的 pageId，初次資料請走
- *     GET /api/pages/:id/snapshot，變更請走 POST /api/pages/:id/transactions
- *   · peek 關閉時這個 div 會被卸載，請在 cleanup 裡解除掛載
- *   · 「以整頁開啟」會導向 /page/:pageId，那裡是既有的 <div id="editor-host">
+ * 外框仍然保留 `id="editor-host-row"`，維持 README §4 對外的掛載點約定。
  */
 import { useEffect, useState } from 'react';
 import type { DatabaseRow } from '@kennote/shared-types';
 import { richTextToPlainText } from '@kennote/shared-types';
+import { Editor } from '../editor/Editor';
+import { usePageSnapshot } from '../../lib/queries';
 import { Dialog, FieldIcon, Menu, MenuItem, Popover, UiIcon } from './_fallback';
 import { EditableCell } from './EditableCell';
 import { useDatabaseContext } from './context';
@@ -43,9 +47,11 @@ export function RowPeek({
   onDelete,
   onDuplicate,
 }: Props) {
-  const { schema, openRowPage, readOnly } = useDatabaseContext();
+  const { schema, workspaceId, openRowPage, readOnly } = useDatabaseContext();
   const [title, setTitle] = useState(richTextToPlainText(row.title));
   const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
+  /** peek 開著才抓 snapshot；關掉就不再維持這個查詢 */
+  const snapshot = usePageSnapshot(open ? row.id : null);
 
   useEffect(() => {
     setTitle(richTextToPlainText(row.title));
@@ -123,12 +129,24 @@ export function RowPeek({
         })}
       </dl>
 
-      {/* ⭐ 編輯器掛載點。編輯器代理把 editor-core 掛進來即可。 */}
+      {/* ⭐ 編輯器：與整頁開啟共用同一支 <Editor> 與同一條同步層 */}
       <div id="editor-host-row" className={styles.editorHost} data-page-id={row.id}>
-        <p className={styles.editorPlaceholder}>
-          這一列就是一個頁面。內容編輯器（editor-core）會掛在這個區塊，
-          掛載點 id 為 <code>editor-host-row</code>，pageId 為 <code>{row.id}</code>。
-        </p>
+        {snapshot.isLoading && !snapshot.data ? (
+          <p className={styles.editorPlaceholder}>載入內容中…</p>
+        ) : (
+          <Editor
+            key={row.id}
+            pageId={row.id}
+            workspaceId={workspaceId || null}
+            snapshot={snapshot.data}
+            readOnly={readOnly}
+            onNavigateToPage={(pageId) => {
+              // peek 裡點到頁面連結：關掉 peek、改開那一頁（不要在對話框裡疊第二層）
+              onClose();
+              openRowPage(pageId);
+            }}
+          />
+        )}
       </div>
 
       <Popover open={menuAnchor !== null} anchor={menuAnchor} onClose={() => setMenuAnchor(null)}>

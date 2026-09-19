@@ -6,10 +6,12 @@
  *   · 儲存格鍵盤導航：Tab / Shift+Tab / 方向鍵 / Enter 進入編輯 / Escape 退出
  *   · 行內編輯（EditableCell，與 Board / RowPeek 共用同一組編輯器）
  *   · 列 hover 顯示「開啟」與拖曳把手（⭐ 把手浮在表格**外面**，不佔欄寬）
+ *   · 列選取（hover 出現勾選框、Shift 連選）＋ 頂部浮出的批次列
+ *   · 列拖曳排序（把手 → HTML5 DnD → `POST /rows/reorder` 寫回 sort_key）
  *   · 表頭最右端的「＋ 新增欄位」、底部「＋ 新增」、聚合列
  *   · VirtualList 虛擬捲動（1000 列時 DOM 節點數 < 100）
  */
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { AggregationFunction, DatabaseRow, FieldType } from '@kennote/shared-types';
 import { AGGREGATION_LABELS, richTextToPlainText } from '@kennote/shared-types';
 import { FieldIcon, Menu, MenuItem, MenuLabel, MenuSeparator, Popover, UiIcon, VirtualList } from '../../_fallback';
@@ -17,6 +19,7 @@ import { EditableCell } from '../../EditableCell';
 import { FieldConfigPopover } from '../../FieldConfigPopover';
 import { useDatabaseContext } from '../../context';
 import { fieldTypeGroups, getFieldType } from '../../fields/types';
+import { relatedTitle } from '../../fields/relation/titles';
 import type { ViewProps } from '../types';
 import { alignViewProperties, visibleProperties } from '../types';
 import styles from './TableView.module.css';
@@ -50,6 +53,101 @@ export function TableView(props: ViewProps) {
    * 只畫**一顆**浮在表格左邊的把手，位置跟著目前 hover 的那一列走。
    */
   const [handleTop, setHandleTop] = useState<number | null>(null);
+  /** 把手目前對應的列（拖曳排序要知道抓的是誰） */
+  const [handleRowId, setHandleRowId] = useState<string | null>(null);
+
+  /* ── 列選取（Notion：hover 出現勾選框、Shift 連選）── */
+  const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set());
+  /** Shift 連選的錨點 */
+  const anchorRef = useRef<string | null>(null);
+
+  /* ── 拖曳排序 ── */
+  const [dragRowId, setDragRowId] = useState<string | null>(null);
+  /** 放開時要插在哪一列之後（null = 最前面、undefined = 沒有落點） */
+  const [dropAfter, setDropAfter] = useState<string | null | undefined>(undefined);
+
+  const rowIds = useMemo(() => rows.map((r) => r.id), [rows]);
+
+  /** 列被重新載入時，把已經不存在的選取清掉 */
+  useEffect(() => {
+    setSelected((prev) => {
+      if (prev.size === 0) return prev;
+      const alive = new Set(rowIds);
+      const next = new Set([...prev].filter((id) => alive.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [rowIds]);
+
+  function toggleSelect(rowId: string, shiftKey: boolean) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      const anchor = anchorRef.current;
+      if (shiftKey && anchor && anchor !== rowId) {
+        // Shift 連選：錨點到這一列之間全部選起來（Notion 只加不減）
+        const from = rowIds.indexOf(anchor);
+        const to = rowIds.indexOf(rowId);
+        if (from !== -1 && to !== -1) {
+          const [lo, hi] = from < to ? [from, to] : [to, from];
+          for (let i = lo; i <= hi; i += 1) {
+            const id = rowIds[i];
+            if (id) next.add(id);
+          }
+          return next;
+        }
+      }
+      if (next.has(rowId)) next.delete(rowId);
+      else next.add(rowId);
+      anchorRef.current = rowId;
+      return next;
+    });
+  }
+
+  const selectedRows = rows.filter((r) => selected.has(r.id));
+  const allSelected = rows.length > 0 && selected.size === rows.length;
+
+  /** 匯出選取的列：直接在瀏覽器組 CSV（欄序＝目前視圖，title 第一欄） */
+  function exportSelected() {
+    const header = columns.map((c) => schema[c.property]?.name ?? c.property);
+    const lines = [header.map(csvCell).join(',')];
+    for (const row of selectedRows) {
+      lines.push(
+        columns
+          .map((c) => {
+            const def = schema[c.property];
+            if (!def) return '';
+            const value = row.properties[c.property];
+            if (def.type === 'relation') {
+              const ids = value && value.type === 'relation' ? value.pageIds : [];
+              return csvCell(ids.map(relatedTitle).join(', '));
+            }
+            return csvCell(getFieldType(def.type).toPlainText(value, def));
+          })
+          .join(','),
+      );
+    }
+    // BOM：Excel 開 UTF-8 CSV 不加 BOM 中文會亂碼（跟後端 export.csv 一致）
+    const blob = new Blob([BOM + lines.join(CRLF) + CRLF], {
+      type: 'text/csv;charset=utf-8',
+    });
+    const href = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = href;
+    a.download = `selection-${selectedRows.length}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(href);
+  }
+
+  /** 拖曳放開：把 dragRowId 插到 dropAfter 後面 */
+  function commitDrop() {
+    const rowId = dragRowId;
+    const afterId = dropAfter;
+    setDragRowId(null);
+    setDropAfter(undefined);
+    if (!rowId || afterId === undefined || afterId === rowId) return;
+    props.reorderRow?.(rowId, afterId);
+  }
   const gridRef = useRef<HTMLDivElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
 
@@ -186,9 +284,11 @@ export function TableView(props: ViewProps) {
     const wrap = wrapperRef.current;
     if (!rowEl || !wrap) {
       setHandleTop(null);
+      setHandleRowId(null);
       return;
     }
     setHandleTop(rowEl.getBoundingClientRect().top - wrap.getBoundingClientRect().top);
+    setHandleRowId(rowEl.dataset.rowId ?? null);
   }
 
   /* ── 鍵盤導航 ── */
@@ -275,11 +375,33 @@ export function TableView(props: ViewProps) {
   function renderRow(row: DatabaseRow, rowIndex: number) {
     return (
       <div
-        className={styles.row}
+        className={`${styles.row} ${selected.has(row.id) ? styles.rowSelected : ''} ${
+          dropAfter !== undefined && dropAfter === (rowIndex === 0 ? null : (rows[rowIndex - 1]?.id ?? null))
+            ? styles.dropBefore
+            : ''
+        }`}
         key={row.id}
         role="row"
         data-row-index={rowIndex}
+        data-row-id={row.id}
         aria-rowindex={rowIndex + 2}
+        aria-selected={selected.has(row.id)}
+        onDragOver={(e) => {
+          if (!dragRowId) return;
+          e.preventDefault();
+          // 指標在上半 → 插在這一列之前；下半 → 插在它之後
+          const box = e.currentTarget.getBoundingClientRect();
+          const after =
+            e.clientY - box.top < box.height / 2
+              ? (rows[rowIndex - 1]?.id ?? null)
+              : row.id;
+          setDropAfter(after);
+        }}
+        onDrop={(e) => {
+          if (!dragRowId) return;
+          e.preventDefault();
+          commitDrop();
+        }}
       >
         {columns.map((column, colIndex) => {
           const def = schema[column.property];
@@ -295,7 +417,7 @@ export function TableView(props: ViewProps) {
               data-col={colIndex}
               className={`${styles.cellWrap} ${frozen ? styles.frozen : ''} ${
                 isActive ? styles.cellActive : ''
-              }`}
+              } ${column.property === 'title' ? styles.titleCell : ''}`}
               style={{ width: widthOf(column.property, column.width), left: frozen ? 0 : undefined }}
               onKeyDown={(e) => onCellKeyDown(e, { rowIndex, colIndex })}
               /**
@@ -330,6 +452,23 @@ export function TableView(props: ViewProps) {
                   }
                 }}
               />
+              {column.property === 'title' && !readOnly ? (
+                /**
+                 * Notion 的列勾選框壓在**名稱欄左側**（07c 實測 x42..57），
+                 * 打開時名稱欄的文字往右讓 20px（`.titleCell` 的 padding-left）。
+                 */
+                <input
+                  type="checkbox"
+                  className={styles.rowCheckbox}
+                  checked={selected.has(row.id)}
+                  aria-label={`選取「${richTextToPlainText(row.title) || '未命名'}」`}
+                  onClick={(e) => e.stopPropagation()}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onChange={(e) =>
+                    toggleSelect(row.id, (e.nativeEvent as unknown as MouseEvent).shiftKey)
+                  }
+                />
+              ) : null}
               {column.property === 'title' ? (
                 <button
                   type="button"
@@ -363,9 +502,73 @@ export function TableView(props: ViewProps) {
       onScroll={() => setHandleTop(null)}
     >
       {handleTop !== null ? (
-        <span className={styles.rowHandle} data-row-handle="" style={{ top: handleTop }} aria-hidden="true">
+        <span
+          className={styles.rowHandle}
+          data-row-handle=""
+          data-testid="row-handle"
+          style={{ top: handleTop }}
+          title="拖曳排序"
+          /* 拖曳排序：HTML5 DnD（與側邊欄 / 看板同一套，不加套件） */
+          draggable={!readOnly && props.reorderRow !== undefined}
+          onDragStart={(e) => {
+            if (!handleRowId) return;
+            setDragRowId(handleRowId);
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', handleRowId);
+          }}
+          onDragEnd={() => {
+            setDragRowId(null);
+            setDropAfter(undefined);
+          }}
+        >
           <UiIcon name="drag" size={12} />
         </span>
+      ) : null}
+
+      {/* 批次列：選了列才浮出來（Notion 在表格頂端） */}
+      {selected.size > 0 ? (
+        <div className={styles.batchBar} role="toolbar" aria-label="批次操作">
+          <label className={styles.batchCheck}>
+            <input
+              type="checkbox"
+              checked={allSelected}
+              aria-label="全選"
+              onChange={(e) => setSelected(e.target.checked ? new Set(rowIds) : new Set())}
+            />
+            已選取 {selected.size} 列
+          </label>
+          <span className={styles.batchSpacer} />
+          <button type="button" className={styles.batchButton} onClick={() => exportSelected()}>
+            匯出選取
+          </button>
+          <button
+            type="button"
+            className={styles.batchButton}
+            disabled={readOnly}
+            onClick={() => {
+              for (const id of selected) props.duplicateRow(id);
+              setSelected(new Set());
+            }}
+          >
+            複製
+          </button>
+          <button
+            type="button"
+            className={`${styles.batchButton} ${styles.batchDanger}`}
+            disabled={readOnly}
+            onClick={() => {
+              const ids = [...selected];
+              setSelected(new Set());
+              if (props.deleteRows) props.deleteRows(ids);
+              else for (const id of ids) props.deleteRow(id);
+            }}
+          >
+            刪除
+          </button>
+          <button type="button" className={styles.batchButton} onClick={() => setSelected(new Set())}>
+            取消
+          </button>
+        </div>
       ) : null}
       <div ref={gridRef} className={styles.grid} role="grid" aria-rowcount={rows.length + 1}>
         {/* 標題列：sticky top，灰字 14px */}
@@ -573,4 +776,16 @@ export function TableView(props: ViewProps) {
       </Popover>
     </div>
   );
+}
+
+
+/** CSV 的逃脫規則（與後端 `service.ts` 的 `csvCell()` 相同） */
+const BOM = '\uFEFF';
+const CRLF = '\r\n';
+const CSV_SPECIAL = /["\n\r,]/;
+
+function csvCell(value: string): string {
+  if (value === '') return '';
+  if (CSV_SPECIAL.test(value)) return '"' + value.replace(/"/g, '""') + '"';
+  return value;
 }

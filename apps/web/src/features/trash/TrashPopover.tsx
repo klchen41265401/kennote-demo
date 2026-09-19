@@ -47,13 +47,17 @@ export function TrashPopover({ workspaceId, trigger, onRestored }: TrashPopoverP
                 className={styles.itemMain}
                 onClick={() => {
                   setOpen(false);
-                  navigate(`/page/${p.id}`);
+                  navigate(p.isDatabase ? `/database/${p.id}` : `/page/${p.id}`);
                 }}
               >
                 <span className={styles.itemIcon}>{p.icon ?? <Icon name="page" size={16} />}</span>
                 <span className={styles.itemBody}>
                   <span className={styles.itemTitle}>{displayTitle(p.title)}</span>
-                  <span className={styles.itemMeta}>{relativeTime(p.deletedAt)}刪除</span>
+                  <span className={styles.itemMeta}>
+                    {/* 資料庫的列也會進垃圾桶，標示它原本屬於哪個資料庫 */}
+                    {p.collectionId ? `${p.collectionTitle || '未命名資料庫'}・` : ''}
+                    {relativeTime(p.deletedAt)}刪除
+                  </span>
                 </span>
               </button>
               <button

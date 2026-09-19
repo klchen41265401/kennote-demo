@@ -1,5 +1,5 @@
 import type { CollectionSchema, ViewFormat } from '@kennote/shared-types';
-import { registerViewType, type ViewSettingsProps } from '../types';
+import { defaultPropertyWidth, registerViewType, type ViewSettingsProps } from '../types';
 import { TableView } from './TableView';
 import styles from './TableView.module.css';
 
@@ -60,7 +60,7 @@ registerViewType({
     properties: Object.keys(schema).map((property) => ({
       property,
       visible: true,
-      width: property === 'title' ? 320 : 160,
+      width: defaultPropertyWidth(property),
     })),
     tableFreezeColumns: 1,
   }),

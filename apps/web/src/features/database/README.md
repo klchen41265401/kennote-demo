@@ -157,40 +157,39 @@ const snapshot = await createDatabase({
 
 ---
 
-## 4. RowPeek 的 editor host 約定 ⭐
+## 4. RowPeek 的編輯器 ⭐
 
 「列 = 頁面」是這個模型最大的槓桿點（03 §4.6）。點一列會開 side peek，
-裡面有**給編輯器代理的掛載點**：
+標題與屬性表（`<dl>`）由 database 模組自己管，底下**直接掛整頁用的那一支編輯器**：
 
-```html
-<div id="editor-host-row" data-page-id="<pageId>"></div>
+```tsx
+<div id="editor-host-row" data-page-id={row.id}>
+  <Editor key={row.id} pageId={row.id} workspaceId={workspaceId}
+          snapshot={usePageSnapshot(open ? row.id : null).data} … />
+</div>
 ```
 
-約定：
-
-1. **同一時間只會有一個** `#editor-host-row`（一次只開一個 peek）。
-2. `data-page-id` 就是這一列的 `pageId` —— 它是一個真正的 page，
-   初次資料走 `GET /api/pages/:id/snapshot`，變更走
-   `POST /api/pages/:id/transactions`（跟 `#editor-host` 完全一樣的協定）。
-3. peek 關閉時這個 div 會被 React 卸載，請在 cleanup 裡解除掛載
-   （建議用 `MutationObserver` 或在掛載時記住 node，`disconnectedCallback` 時清掉）。
-4. 「以整頁開啟」會導向 `/page/:pageId`，那裡是既有的 `#editor-host`，不需要特別處理。
-5. 屬性表（`<dl>`）在掛載點**上方**，由 database 模組自己管理，編輯器不要動它。
-
----
+- 初次資料 `GET /api/pages/:id/snapshot`、變更走同一條同步層 ——
+  peek 與 `/page/:id` 改的是**同一份資料**。
+- `key={row.id}` 保證換一列就重建編輯器；peek 關閉時整棵子樹卸載，
+  `useEditorHost` 的 cleanup 會銷毀 editor-core。
+- 「以整頁開啟」導向 `/page/:rowId`（那裡是既有的 `#editor-host`）。
+- `id="editor-host-row"` 仍然保留，外部還是可以靠它找到 peek 的內容區。
 
 ## 5. 與後端的契約
 
 | 端點 | 用途 |
 |---|---|
 | `POST /api/databases` | 建立（回 collection + 預設視圖 + 預設欄位） |
+| `GET /api/databases?workspaceId=` | 工作區的資料庫清單（relation 的「目標資料庫」下拉） |
 | `GET /api/databases/:id` | schema + 所有視圖 |
 | `GET /api/databases/:id/rows?viewId=&cursor=&search=&timeZone=` | `{ rows, groups?, aggregations?, cursor, hasMore, total }` |
 | `POST /api/databases/:id/rows` | 可帶 `group: { property, key }`（看板的「＋ 新增」） |
 | `PATCH /api/databases/:id/rows/:rowId` | 回傳**重算過的整列**（formula / rollup 會更新） |
-| `DELETE /api/databases/:id/rows/:rowId` | 軟刪 |
+| `DELETE /api/databases/:id/rows/:rowId` | 軟刪（走 pages 的軟刪除路徑 → 進工作區垃圾桶） |
+| `POST /api/databases/:id/rows/reorder` | `{ rowId, afterId }` 拖曳排序（`afterId: null` = 最前面） |
 | `POST /api/databases/:id/rows/:rowId/duplicate` | 複製列 |
-| `PATCH /api/databases/:id/schema` | `{ ops: SchemaOp[] }`，回 `{ collection, migrations }` |
+| `PATCH /api/databases/:id/schema` | `{ ops: SchemaOp[] }`，回 `{ collection, migrations }`。relation 的 `add`/`update` 可帶 `createDual: { name }` 自動建反向欄位 |
 | `POST /api/databases/:id/schema/preview-cast` | 改型別前的損失預告（**必做**，02 §4.3.1） |
 | `POST/PATCH/DELETE /api/databases/:id/views[/:viewId]` | 視圖 CRUD |
 | `GET /api/databases/:id/export.csv?viewId=` | CSV（含 BOM，Excel 開中文不亂碼） |
@@ -230,5 +229,7 @@ export { Popover, Menu, MenuItem, Dialog, VirtualList } from '@kennote/ui';
 - **relation 儲存格**顯示標題快取；快取沒命中時顯示 id 前 8 碼（picker 開過就會有標題）。
 - **files 欄位**只支援外部連結；`POST /api/files/upload` 接上後換掉 `fields/files/Editor.tsx` 即可。
 - **Gallery 的 `pageContent` 封面**（頁面內容首圖）目前退回頁面封面，要載入 block 才做得到。
-- **manualOrder（拖曳列排序）** 的 API 已存在（`PATCH view` 的 `manualOrder`），UI 尚未接。
+- **拖曳列排序**走 `POST /api/databases/:id/rows/reorder`（寫 `pages.sort_key`），
+  只有**表格**接了，而且沒有鍵盤替代路徑；`view.format.manualOrder` 那條路徑仍未使用。
+- **列選取 / 批次操作**（勾選框、Shift 連選、批次列）只有**表格**有。
 - **子分組 sub-group**、**timeline 視圖**、**個人暫用視圖設定**是 P2，尚未實作。

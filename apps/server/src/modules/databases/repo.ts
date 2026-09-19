@@ -115,6 +115,24 @@ export async function findCollectionById(
   `);
 }
 
+/** 工作區裡所有（未刪除的）資料庫，relation 的目標選單用 */
+export async function listCollectionsForUser(
+  workspaceId: string,
+  userId: string,
+  conn: Queryable = db,
+): Promise<CollectionRow[]> {
+  return conn.query<CollectionRow>(sql`
+    SELECT ${collectionColumns('c')}
+      FROM collections c
+      JOIN workspace_members m
+        ON m.workspace_id = c.workspace_id AND m.user_id = ${userId} AND m.deleted_at IS NULL
+      JOIN pages p ON p.id = c.page_id AND p.deleted_at IS NULL
+     WHERE c.workspace_id = ${workspaceId} AND c.deleted_at IS NULL
+     ORDER BY c.updated_at DESC
+     LIMIT 200
+  `);
+}
+
 export async function updateCollectionSchema(
   conn: Queryable,
   collectionId: string,
@@ -452,6 +470,21 @@ export async function updateRowProperties(
      WHERE p.id = ${rowId} AND p.deleted_at IS NULL
      RETURNING ${ROW_COLUMNS}
   `);
+}
+
+/** 手動拖曳排序：只改 sort_key（列的排序真值與 pages 相同） */
+export async function updateRowSortKey(
+  conn: Queryable,
+  rowId: string,
+  collectionId: string,
+  sortKey: string,
+): Promise<boolean> {
+  const row = await conn.queryOne<{ id: string }>(sql`
+    UPDATE pages SET sort_key = ${sortKey}, version = version + 1
+     WHERE id = ${rowId} AND collection_id = ${collectionId} AND deleted_at IS NULL
+     RETURNING id
+  `);
+  return row !== null;
 }
 
 export async function softDeleteRow(

@@ -152,6 +152,8 @@ export function DatabaseView({
             createRow={(options) => void controller.createRow(options)}
             deleteRow={(rowId) => void controller.deleteRow(rowId)}
             duplicateRow={(rowId) => void controller.duplicateRow(rowId)}
+            deleteRows={(rowIds) => void controller.deleteRows(rowIds)}
+            reorderRow={(rowId, afterId) => void controller.reorderRow(rowId, afterId)}
             openRow={(rowId) => setPeekRowId(rowId)}
           />
         </div>

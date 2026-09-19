@@ -37,6 +37,7 @@ import {
   useExpanded,
 } from '../../stores/ui';
 import { useAuth } from '../../stores/auth';
+import { createDatabase } from '../database';
 import { TrashPopover } from '../trash/TrashPopover';
 import { TemplatesMenu } from '../templates/TemplatesMenu';
 import { WorkspaceSwitcher } from './WorkspaceSwitcher';
@@ -376,6 +377,27 @@ export function Sidebar({ workspace }: SidebarProps): JSX.Element {
         >
           <Icon name="plus" size={16} />
           新增頁面
+        </button>
+
+        {/**
+         * 功能 QA 第三輪 §1.1 的缺口：側邊欄沒有建立資料庫的入口，
+         * 唯一路徑是「新增頁面 → `/資料庫 - 整頁`」。這裡補一個整頁資料庫的入口。
+         */}
+        <button
+          type="button"
+          className={styles.more}
+          onClick={async () => {
+            const snapshot = await createDatabase({
+              workspaceId: workspace.id,
+              title: '未命名資料庫',
+              inline: false,
+            });
+            await refresh();
+            navigate(`/database/${snapshot.collection.pageId}`);
+          }}
+        >
+          <Icon name="table" size={16} />
+          新增資料庫
         </button>
       </div>
 

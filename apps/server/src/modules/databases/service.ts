@@ -141,6 +141,20 @@ async function loadCollection(collectionId: string, userId: string) {
   return row;
 }
 
+/** 工作區的資料庫清單（relation 的「目標資料庫」下拉） */
+export async function listDatabases(
+  workspaceId: string,
+  userId: string,
+): Promise<Array<{ id: string; pageId: string; name: RichText; isInline: boolean }>> {
+  const rows = await repo.listCollectionsForUser(workspaceId, userId);
+  return rows.map((r) => ({
+    id: r.id,
+    pageId: r.page_id,
+    name: r.name ?? [],
+    isInline: r.is_inline,
+  }));
+}
+
 export async function getDatabase(collectionId: string, userId: string): Promise<DatabaseSnapshot> {
   const collection = await loadCollection(collectionId, userId);
   const views = await repo.listViews(collectionId);
@@ -161,6 +175,17 @@ export async function getDatabase(collectionId: string, userId: string): Promise
 }
 
 /**
+ * 欄位的預設寬度（對齊 Notion：title 276px、其餘 200px）。
+ * 前端 `views/types.ts` 的 `defaultPropertyWidth()` 是同一份數字，兩邊要一起改。
+ */
+export const DEFAULT_TITLE_WIDTH = 276;
+export const DEFAULT_PROPERTY_WIDTH = 200;
+
+export function defaultPropertyWidth(property: string): number {
+  return property === 'title' ? DEFAULT_TITLE_WIDTH : DEFAULT_PROPERTY_WIDTH;
+}
+
+/**
  * 新資料庫的預設表格視圖。
  *
  * ⭐ 一律 `visible: true`。原本是 `visible: i < 5`，所以帶了 6 個以上欄位建出來的
@@ -173,7 +198,7 @@ function defaultViewFormat(schema: CollectionSchema) {
     properties: Object.keys(schema).map((property) => ({
       property,
       visible: true,
-      width: property === 'title' ? 320 : 160,
+      width: defaultPropertyWidth(property),
     })),
     tableFreezeColumns: 1,
     tableRowNumbers: false,
@@ -218,12 +243,12 @@ export function alignViewProperties(
   for (const property of Object.keys(schema)) {
     if (seen.has(property) || isAppended.has(property)) continue;
     seen.add(property);
-    out.push({ property, visible: true, width: property === 'title' ? 320 : 160 });
+    out.push({ property, visible: true, width: defaultPropertyWidth(property) });
   }
   for (const property of appendedIds) {
     if (seen.has(property) || !schema[property]) continue;
     seen.add(property);
-    out.push(prior.get(property) ?? { property, visible: true, width: 160 });
+    out.push(prior.get(property) ?? { property, visible: true, width: defaultPropertyWidth(property) });
   }
   return out;
 }
@@ -430,6 +455,64 @@ export async function previewCast(
  * ops 版的 schema 編輯：新增 / 改名 / 改設定 / 改型別 / 刪除。
  * 改型別時同一個交易內做值遷移，轉不動的**清空**（並在回傳的 report 裡說明）。
  */
+/* ── relation 的反向欄位（BUG-11） ─────────────────────── */
+
+/**
+ * 讀 schema 的小快取：一次 `PATCH /schema` 或一次列寫入裡，
+ * 同一個目標 collection 只查一次（交易內的額外查詢要省著用）。
+ */
+function schemaLoader(tx: Queryable, local: { id: string; schema: () => CollectionSchema }) {
+  const cache = new Map<string, CollectionSchema | null>();
+  return async (collectionId: string): Promise<CollectionSchema | null> => {
+    if (collectionId === local.id) return local.schema();
+    if (cache.has(collectionId)) return cache.get(collectionId) ?? null;
+    const row = await repo.findCollectionById(collectionId, tx);
+    const schema = row ? ((row.schema ?? {}) as CollectionSchema) : null;
+    cache.set(collectionId, schema);
+    return schema;
+  };
+}
+
+/**
+ * BUG-11：`dualProperty` 指到目標資料庫**不存在**（或不是 relation）的欄位時，
+ * 之前會一路寫下去，在目標列的 properties jsonb 裡留下 schema 沒有的孤兒屬性
+ * （UI 看不到、CSV 不會輸出，但 relation_edges 已經寫進去了）。
+ *
+ * 現在在 `PATCH /schema` 當場擋下來（400），訊息直接說是哪個欄位、要怎麼修。
+ */
+export async function assertDualPropertyExists(
+  loadSchema: (collectionId: string) => Promise<CollectionSchema | null>,
+  propertyId: string,
+  def: FieldDefinition,
+): Promise<void> {
+  if (def.type !== 'relation' || !def.dualProperty) return;
+  if (!def.collectionId) {
+    throw new AppError(
+      'INVALID_FIELD_TYPE',
+      `關聯欄位「${def.name}」設了反向欄位，但沒有指定目標資料庫（collectionId）。`,
+    );
+  }
+  const targetSchema = await loadSchema(def.collectionId);
+  if (!targetSchema) {
+    throw new AppError('INVALID_FIELD_TYPE', `關聯欄位「${def.name}」的目標資料庫不存在。`);
+  }
+  const dual = targetSchema[def.dualProperty];
+  if (!dual) {
+    throw new AppError(
+      'INVALID_FIELD_TYPE',
+      `目標資料庫裡沒有欄位「${def.dualProperty}」，反向關聯無法建立。` +
+        '請改用「在目標資料庫顯示反向欄位」自動建立，或先在目標資料庫加一個關聯欄位。',
+    );
+  }
+  if (dual.type !== 'relation') {
+    throw new AppError(
+      'INVALID_FIELD_TYPE',
+      `目標資料庫的欄位「${dual.name}」不是關聯欄位（目前是 ${dual.type}），不能當反向欄位。`,
+    );
+  }
+  void propertyId;
+}
+
 export async function applySchemaOps(
   collectionId: string,
   userId: string,
@@ -446,6 +529,10 @@ export async function applySchemaOps(
     let schemaShapeChanged = false;
     /** propertyId → 每一列的新值（null = 刪掉 key） */
     const pendingWrites = new Map<string, Map<string, FieldValue | null>>();
+    /** BUG-11：這一批要「順便在目標資料庫建反向欄位」的 relation 欄位 */
+    const dualCreations: Array<{ propertyId: string; targetCollectionId: string; name: string }> = [];
+    /** 這一批動過的 relation 欄位（只驗這些，既有的壞資料不因無關的 op 被擋下） */
+    const touchedRelations = new Set<string>();
 
     for (const op of ops) {
       switch (op.op) {
@@ -460,6 +547,24 @@ export async function applySchemaOps(
           schema[propertyId] = op.definition;
           addedPropertyIds.push(propertyId);
           schemaShapeChanged = true;
+          if (op.definition.type === 'relation') touchedRelations.add(propertyId);
+          if (op.createDual) {
+            if (op.definition.type !== 'relation') {
+              throw new AppError('INVALID_FIELD_TYPE', '只有關聯欄位可以自動建立反向欄位');
+            }
+            if (!op.definition.collectionId) {
+              throw new AppError('INVALID_FIELD_TYPE', '要建立反向欄位，請先選擇目標資料庫');
+            }
+            const name = op.createDual.name.trim();
+            if (name === '') {
+              throw new AppError('INVALID_FIELD_TYPE', '反向欄位需要一個名稱');
+            }
+            dualCreations.push({
+              propertyId,
+              targetCollectionId: op.definition.collectionId,
+              name,
+            });
+          }
           break;
         }
         case 'rename': {
@@ -475,6 +580,22 @@ export async function applySchemaOps(
             throw new AppError('INVALID_FIELD_TYPE', '改型別請用 retype，才會做值遷移');
           }
           schema[op.propertyId] = op.definition;
+          if (op.definition.type === 'relation') touchedRelations.add(op.propertyId);
+          if (op.createDual) {
+            if (op.definition.type !== 'relation') {
+              throw new AppError('INVALID_FIELD_TYPE', '只有關聯欄位可以自動建立反向欄位');
+            }
+            if (!op.definition.collectionId) {
+              throw new AppError('INVALID_FIELD_TYPE', '要建立反向欄位，請先選擇目標資料庫');
+            }
+            const name = op.createDual.name.trim();
+            if (name === '') throw new AppError('INVALID_FIELD_TYPE', '反向欄位需要一個名稱');
+            dualCreations.push({
+              propertyId: op.propertyId,
+              targetCollectionId: op.definition.collectionId,
+              name,
+            });
+          }
           break;
         }
         case 'delete': {
@@ -526,6 +647,7 @@ export async function applySchemaOps(
           }
 
           schema[op.propertyId] = toDef;
+          if (toDef.type === 'relation') touchedRelations.add(op.propertyId);
           pendingWrites.set(op.propertyId, writes);
           migrations.push(report);
           break;
@@ -535,7 +657,74 @@ export async function applySchemaOps(
       }
     }
 
+    /**
+     * BUG-11 之二：`createDual` —— 在**同一個交易**裡於目標 collection 建一個
+     * 反向 relation 欄位，兩邊互指。目標可以是自己（自我關聯）。
+     */
+    const dualTargets = new Map<string, { schema: CollectionSchema; appended: string[] }>();
+    for (const dual of dualCreations) {
+      const self = schema[dual.propertyId];
+      if (!self || self.type !== 'relation') continue;
+
+      if (dual.targetCollectionId === collectionId) {
+        const dualId = generatePropertyId(Object.keys(schema));
+        schema[dualId] = {
+          name: dual.name,
+          type: 'relation',
+          collectionId,
+          dualProperty: dual.propertyId,
+        };
+        schema[dual.propertyId] = { ...self, dualProperty: dualId };
+        addedPropertyIds.push(dualId);
+        schemaShapeChanged = true;
+        continue;
+      }
+
+      let entry = dualTargets.get(dual.targetCollectionId);
+      if (!entry) {
+        const target = await repo.findCollectionById(dual.targetCollectionId, tx);
+        if (!target) {
+          throw new AppError('INVALID_FIELD_TYPE', '找不到要建立反向欄位的目標資料庫');
+        }
+        if (target.workspace_id !== collection.workspace_id) {
+          throw new AppError('INVALID_FIELD_TYPE', '只能關聯同一個工作區裡的資料庫');
+        }
+        entry = { schema: { ...((target.schema ?? {}) as CollectionSchema) }, appended: [] };
+        dualTargets.set(dual.targetCollectionId, entry);
+      }
+      const dualId = generatePropertyId(Object.keys(entry.schema));
+      entry.schema[dualId] = {
+        name: dual.name,
+        type: 'relation',
+        collectionId,
+        dualProperty: dual.propertyId,
+      };
+      entry.appended.push(dualId);
+      schema[dual.propertyId] = { ...self, dualProperty: dualId };
+    }
+
     schema = validateSchema(schema);
+
+    for (const [targetId, entry] of dualTargets) {
+      const targetSchema = validateSchema(entry.schema);
+      await repo.updateCollectionSchema(tx, targetId, targetSchema);
+      const targetViews = await repo.listViews(targetId, tx);
+      for (const viewRow of targetViews) {
+        const format = (viewRow.format ?? {}) as ViewFormat;
+        const properties = alignViewProperties(format, targetSchema, entry.appended);
+        if (samePropertyOrder(properties, format.properties)) continue;
+        await repo.updateView(tx, viewRow.id, { format: { ...format, properties } });
+      }
+    }
+
+    // BUG-11：dualProperty 指到不存在／型別不對的欄位時，當場 400（不再寫出孤兒資料）
+    {
+      const loadSchema = schemaLoader(tx, { id: collectionId, schema: () => schema });
+      for (const propertyId of touchedRelations) {
+        const def = schema[propertyId];
+        if (def) await assertDualPropertyExists(loadSchema, propertyId, def);
+      }
+    }
 
     // 值遷移：一列一個 UPDATE，但都在同一個交易內（03 §9.5：交易要短，
     // 所以 MAX_MIGRATION_ROWS 有上限；超過時請走匯出/匯入）
@@ -916,12 +1105,14 @@ async function syncRelations(
   tx: Queryable,
   params: {
     workspaceId: string;
+    collectionId: string;
     rowId: string;
     schema: CollectionSchema;
     before: RowProperties;
     after: RowProperties;
   },
 ): Promise<void> {
+  const loadSchema = schemaLoader(tx, { id: params.collectionId, schema: () => params.schema });
   for (const [propertyId, def] of Object.entries(params.schema)) {
     if (def?.type !== 'relation') continue;
     const beforeValue = params.before[propertyId];
@@ -939,6 +1130,13 @@ async function syncRelations(
     });
 
     if (!def.dualProperty) continue;
+    /**
+     * BUG-11：目標資料庫的 schema 裡沒有這個欄位（或型別不是 relation）時
+     * **當成單向關聯**，不寫反向值。舊資料可能已經存了壞設定，這裡只能靜靜跳過
+     * （`PATCH /schema` 會在設定的當下就擋掉新的壞設定）。
+     */
+    const targetSchema = def.collectionId ? await loadSchema(def.collectionId) : null;
+    if (!targetSchema || targetSchema[def.dualProperty]?.type !== 'relation') continue;
     const dualProperty = def.dualProperty;
     const touched = [...new Set([...beforeIds, ...afterIds])];
     const targets = await repo.findRowsForRelationUpdate(touched, tx);
@@ -1019,6 +1217,7 @@ export async function createRow(
 
     await syncRelations(tx, {
       workspaceId: collection.workspace_id,
+      collectionId,
       rowId: page.id,
       schema,
       before: {},
@@ -1063,6 +1262,7 @@ export async function patchRow(
     if (properties) {
       await syncRelations(tx, {
         workspaceId: collection.workspace_id,
+        collectionId,
         rowId,
         schema,
         before,
@@ -1089,14 +1289,61 @@ export async function deleteRow(
     // 先把 relation 清掉，反向欄位才不會留下指向垃圾桶的幽靈
     await syncRelations(tx, {
       workspaceId: collection.workspace_id,
+      collectionId,
       rowId,
       schema: (collection.schema ?? {}) as CollectionSchema,
       before: (existing.properties ?? {}) as RowProperties,
       after: {},
     });
-    const ok = await repo.softDeleteRow(tx, rowId, collectionId);
-    if (!ok) throw new AppError('ROW_NOT_FOUND');
+    /**
+     * ⭐ 走**與 pages 完全相同的軟刪除路徑**（`softDeleteSubtree`）：
+     * 列本身就是 page，它底下的 block 與子頁面要一起進垃圾桶，
+     * `GET /api/trash` 才看得到、`POST /api/pages/:id/restore` 才還原得回來
+     * （功能 QA 第三輪 §1.6：以前只更新 `pages.deleted_at`，blocks 沒跟著走）。
+     */
+    const ids = await pagesRepo.collectDescendantIds(rowId, tx);
+    await pagesRepo.softDeleteSubtree(tx, ids, userId);
   });
+}
+
+/**
+ * 表格的**拖曳排序**：把 `rowId` 移到 `afterId` 後面（`afterId: null` = 移到最前面）。
+ *
+ * 列就是 page，排序真值一樣是 `pages.sort_key`（fractional index），
+ * 所以直接沿用 pages 的 `computeSortKey()`：只寫一列，不必整批重排。
+ */
+export async function reorderRow(
+  collectionId: string,
+  rowId: string,
+  userId: string,
+  afterId: string | null,
+): Promise<DatabaseRow> {
+  const collection = await loadCollection(collectionId, userId);
+  const schema = (collection.schema ?? {}) as CollectionSchema;
+  const existing = await repo.findRow(rowId, collectionId);
+  if (!existing) throw new AppError('ROW_NOT_FOUND');
+  if (afterId === rowId) throw new AppError('BAD_REQUEST', '不能把一列排到自己後面');
+  if (afterId) {
+    const target = await repo.findRow(afterId, collectionId);
+    if (!target) throw new AppError('ROW_NOT_FOUND', '找不到要插入位置的那一列');
+  }
+
+  const updated = await withTransaction(async (tx) => {
+    const sortKey = await pagesRepo.computeSortKey(
+      collection.workspace_id,
+      collection.page_id,
+      afterId,
+      tx,
+    );
+    const ok = await repo.updateRowSortKey(tx, rowId, collectionId, sortKey);
+    if (!ok) throw new AppError('ROW_NOT_FOUND');
+    const row = await repo.findRow(rowId, collectionId, tx);
+    if (!row) throw new AppError('ROW_NOT_FOUND');
+    return row;
+  });
+
+  const sources = await loadRollupSources(schema, [updated]);
+  return materializeRow(updated, schema, sources, new Date(), schemaHasComputed(schema));
 }
 
 export async function duplicateRow(
@@ -1219,6 +1466,46 @@ function csvCell(value: string): string {
   return value;
 }
 
+/**
+ * CSV 的欄序：**依目前視圖的 `format.properties`**（只取可見欄），title 永遠第一欄。
+ *
+ * 功能 QA 第三輪 §1.3：之前匯出直接走 `Object.keys(schema)`（Postgres 的 jsonb
+ * key 排序），所以 `名稱`（title）被排到最後一欄 —— Notion 的 CSV 第一欄一定是 title。
+ */
+export function csvColumns(schema: CollectionSchema, format: ViewFormat | undefined): string[] {
+  const formatProps = format?.properties ?? [];
+  const visible = formatProps.filter((p) => p.visible !== false).map((p) => p.property);
+  const columns = (visible.length > 0 ? visible : Object.keys(schema)).filter((id) => schema[id]);
+  const titleAt = columns.indexOf('title');
+  if (titleAt > 0) columns.splice(titleAt, 1);
+  if (titleAt !== 0 && schema.title) columns.unshift('title');
+  return columns;
+}
+
+/**
+ * CSV 的 relation 欄位要顯示**目標列的標題**，所以先把這一批會用到的 pageId
+ * 一次撈回來（一次查詢，不是每格一次）。
+ */
+async function loadRelationTitles(
+  schema: CollectionSchema,
+  columns: readonly string[],
+  records: readonly repo.RowRecord[],
+): Promise<Map<string, string>> {
+  const relationColumns = columns.filter((id) => schema[id]?.type === 'relation');
+  if (relationColumns.length === 0) return new Map();
+  const ids = new Set<string>();
+  for (const record of records) {
+    const props = (record.properties ?? {}) as RowProperties;
+    for (const column of relationColumns) {
+      const value = props[column];
+      if (value && value.type === 'relation') for (const id of value.pageIds) ids.add(id);
+    }
+  }
+  if (ids.size === 0) return new Map();
+  const rows = await repo.findRowsByIds([...ids].slice(0, MAX_EXPORT_ROWS));
+  return new Map(rows.map((r) => [r.id, richTextToPlainText(r.title ?? [])]));
+}
+
 export async function exportCsv(
   collectionId: string,
   userId: string,
@@ -1226,15 +1513,18 @@ export async function exportCsv(
 ): Promise<string> {
   const collection = await loadCollection(collectionId, userId);
   const schema = (collection.schema ?? {}) as CollectionSchema;
-  const view = viewId ? await repo.findView(viewId, collectionId) : null;
+  /**
+   * 沒帶 viewId 時退回**第一個視圖**，而不是「沒有視圖」。
+   * 不這樣做的話欄序會退回 `Object.keys(schema)`（Postgres 的 jsonb key 排序），
+   * title 會被排到最後 —— Notion 的 CSV 第一欄一定是 title。
+   */
+  const view = viewId
+    ? await repo.findView(viewId, collectionId)
+    : ((await repo.listViews(collectionId))[0] ?? null);
   const ctx = defaultQueryContext();
   const compiled = compileViewQuery(schema, view?.query ?? {}, ctx);
 
-  // 視圖有隱藏欄位時，匯出跟著隱藏（使用者看到什麼就匯出什麼）
-  const formatProps = view?.format?.properties ?? [];
-  const visible = formatProps.filter((p) => p.visible !== false).map((p) => p.property);
-  const columns = (visible.length > 0 ? visible : Object.keys(schema)).filter((id) => schema[id]);
-  if (!columns.includes('title')) columns.unshift('title');
+  const columns = csvColumns(schema, view?.format as ViewFormat | undefined);
 
   const records = await repo.streamAllRows(
     collectionId,
@@ -1244,6 +1534,7 @@ export async function exportCsv(
   );
   const sources = await loadRollupSources(schema, records);
   const hasComputed = schemaHasComputed(schema);
+  const relationTitles = await loadRelationTitles(schema, columns, records);
 
   const lines: string[] = [
     columns.map((id) => csvCell(schema[id]?.name ?? id)).join(','),
@@ -1253,6 +1544,14 @@ export async function exportCsv(
     const cells = columns.map((id) => {
       const def = schema[id];
       if (!def) return '';
+      if (def.type === 'relation') {
+        const value = row.properties[id];
+        if (!value || value.type !== 'relation') return '';
+        // relation 匯出目標列的**標題**（Notion 就是這樣），不是 pageId
+        return csvCell(
+          value.pageIds.map((pid) => relationTitles.get(pid) ?? pid).join(', '),
+        );
+      }
       return csvCell(getFieldType(def.type).toPlainText(row.properties[id], def));
     });
     lines.push(cells.join(','));

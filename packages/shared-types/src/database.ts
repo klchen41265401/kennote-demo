@@ -575,10 +575,31 @@ export interface QueryRowsResult {
 
 /* ── schema 編輯（PATCH /api/databases/:id/schema）───────── */
 
+/**
+ * `add` 的 `createDual`：新增 relation 欄位時，順便在**目標資料庫**建一個
+ * 反向 relation 欄位，並讓兩邊互指（Notion 的「在〈目標〉顯示」開關）。
+ * 後端在同一個交易內完成；目標 collection 由 `definition.collectionId` 決定。
+ */
+export interface CreateDualRelation {
+  /** 反向欄位在目標資料庫裡的名稱 */
+  name: string;
+}
+
 export type SchemaOp =
-  | { op: 'add'; propertyId?: string; definition: FieldDefinition }
+  | {
+      op: 'add';
+      propertyId?: string;
+      definition: FieldDefinition;
+      createDual?: CreateDualRelation;
+    }
   | { op: 'rename'; propertyId: string; name: string }
-  | { op: 'update'; propertyId: string; definition: FieldDefinition }
+  | {
+      op: 'update';
+      propertyId: string;
+      definition: FieldDefinition;
+      /** relation：把「在目標資料庫顯示」打開時，順便建反向欄位 */
+      createDual?: CreateDualRelation;
+    }
   | { op: 'retype'; propertyId: string; definition: FieldDefinition }
   | { op: 'delete'; propertyId: string };
 

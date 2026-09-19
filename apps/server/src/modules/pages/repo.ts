@@ -300,6 +300,15 @@ export async function movePageRow(
   `);
 }
 
+/**
+ * 垃圾桶清單。
+ *
+ * ⭐ **資料庫的列也是 page，刪掉之後要看得到**（功能 QA 第三輪 §1.6 的缺口）。
+ * 原本這裡有一條 `AND collection_id IS NULL`，把所有列排除在外 ——
+ * 結果是「`POST /api/pages/:id/restore` 還原得回來，但使用者找不到入口」。
+ * 列的父層是資料庫頁本身，所以「父層也被刪掉就不重複列出」那條規則仍然成立：
+ * 整個資料庫被刪時只會看到資料庫，不會看到它底下的幾千列。
+ */
 export async function listTrash(workspaceId: string): Promise<TrashedPage[]> {
   const rows = await db.query<{
     id: string;
@@ -309,20 +318,25 @@ export async function listTrash(workspaceId: string): Promise<TrashedPage[]> {
     icon: string | null;
     sort_key: string;
     is_database: boolean;
+    collection_id: string | null;
+    collection_title: string | null;
     updated_at: Date;
     deleted_at: Date;
   }>(sql`
-    SELECT id, workspace_id, parent_id, title_plain, icon, sort_key, is_database,
-           updated_at, deleted_at
-      FROM pages
-     WHERE workspace_id = ${workspaceId}
-       AND deleted_at IS NOT NULL
-       AND collection_id IS NULL
+    SELECT p.id, p.workspace_id, p.parent_id, p.title_plain, p.icon, p.sort_key, p.is_database,
+           p.collection_id,
+           cp.title_plain AS collection_title,
+           p.updated_at, p.deleted_at
+      FROM pages p
+      LEFT JOIN collections c ON c.id = p.collection_id
+      LEFT JOIN pages cp ON cp.id = c.page_id
+     WHERE p.workspace_id = ${workspaceId}
+       AND p.deleted_at IS NOT NULL
        -- 只列出「刪除動作的根」：父層也被刪掉的子孫不必重複出現
-       AND (parent_id IS NULL OR parent_id NOT IN (
+       AND (p.parent_id IS NULL OR p.parent_id NOT IN (
              SELECT id FROM pages WHERE deleted_at IS NOT NULL
            ))
-     ORDER BY deleted_at DESC
+     ORDER BY p.deleted_at DESC
      LIMIT 200
   `);
   return rows.map((r) => ({
@@ -336,6 +350,8 @@ export async function listTrash(workspaceId: string): Promise<TrashedPage[]> {
     hasChildren: false,
     updatedAt: r.updated_at.toISOString(),
     deletedAt: r.deleted_at.toISOString(),
+    collectionId: r.collection_id,
+    collectionTitle: r.collection_title,
   }));
 }
 

@@ -357,3 +357,92 @@
   align-items: center;
   gap: var(--kn-space-2);
 }
+
+/* ── 列選取與批次操作（功能 QA 第四輪：資料庫缺口 §7）─────────
+   Notion 的勾選框壓在**名稱欄左側**（07c-db-row-hover 量到 x42..57），
+   hover／選取時名稱欄的文字往右讓 20px，所以框不會蓋到字。 */
+
+.rowCheckbox {
+  position: absolute;
+  left: 4px;
+  z-index: 2;
+  display: none;
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: var(--kn-color-accent);
+  cursor: pointer;
+}
+
+.row:hover .rowCheckbox,
+.rowSelected .rowCheckbox {
+  display: block;
+}
+
+.row:hover .titleCell > :first-child,
+.rowSelected .titleCell > :first-child {
+  padding-left: 20px;
+}
+
+.rowSelected {
+  background: var(--kn-color-cell-selected);
+}
+
+/* 拖曳落點：插在這一列上緣 */
+.dropBefore {
+  box-shadow: inset 0 2px 0 0 var(--kn-color-accent);
+}
+
+.batchBar {
+  position: absolute;
+  top: 4px;
+  left: 50%;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 320px;
+  padding: 6px 10px;
+  transform: translateX(-50%);
+  border: 1px solid var(--kn-color-border);
+  border-radius: var(--kn-radius-md);
+  background: var(--kn-color-bg);
+  box-shadow: var(--kn-shadow-md, 0 4px 12px rgb(15 15 15 / 12%));
+  font-size: var(--kn-font-size-sm);
+}
+
+.batchCheck {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--kn-color-text-secondary);
+}
+
+.batchSpacer {
+  flex: 1 1 auto;
+}
+
+.batchButton {
+  height: 26px;
+  padding: 0 8px;
+  border: 1px solid transparent;
+  border-radius: var(--kn-radius-sm);
+  background: transparent;
+  color: var(--kn-color-text-secondary);
+  font-size: var(--kn-font-size-sm);
+  cursor: pointer;
+}
+
+.batchButton:hover:not(:disabled) {
+  background: var(--kn-color-surface-hover);
+  color: var(--kn-color-text);
+}
+
+.batchButton:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.batchDanger {
+  color: var(--kn-color-danger, #e03e3e);
+}

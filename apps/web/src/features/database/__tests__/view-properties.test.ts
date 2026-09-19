@@ -9,7 +9,7 @@
 import { describe, expect, it } from 'vitest';
 import type { CollectionSchema, ViewFormat } from '@kennote/shared-types';
 import { splitViewTabs } from '../DatabaseHeader';
-import { alignViewProperties, defaultPropertyWidth, visibleProperties } from '../views/types';
+import { alignViewProperties, defaultPropertyWidth, visibleProperties, DEFAULT_PROPERTY_WIDTH, DEFAULT_TITLE_WIDTH } from '../views/types';
 
 const schema: CollectionSchema = {
   title: { name: '名稱', type: 'title' },
@@ -78,7 +78,7 @@ describe('alignViewProperties（BUG-8）', () => {
       'Aa1',
     ]);
     expect(next.map((p) => p.property)).toEqual(['title', 'Mul1', 'Sel1', 'Dat1', 'Aa1']);
-    expect(next.at(-1)).toEqual({ property: 'Aa1', visible: true, width: 160 });
+    expect(next.at(-1)).toEqual({ property: 'Aa1', visible: true, width: DEFAULT_PROPERTY_WIDTH });
   });
 
   it('連加三個欄位時照新增順序排在尾端', () => {
@@ -135,7 +135,10 @@ describe('alignViewProperties（BUG-8）', () => {
   });
 
   it('預設寬度跟後端 defaultViewFormat 一致', () => {
-    expect(defaultPropertyWidth('title')).toBe(320);
-    expect(defaultPropertyWidth('Aa1')).toBe(160);
+    expect(defaultPropertyWidth('title')).toBe(DEFAULT_TITLE_WIDTH);
+    expect(defaultPropertyWidth('Aa1')).toBe(DEFAULT_PROPERTY_WIDTH);
+    // 對齊 Notion 的欄寬
+    expect(DEFAULT_TITLE_WIDTH).toBe(276);
+    expect(DEFAULT_PROPERTY_WIDTH).toBe(200);
   });
 });

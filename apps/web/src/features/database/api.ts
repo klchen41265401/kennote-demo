@@ -26,6 +26,7 @@ import { api } from '../../lib/api-client';
 const ROUTES = {
   previewCast: (id: string) => `${API_ROUTES.databaseSchema(id)}/preview-cast`,
   rowDuplicate: (id: string, rowId: string) => `${API_ROUTES.databaseRow(id, rowId)}/duplicate`,
+  rowsReorder: (id: string) => `${API_ROUTES.databaseRows(id)}/reorder`,
   viewDuplicate: (id: string, viewId: string) =>
     `${API_ROUTES.databaseView(id, viewId)}/duplicate`,
   exportCsv: (id: string) => `${API_ROUTES.database(id)}/export.csv`,
@@ -54,6 +55,27 @@ export function useDatabase(collectionId: string | null) {
     key: collectionId ? databaseKeys.database(collectionId) : ['database', 'none'],
     enabled: Boolean(collectionId),
     fetcher: () => api.get<DatabaseSnapshot>(API_ROUTES.database(collectionId as string)),
+  });
+}
+
+export interface DatabaseListEntry {
+  id: string;
+  pageId: string;
+  name: RichText;
+  isInline: boolean;
+}
+
+/**
+ * 工作區裡的資料庫清單（relation 欄位的「目標資料庫」下拉）。
+ * 沒有這個之前，設定面板要使用者自己貼 collection 的 UUID。
+ */
+export function useWorkspaceDatabases(workspaceId: string | null) {
+  return useQuery<DatabaseListEntry[]>({
+    key: workspaceId ? (['workspace', workspaceId, 'databases'] as const) : ['workspace', 'none', 'databases'],
+    enabled: Boolean(workspaceId),
+    staleTime: 60_000,
+    fetcher: () =>
+      api.get<DatabaseListEntry[]>(API_ROUTES.databases, { workspaceId: workspaceId as string }),
   });
 }
 
@@ -138,6 +160,17 @@ export async function deleteRow(collectionId: string, rowId: string): Promise<vo
 
 export async function duplicateRow(collectionId: string, rowId: string): Promise<DatabaseRow> {
   const row = await api.post<DatabaseRow>(ROUTES.rowDuplicate(collectionId, rowId));
+  invalidateQueries(['database', collectionId, 'rows']);
+  return row;
+}
+
+/** 表格拖曳排序：把 rowId 移到 afterId 後面（null = 移到最前面） */
+export async function reorderRow(
+  collectionId: string,
+  rowId: string,
+  afterId: string | null,
+): Promise<DatabaseRow> {
+  const row = await api.post<DatabaseRow>(ROUTES.rowsReorder(collectionId), { rowId, afterId });
   invalidateQueries(['database', collectionId, 'rows']);
   return row;
 }

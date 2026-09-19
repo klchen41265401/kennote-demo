@@ -67,6 +67,10 @@ export interface DatabaseController {
   createRow: (options?: { group?: { property: string; key: string | null } }) => Promise<void>;
   deleteRow: (rowId: string) => Promise<void>;
   duplicateRow: (rowId: string) => Promise<void>;
+  /** 表格拖曳排序（afterId = null → 移到最前面） */
+  reorderRow: (rowId: string, afterId: string | null) => Promise<void>;
+  /** 批次刪除（勾選多列 → 刪除） */
+  deleteRows: (rowIds: string[]) => Promise<void>;
 
   applySchemaOps: (ops: SchemaOp[]) => Promise<string[]>;
   createOption: (propertyId: string, label: string) => Promise<string | null>;
@@ -248,6 +252,40 @@ export function useDatabaseController(
     [collectionId, load],
   );
 
+  /** 批次刪除：先樂觀移除，再依序打 API（後端有 240 筆/分的寫入上限） */
+  const deleteRows = useCallback(
+    async (rowIds: string[]) => {
+      if (rowIds.length === 0) return;
+      const ids = new Set(rowIds);
+      setRowsState((prev) => ({ ...prev, rows: prev.rows.filter((r) => !ids.has(r.id)) }));
+      for (const rowId of rowIds) await api.deleteRow(collectionId, rowId);
+      await load(null);
+    },
+    [collectionId, load],
+  );
+
+  const reorderRow = useCallback(
+    async (rowId: string, afterId: string | null) => {
+      // 樂觀重排：先把列搬到新位置，再以伺服器回來的順序為準
+      setRowsState((prev) => {
+        const from = prev.rows.findIndex((r) => r.id === rowId);
+        if (from === -1) return prev;
+        const rows = [...prev.rows];
+        const [moved] = rows.splice(from, 1);
+        if (!moved) return prev;
+        const at = afterId === null ? 0 : rows.findIndex((r) => r.id === afterId) + 1;
+        rows.splice(at, 0, moved);
+        return { ...prev, rows };
+      });
+      try {
+        await api.reorderRow(collectionId, rowId, afterId);
+      } finally {
+        await load(null);
+      }
+    },
+    [collectionId, load],
+  );
+
   /* ── schema ── */
 
   const applySchemaOps = useCallback(
@@ -303,6 +341,8 @@ export function useDatabaseController(
     createRow,
     deleteRow,
     duplicateRow,
+    deleteRows,
+    reorderRow,
     applySchemaOps,
     createOption,
     schemaError,

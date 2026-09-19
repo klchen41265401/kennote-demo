@@ -38,6 +38,10 @@ export interface ViewProps {
   deleteRow: (rowId: string) => void;
   duplicateRow: (rowId: string) => void;
   openRow: (rowId: string) => void;
+  /** 批次刪除（表格的勾選 + 批次列） */
+  deleteRows?: (rowIds: string[]) => void;
+  /** 拖曳排序：把 rowId 移到 afterId 後面（null = 移到最前面） */
+  reorderRow?: (rowId: string, afterId: string | null) => void;
 }
 
 export interface ViewSettingsProps {
@@ -108,19 +112,25 @@ export function visibleProperties(
     if (!schema[entry.property] || seen.has(entry.property)) continue;
     seen.add(entry.property);
     if (entry.visible === false) continue;
-    out.push({ property: entry.property, width: entry.width ?? 160 });
+    out.push({ property: entry.property, width: entry.width ?? DEFAULT_PROPERTY_WIDTH });
   }
   for (const property of Object.keys(schema)) {
     if (seen.has(property)) continue;
     // 沒設定過的欄位預設顯示，但 title 一定排最前面
-    out.push({ property, width: property === 'title' ? 320 : 160 });
+    out.push({ property, width: defaultPropertyWidth(property) });
   }
   return out.sort((a, b) => (a.property === 'title' ? -1 : b.property === 'title' ? 1 : 0));
 }
 
-/** 新欄位的預設寬度（跟後端 defaultViewFormat 一致） */
+/**
+ * 新欄位的預設寬度（跟後端 `service.ts` 的 `defaultPropertyWidth()` 是同一份數字）。
+ * 對齊 Notion：title 276px、其餘 200px（原本是 320 / 160，欄位太窄、title 太寬）。
+ */
+export const DEFAULT_TITLE_WIDTH = 276;
+export const DEFAULT_PROPERTY_WIDTH = 200;
+
 export function defaultPropertyWidth(property: string): number {
-  return property === 'title' ? 320 : 160;
+  return property === 'title' ? DEFAULT_TITLE_WIDTH : DEFAULT_PROPERTY_WIDTH;
 }
 
 /**

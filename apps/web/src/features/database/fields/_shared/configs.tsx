@@ -256,40 +256,7 @@ export function FilesConfig({ def, onChange }: ConfigProps) {
   );
 }
 
-export function RelationConfig({ def, onChange }: ConfigProps) {
-  const config = def as Extract<FieldDefinition, { type: 'relation' }>;
-  return (
-    <div className={styles.configBody}>
-      <label className={styles.configRow}>
-        <span>目標資料庫</span>
-        <input
-          value={config.collectionId ?? ''}
-          placeholder="collection id"
-          onChange={(e) => onChange({ ...config, collectionId: e.target.value || null })}
-        />
-      </label>
-      <label className={styles.configRow}>
-        <span>反向欄位 id</span>
-        <input
-          value={config.dualProperty ?? ''}
-          placeholder="留空 = 單向關聯"
-          onChange={(e) => onChange({ ...config, dualProperty: e.target.value || null })}
-        />
-      </label>
-      <label className={styles.configCheck}>
-        <input
-          type="checkbox"
-          checked={config.allowMultiple ?? true}
-          onChange={(e) => onChange({ ...config, allowMultiple: e.target.checked })}
-        />
-        允許關聯多列
-      </label>
-      <p className={styles.configHint}>
-        設定反向欄位後，A 加了 B，B 的反向欄位也會出現 A（後端在同一個交易內維護）。
-      </p>
-    </div>
-  );
-}
+/* RelationConfig 已搬到 fields/relation/Config.tsx（需要 context 與資料庫清單，不是純 props 元件）。 */
 
 export function RollupConfig({ def, schema, onChange }: ConfigProps) {
   const config = def as Extract<FieldDefinition, { type: 'rollup' }>;

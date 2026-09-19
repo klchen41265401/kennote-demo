@@ -55,6 +55,16 @@ export async function databaseRoutes(app: FastifyInstance): Promise<void> {
     return reply.status(201).send({ data });
   });
 
+  /**
+   * 工作區裡的資料庫清單（relation 欄位的「目標資料庫」下拉用，
+   * 使用者不必自己貼 collection 的 UUID）。
+   */
+  app.get('/', async (req, reply) => {
+    const user = requireUser(req);
+    const { workspaceId } = z.object({ workspaceId: z.string().uuid() }).parse(req.query);
+    return reply.send({ data: await service.listDatabases(workspaceId, user.id) });
+  });
+
   app.get('/:id', async (req, reply) => {
     const user = requireUser(req);
     const { id } = idParams.parse(req.params);
@@ -68,9 +78,16 @@ export async function databaseRoutes(app: FastifyInstance): Promise<void> {
       op: z.literal('add'),
       propertyId: z.string().max(16).optional(),
       definition: z.record(z.unknown()),
+      /** relation：順便在目標資料庫建一個反向欄位（Notion 的「在〈目標〉顯示」） */
+      createDual: z.object({ name: z.string().min(1).max(200) }).optional(),
     }),
     z.object({ op: z.literal('rename'), propertyId: z.string().max(16), name: z.string().min(1).max(200) }),
-    z.object({ op: z.literal('update'), propertyId: z.string().max(16), definition: z.record(z.unknown()) }),
+    z.object({
+      op: z.literal('update'),
+      propertyId: z.string().max(16),
+      definition: z.record(z.unknown()),
+      createDual: z.object({ name: z.string().min(1).max(200) }).optional(),
+    }),
     z.object({ op: z.literal('retype'), propertyId: z.string().max(16), definition: z.record(z.unknown()) }),
     z.object({ op: z.literal('delete'), propertyId: z.string().max(16) }),
   ]);
@@ -167,6 +184,19 @@ export async function databaseRoutes(app: FastifyInstance): Promise<void> {
     const { id, rowId } = rowParams.parse(req.params);
     await service.deleteRow(id, rowId, user.id);
     return reply.status(204).send();
+  });
+
+  /**
+   * 表格的拖曳排序。`afterId: null` = 移到最前面；省略 = 移到最後面。
+   * （`PATCH /rows/:id` 只改屬性，排序是另一件事，所以給它自己的端點。）
+   */
+  app.post('/:id/rows/reorder', writeLimit, async (req, reply) => {
+    const user = requireUser(req);
+    const { id } = idParams.parse(req.params);
+    const input = z
+      .object({ rowId: z.string().uuid(), afterId: z.string().uuid().nullable() })
+      .parse(req.body);
+    return reply.send({ data: await service.reorderRow(id, input.rowId, user.id, input.afterId) });
   });
 
   app.post('/:id/rows/:rowId/duplicate', writeLimit, async (req, reply) => {
