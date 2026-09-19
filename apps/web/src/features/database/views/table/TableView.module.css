@@ -1,7 +1,7 @@
 /**
  * Notion 表格的視覺基準（UI-SPEC §8.1 + 07-db-table-light.png 實測）：
  *   資料列高 **37px**（不是 32）、表頭列高 33px、
- *   格線 rgb(230,229,227) / dark rgb(56,56,54)（_extra-*.json 的 tableBorder）、
+ *   格線 rgb(230,229,227) / dark rgb(44,44,43)（07-db-table-dark 實測）、
  *   名稱欄預設 **280px**、欄名 14px 次要灰字。
  */
 .grid {
@@ -10,12 +10,12 @@
 }
 
 :global(:root[data-theme='dark']) .grid {
-  --kn-db-line: rgb(56, 56, 54);
+  --kn-db-line: rgb(44, 44, 43);
 }
 
 @media (prefers-color-scheme: dark) {
   :global(:root:not([data-theme='light'])) .grid {
-    --kn-db-line: rgb(56, 56, 54);
+    --kn-db-line: rgb(44, 44, 43);
   }
 }
 
@@ -112,9 +112,14 @@
   border-bottom: 1px solid var(--kn-db-line);
 }
 
-.row:hover {
-  background: var(--kn-color-surface-hover);
-}
+/**
+ * ⭐ 第八輪：**Notion 的資料庫列 hover 不會把整列染色**。
+ * `07c-db-row-hover-light.png` 實測：被 hover 的那一列（左側 ⠿ 把手已經出現、
+ * y45..80）整列底色是 **rgb(255,255,255)**，名稱欄（x75）也是白的。
+ * kennote 原本整列 rgb(249,248,247) ＋ 名稱欄 rgb(240,239,237)，
+ * 704×36 的色塊佔 07c 的 24% 面積，平均通道差光這塊就吃掉 ~2。
+ * → hover 只留左側把手與「⤢ 開啟」按鈕（Notion 也只有這兩個）。
+ */
 
 .rowGutter {
   display: flex;
@@ -151,9 +156,6 @@
   background: var(--kn-color-bg);
 }
 
-.row:hover .frozen {
-  background: var(--kn-color-bg-subtle);
-}
 
 /** 選取中的儲存格：藍色外框 **+ 右下角的小方塊**（07d-db-cell-edit-light.png） */
 .cellActive {
@@ -163,6 +165,13 @@
   background: var(--kn-color-cell-selected);
   box-shadow: inset 0 0 0 2px var(--kn-color-accent);
   border-radius: 2px;
+}
+
+/* Notion 的選取格只有 inset 藍框；global.css 的 :focus-visible 會在外面
+   再畫一圈 2px rgb(156,199,242)（07d 下緣量到的外暈）。 */
+.cellActive:focus-visible,
+.cellActive *:focus-visible {
+  outline: none;
 }
 
 .cellActive::after {

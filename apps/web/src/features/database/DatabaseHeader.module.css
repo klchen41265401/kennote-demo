@@ -36,27 +36,28 @@
   color: var(--kn-color-text-disabled);
 }
 
+/**
+ * ⭐ 第八輪推翻第七輪：**Notion 的 view-tab 列根本沒有下框線**。
+ * 四張參考圖一致（`scan` 逐列找「同色連續 ≥300px」）：
+ *   `07-db-table` light/dark：y110（膠囊下緣）→ y150（第一條格線）之間**一條線都沒有**；
+ *   `07b-db-header-hover`：Notion 只有 y85 / y122 兩條格線，kennote 多一條 y52；
+ *   `07n-db-view-tabs`：Notion 全圖沒有任何 ≥300px 的橫線，kennote 有 y106。
+ * 第七輪把這條線的深色改成 rgb(44,44,43)，其實整條都不該存在。
+ *
+ * 另外量到「膠囊下緣 → 表頭列上緣」Notion 是 7px、kennote 只有 5px
+ * （07-db-table：N 膠囊 y79..110、表頭列 y118..149＋格線 y150；
+ *   07b：N 膠囊 y14..45、表頭列上緣 y53、下框線 y85）。
+ * → 拿掉 1px 框線、`padding-bottom` 4 → 7，整條 bar 37 → 39，表頭以下整體下移 2px。
+ * ⚠ **表頭列高度兩邊本來就都是 32＋1**（第七輪交接寫「Notion 55」是把工具列的像素
+ *    當成 tab 下框線量錯了），不要去改 `.headerRow` 的 height。
+ */
 .bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--kn-space-4);
   min-height: 36px;
-  padding-bottom: 4px;
-  border-bottom: 1px solid var(--kn-db-bar-line, var(--kn-color-divider));
-}
-
-/* 第七輪（`colseg 07-db-table dark 600`）：Notion 深色的 view-tab 列下框線是
-   **rgb(44,43,42)**（跟資料庫格線同一色），kennote 吃 --kn-color-divider ＝ rgb(48,48,46)，
-   是整張深色表格裡唯一一條顏色不對的線。 */
-:global(:root[data-theme='dark']) .bar {
-  --kn-db-bar-line: rgb(44, 44, 43);
-}
-
-@media (prefers-color-scheme: dark) {
-  :global(:root:not([data-theme='light'])) .bar {
-    --kn-db-bar-line: rgb(44, 44, 43);
-  }
+  padding-bottom: 7px;
 }
 
 .tabs {

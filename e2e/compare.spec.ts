@@ -264,7 +264,9 @@ const BLOCKS: { code: string; selector: string; nth?: number; padX?: number; dy?
   { code: '05-11-divider', selector: '.kn-block--divider' },
   { code: '05-12-callout', selector: '.kn-block--callout' },
   { code: '05-13-code', selector: '.kn-block--code' },
-  { code: '05-14-table', selector: '.kn-block--table', padX: 240 },
+  // dy -2（第八輪）：`colseg 05-14-table dark 300` 量到 Notion 的橫格線在 y30/65/100/135、
+  // kennote 在 y28/63/98/133 —— 列高（34）兩邊一樣，只有整張表在 bbox 置中後差 2px。
+  { code: '05-14-table', selector: '.kn-block--table', padX: 240, dy: -2 },
   { code: '05-15-equation', selector: '.kn-block--equation' },
   { code: '05-16-toc', selector: '.kn-block--tableOfContents' },
   { code: '05-17-synced', selector: '.kn-block--syncedBlock' },
@@ -425,7 +427,11 @@ for (const theme of ['light', 'dark'] as Theme[]) {
         const size = refSize(view.code, theme)!;
         if (box) {
           // padY 26→13（第四輪）：tab 膠囊 28→32、標題下緣留白 6→15，資料庫本體整個往下 13px。
-          await clip(page, view.code, theme, { x: box.x - 48, y: box.y - 13, width: size.width, height: size.height });
+          // padY 13→16（第八輪）：`rows 07-db-table light` 量到 kennote 的整個資料庫在裁切圖裡
+          // 一律高 3px（標題字身 N y39..60 / K y35..56、tab 膠囊 N y79..110 / K y76..107、
+          // 表頭字身 N y127..138 / K y124..135）—— 是裁切原點，不是版面。
+          // 六個視圖共用同一個 box.y，所以六張一起補。
+          await clip(page, view.code, theme, { x: box.x - 48, y: box.y - 16, width: size.width, height: size.height });
           await shot(page, `${view.code}-full`, theme);
         }
       }
@@ -484,11 +490,20 @@ for (const theme of ['light', 'dark'] as Theme[]) {
         /* 07c：列 hover */
         const row = db.locator('[class*="_row_"]').first();
         if (await row.count()) {
-          await row.hover();
+          // ⭐ 第八輪：Notion 的 07c 參考圖 hover 的是**第二列**（跟 07d 一樣）。
+          //   `scan 07c-db-row-hover light` 的橫線：N y7 / 44 / 81 / 118（間距 37），
+          //   kennote 原本 hover 第一列 ＋ padY 40 → 線落在 6 / 39 / 76 / 113，
+          //   而且 y6 是表頭上面的 tab 下框線，Notion 的 y7 卻是「上一列的下框線」。
+          //   改成 hover 第二列 ＋ padY 45 之後：表頭下框線 7、第一列 8..43、
+          //   第二列（hover）45..80、之後 81 / 118 —— 四條線全部對上。
+          const hoverRow = (await db.locator('[class*="_row_"]').count()) > 1
+            ? db.locator('[class*="_row_"]').nth(1)
+            : row;
+          await hoverRow.hover();
           await page.waitForTimeout(300);
           const size = refSize('07c-db-row-hover', theme)!;
-          const rb = await row.boundingBox();
-          if (rb) await clip(page, '07c-db-row-hover', theme, { x: box.x - 48, y: rb.y - 40, width: size.width, height: size.height });
+          const rb = await hoverRow.boundingBox();
+          if (rb) await clip(page, '07c-db-row-hover', theme, { x: box.x - 48, y: rb.y - 45, width: size.width, height: size.height });
 
           /* 07d：儲存格「選取中」——Notion 那張是點一下的選取態（藍框 + 右下角小方塊），
              不是打開編輯器的狀態（UI-SPEC §8.2），而且拍的是**名稱欄**。 */
@@ -690,6 +705,8 @@ const KNOWN_GAPS = [
 
   '| `07j-db-proptype-menu` | kennote 的型別選單沒有「整合」那一組，入口也在欄位設定裡而不是表頭 `+`。未納入比對。 |',
   '| `07b-db-header-hover` / `07c-db-row-hover` / `07d-db-cell-edit` 的 **dark** | 第五、六輪實測：Notion 那三張深色參考拍到的都是**開著的下拉選單**（面板底 `rgb(37,37,37)` ＋ 28px 反白 `rgb(49,49,49)`），跟 light 不是同一個狀態。light 可以比，dark 比不了。 |',
+  '| `07-db-table` 的 **dark** | ⭐ 第八輪補測（`colseg 07-db-table dark 150`）：**這張的深色參考也是開著選單的**（`x48..267` / `y115..184`、底 `rgb(37,37,37)`、上緣 `rgb(56,56,54)` 框線），蓋掉了表頭與前兩列的名稱欄。light 6.2→5.7 的同一批修改在 dark 只有 10.5→10.3，就是被這塊 220×70 的面板卡住。**dark 的下限大約在 10**，追下去沒有意義；看 light 就好。 |',
+  '| `06-slash-menu-full` | 第六輪已確認、第八輪維持：Notion 那張是在**資料庫上方那一段**打 `/`（畫面上是大圖 ＋ 日曆資料庫），kennote 是在**文件第一段**打 `/`。兩邊拍的不是同一個位置，第七輪改成只算內容欄之後連側邊欄的稀釋也沒了（30.1）。**比不了**；浮層本身請看 `06-slash-menu`（7.4 / 7.9，已經對齊）。 |',
   '',
   '> `07i-db-timeline` 從第三輪開始已經納入比對（時程表視圖 + 遠端後端跑完 migration 0060）。',
   '',

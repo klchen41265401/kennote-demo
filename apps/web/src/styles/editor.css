@@ -1074,9 +1074,16 @@
 
 .kn-table-cell:focus { box-shadow: inset 0 0 0 2px var(--kn-color-accent); }
 
-/** Notion 的標題列只是「粗體 + 淡底」，不是深灰底（05-14-table-light.png） */
+/**
+ * ⭐ 第八輪實測（`colseg 05-14-table light/dark 300`）：Notion 的簡易表格標題列
+ * **完全沒有底色**，只有粗體 —— light 量到 rgb(255,255,255)（＝頁面底）、
+ * dark 量到 rgb(25,25,25)（＝頁面底），格線一律 rgb(230,229,227)/rgb(56,56,54)。
+ * kennote 原本吃 `--kn-editor-callout-bg`，深色剛好 ＝ rgb(56,56,54) ＝ 格線色，
+ * 整條標題列變成一塊 704×36 的實心色塊，把欄分隔線也吃掉了
+ * （`05-14-table` dark 的明顯差異像素 15.4% 有 11% 是這一塊）。
+ */
 .kn-table th.kn-table-cell {
-  background: var(--kn-editor-callout-bg);
+  background: transparent;
   font-weight: var(--kn-font-weight-semibold);
   text-align: left;
 }
