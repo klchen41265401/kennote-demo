@@ -9,15 +9,17 @@
   "types": "src/index.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "development": "./src/index.ts",
-      "import": "./dist/index.js",
-      "default": "./dist/index.js"
+      "types": "./src/index.ts",
+      "import": "./src/index.ts",
+      "default": "./src/index.ts"
     },
     "./src/*": "./src/*",
     "./styles.css": "./src/styles.css"
   },
-  "files": ["dist", "src"],
+  "files": [
+    "dist",
+    "src"
+  ],
   "sideEffects": false,
   "dependencies": {},
   "scripts": {
