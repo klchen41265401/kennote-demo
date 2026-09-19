@@ -1,0 +1,8 @@
+{
+  "extends": "@kennote/config/tsconfig/node.json",
+  "compilerOptions": {
+    "noUncheckedIndexedAccess": true,
+    "types": ["node"]
+  },
+  "include": ["src/**/*.ts", "test/**/*.ts", "build.mjs"]
+}

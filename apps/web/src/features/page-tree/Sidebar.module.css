@@ -1,0 +1,199 @@
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  width: var(--kn-size-sidebar);
+  min-width: var(--kn-size-sidebar-min);
+  height: 100%;
+  background: var(--kn-color-bg-subtle);
+  border-right: 1px solid var(--kn-color-divider);
+  overflow: hidden;
+}
+
+.header {
+  padding: var(--kn-space-3);
+}
+
+.workspace {
+  display: flex;
+  align-items: center;
+  gap: var(--kn-space-3);
+  padding: var(--kn-space-2) var(--kn-space-3);
+  border-radius: var(--kn-radius-md);
+}
+
+.workspace:hover {
+  background: var(--kn-color-surface-hover);
+}
+
+.avatar {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--kn-radius-sm);
+  background: var(--kn-color-text);
+  color: var(--kn-color-text-inverse);
+  font-size: var(--kn-font-size-xs);
+  font-weight: var(--kn-font-weight-semibold);
+}
+
+.workspaceMeta {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.workspaceName {
+  font-size: var(--kn-font-size-sm);
+  font-weight: var(--kn-font-weight-medium);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.userEmail {
+  color: var(--kn-color-text-tertiary);
+  font-size: var(--kn-font-size-xs);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.section {
+  flex: 1;
+  min-height: 0;
+  padding: var(--kn-space-2) var(--kn-space-3);
+  overflow-y: auto;
+}
+
+.sectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--kn-space-2) var(--kn-space-3);
+}
+
+.sectionTitle {
+  color: var(--kn-color-text-tertiary);
+  font-size: var(--kn-font-size-xs);
+  font-weight: var(--kn-font-weight-semibold);
+  letter-spacing: 0.04em;
+}
+
+.iconButton {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  background: none;
+  border: none;
+  border-radius: var(--kn-radius-sm);
+  color: var(--kn-color-text-secondary);
+  font-size: var(--kn-font-size-md);
+  line-height: 1;
+}
+
+.iconButton:hover:not(:disabled) {
+  background: var(--kn-color-surface-hover);
+  color: var(--kn-color-text);
+}
+
+.list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  border-radius: var(--kn-radius-md);
+}
+
+.item:hover {
+  background: var(--kn-color-surface-hover);
+}
+
+.item:hover .deleteButton {
+  opacity: 1;
+}
+
+.link {
+  display: flex;
+  align-items: center;
+  gap: var(--kn-space-2);
+  flex: 1;
+  min-width: 0;
+  padding: var(--kn-space-2) var(--kn-space-3);
+  border-radius: var(--kn-radius-md);
+  color: var(--kn-color-text-secondary);
+  font-size: var(--kn-font-size-sm);
+  text-decoration: none;
+}
+
+.linkActive {
+  background: var(--kn-color-surface-active);
+  color: var(--kn-color-text);
+  font-weight: var(--kn-font-weight-medium);
+}
+
+.icon {
+  flex: none;
+  font-size: var(--kn-font-size-sm);
+}
+
+.label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.deleteButton {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  margin-right: var(--kn-space-2);
+  background: none;
+  border: none;
+  border-radius: var(--kn-radius-sm);
+  color: var(--kn-color-text-tertiary);
+  font-size: var(--kn-font-size-md);
+  line-height: 1;
+  opacity: 0;
+  transition: opacity var(--kn-motion-fast) var(--kn-motion-ease);
+}
+
+.deleteButton:hover {
+  background: var(--kn-color-danger-subtle);
+  color: var(--kn-color-danger);
+}
+
+.empty {
+  margin: var(--kn-space-3);
+  color: var(--kn-color-text-tertiary);
+  font-size: var(--kn-font-size-xs);
+  line-height: var(--kn-line-height-relaxed);
+}
+
+.footer {
+  display: flex;
+  gap: var(--kn-space-2);
+  padding: var(--kn-space-3);
+  border-top: 1px solid var(--kn-color-divider);
+}
+
+.footerButton {
+  flex: 1;
+  padding: var(--kn-space-2);
+  background: none;
+  border: 1px solid var(--kn-color-border);
+  border-radius: var(--kn-radius-md);
+  color: var(--kn-color-text-secondary);
+  font-size: var(--kn-font-size-xs);
+}
+
+.footerButton:hover {
+  background: var(--kn-color-surface-hover);
+  color: var(--kn-color-text);
+}

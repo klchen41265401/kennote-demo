@@ -1,0 +1,28 @@
+.splash {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--kn-space-3);
+  height: 100vh;
+  color: var(--kn-color-text-secondary);
+  font-size: var(--kn-font-size-sm);
+}
+
+.spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--kn-color-border);
+  border-top-color: var(--kn-color-accent);
+  border-radius: var(--kn-radius-full);
+  animation: spin 700ms linear infinite;
+}
+
+.label {
+  letter-spacing: 0.02em;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

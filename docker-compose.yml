@@ -1,0 +1,82 @@
+# ============================================================
+# 開發環境：docker compose up
+#   web  http://localhost:5173
+#   api  http://localhost:4000/api/health
+#   db   localhost:5432
+#
+# 只想要資料庫、其他跑本機：pnpm db:up && pnpm dev:local
+# ============================================================
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: kennote-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-kennote}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-kennote}
+      POSTGRES_DB: ${POSTGRES_DB:-kennote}
+      TZ: UTC
+      PGTZ: UTC
+    ports:
+      - '5432:5432'
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-kennote} -d ${POSTGRES_DB:-kennote}']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  server:
+    build:
+      context: .
+      dockerfile: apps/server/Dockerfile
+      target: dev
+    container_name: kennote-server
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      NODE_ENV: development
+      SERVER_HOST: 0.0.0.0
+      DATABASE_URL: postgres://${POSTGRES_USER:-kennote}:${POSTGRES_PASSWORD:-kennote}@postgres:5432/${POSTGRES_DB:-kennote}
+      STORAGE_LOCAL_PATH: /app/data/uploads
+    ports:
+      - '4000:4000'
+    volumes:
+      - ./apps/server/src:/app/apps/server/src
+      - ./apps/server/migrations:/app/apps/server/migrations
+      - ./packages:/app/packages
+      - ./data/uploads:/app/data/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:4000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      target: dev
+    container_name: kennote-web
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - '5173:5173'
+    volumes:
+      - ./apps/web/src:/app/apps/web/src
+      - ./apps/web/index.html:/app/apps/web/index.html
+      - ./packages:/app/packages
+    depends_on:
+      - server
+
+volumes:
+  pgdata:

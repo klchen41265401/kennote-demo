@@ -1,0 +1,246 @@
+/**
+ * 設計 token —— 一律原生 CSS 變數（02 §6 / 00-README 決策 #10）。
+ * 不用 Tailwind、不用任何 UI 元件庫；元件樣式一律 CSS Modules。
+ *
+ * ⚠️ 這份是「合理的 Notion 風格預設值」，之後會被 UI 代理替換成正式色票。
+ * 替換時**只能改值，不要改變數名稱** —— 名稱是各層元件的契約。
+ *
+ * 命名規則：--kn-<類別>-<語意>[-<狀態>]
+ *   類別：color / space / radius / font / size / shadow / z / motion
+ */
+
+:root {
+  color-scheme: light;
+
+  /* ── 色彩：表面 ── */
+  --kn-color-bg: #ffffff;
+  --kn-color-bg-subtle: #f7f7f5;
+  --kn-color-bg-sunken: #efeeec;
+  --kn-color-surface: #ffffff;
+  --kn-color-surface-hover: rgba(55, 53, 47, 0.06);
+  --kn-color-surface-active: rgba(55, 53, 47, 0.1);
+  --kn-color-overlay: rgba(15, 15, 15, 0.4);
+
+  /* ── 色彩：文字 ── */
+  --kn-color-text: #37352f;
+  --kn-color-text-secondary: #787774;
+  --kn-color-text-tertiary: #9b9a97;
+  --kn-color-text-inverse: #ffffff;
+  --kn-color-text-on-accent: #ffffff;
+
+  /* ── 色彩：線條 ── */
+  --kn-color-border: rgba(55, 53, 47, 0.16);
+  --kn-color-border-strong: rgba(55, 53, 47, 0.28);
+  --kn-color-divider: rgba(55, 53, 47, 0.09);
+
+  /* ── 色彩：強調與狀態 ── */
+  --kn-color-accent: #2383e2;
+  --kn-color-accent-hover: #1a6fc4;
+  --kn-color-accent-subtle: rgba(35, 131, 226, 0.12);
+  --kn-color-focus-ring: rgba(35, 131, 226, 0.45);
+  --kn-color-danger: #e03e3e;
+  --kn-color-danger-subtle: rgba(224, 62, 62, 0.12);
+  --kn-color-success: #0f7b6c;
+  --kn-color-warning: #cb912f;
+
+  /* ── 色彩：block 調色盤（03 §6.2 的 block_color）── */
+  --kn-color-block-gray: #787774;
+  --kn-color-block-brown: #976d57;
+  --kn-color-block-orange: #cc772f;
+  --kn-color-block-yellow: #c29343;
+  --kn-color-block-green: #548164;
+  --kn-color-block-blue: #477da5;
+  --kn-color-block-purple: #8a67ab;
+  --kn-color-block-pink: #b35488;
+  --kn-color-block-red: #c4554d;
+  --kn-color-block-gray-bg: rgba(84, 72, 49, 0.08);
+  --kn-color-block-brown-bg: rgba(210, 162, 141, 0.2);
+  --kn-color-block-orange-bg: rgba(224, 124, 57, 0.16);
+  --kn-color-block-yellow-bg: rgba(236, 191, 66, 0.2);
+  --kn-color-block-green-bg: rgba(123, 183, 129, 0.2);
+  --kn-color-block-blue-bg: rgba(93, 165, 206, 0.2);
+  --kn-color-block-purple-bg: rgba(168, 129, 197, 0.2);
+  --kn-color-block-pink-bg: rgba(225, 136, 179, 0.2);
+  --kn-color-block-red-bg: rgba(244, 171, 159, 0.25);
+
+  /* ── 間距（4px 基準）── */
+  --kn-space-0: 0;
+  --kn-space-1: 2px;
+  --kn-space-2: 4px;
+  --kn-space-3: 8px;
+  --kn-space-4: 12px;
+  --kn-space-5: 16px;
+  --kn-space-6: 24px;
+  --kn-space-7: 32px;
+  --kn-space-8: 48px;
+  --kn-space-9: 64px;
+
+  /* ── 圓角 ── */
+  --kn-radius-sm: 3px;
+  --kn-radius-md: 5px;
+  --kn-radius-lg: 8px;
+  --kn-radius-xl: 12px;
+  --kn-radius-full: 999px;
+
+  /* ── 字體 ── */
+  --kn-font-sans:
+    ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans TC',
+    'PingFang TC', 'Microsoft JhengHei', 'Helvetica Neue', Arial, sans-serif;
+  --kn-font-serif: ui-serif, Georgia, 'Noto Serif TC', 'Songti TC', serif;
+  --kn-font-mono:
+    ui-monospace, SFMono-Regular, 'JetBrains Mono', Menlo, Consolas, 'Noto Sans Mono CJK TC',
+    monospace;
+
+  --kn-font-size-xs: 12px;
+  --kn-font-size-sm: 14px;
+  --kn-font-size-md: 16px;
+  --kn-font-size-lg: 20px;
+  --kn-font-size-xl: 24px;
+  --kn-font-size-2xl: 30px;
+  --kn-font-size-3xl: 40px;
+
+  --kn-line-height-tight: 1.2;
+  --kn-line-height-normal: 1.5;
+  --kn-line-height-relaxed: 1.7;
+
+  --kn-font-weight-normal: 400;
+  --kn-font-weight-medium: 500;
+  --kn-font-weight-semibold: 600;
+  --kn-font-weight-bold: 700;
+
+  /* ── 版面尺寸 ── */
+  --kn-size-sidebar: 260px;
+  --kn-size-sidebar-min: 180px;
+  --kn-size-sidebar-max: 480px;
+  --kn-size-topbar: 45px;
+  --kn-size-content-width: 708px;
+  --kn-size-content-width-wide: 1200px;
+  --kn-size-control: 28px;
+
+  /* ── 陰影 ── */
+  --kn-shadow-sm: 0 1px 2px rgba(15, 15, 15, 0.08);
+  --kn-shadow-md: 0 4px 12px rgba(15, 15, 15, 0.12);
+  --kn-shadow-lg: 0 12px 32px rgba(15, 15, 15, 0.16);
+  --kn-shadow-popover:
+    rgba(15, 15, 15, 0.05) 0 0 0 1px, rgba(15, 15, 15, 0.1) 0 3px 6px,
+    rgba(15, 15, 15, 0.2) 0 9px 24px;
+
+  /* ── 層級（浮層體系，02 §4.7）── */
+  --kn-z-base: 0;
+  --kn-z-sticky: 100;
+  --kn-z-dropdown: 200;
+  --kn-z-popover: 300;
+  --kn-z-drag: 400;
+  --kn-z-dialog: 500;
+  --kn-z-toast: 600;
+
+  /* ── 動效 ── */
+  --kn-motion-fast: 90ms;
+  --kn-motion-normal: 150ms;
+  --kn-motion-slow: 240ms;
+  --kn-motion-ease: cubic-bezier(0.2, 0, 0.2, 1);
+}
+
+/* 深色主題：由 <html data-theme="dark"> 切換（02 §6） */
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --kn-color-bg: #191919;
+  --kn-color-bg-subtle: #202020;
+  --kn-color-bg-sunken: #161616;
+  --kn-color-surface: #252525;
+  --kn-color-surface-hover: rgba(255, 255, 255, 0.055);
+  --kn-color-surface-active: rgba(255, 255, 255, 0.1);
+  --kn-color-overlay: rgba(0, 0, 0, 0.6);
+
+  --kn-color-text: #d4d4d4;
+  --kn-color-text-secondary: #9b9b9b;
+  --kn-color-text-tertiary: #6f6f6f;
+  --kn-color-text-inverse: #191919;
+  --kn-color-text-on-accent: #ffffff;
+
+  --kn-color-border: rgba(255, 255, 255, 0.13);
+  --kn-color-border-strong: rgba(255, 255, 255, 0.22);
+  --kn-color-divider: rgba(255, 255, 255, 0.08);
+
+  --kn-color-accent: #2383e2;
+  --kn-color-accent-hover: #4a9bea;
+  --kn-color-accent-subtle: rgba(35, 131, 226, 0.2);
+  --kn-color-focus-ring: rgba(35, 131, 226, 0.6);
+  --kn-color-danger: #ff7369;
+  --kn-color-danger-subtle: rgba(255, 115, 105, 0.16);
+  --kn-color-success: #4dab9a;
+  --kn-color-warning: #ffdc49;
+
+  --kn-color-block-gray: #9b9b9b;
+  --kn-color-block-brown: #ba856f;
+  --kn-color-block-orange: #c77d48;
+  --kn-color-block-yellow: #ca9849;
+  --kn-color-block-green: #529e72;
+  --kn-color-block-blue: #5e87c9;
+  --kn-color-block-purple: #9d68d3;
+  --kn-color-block-pink: #d15796;
+  --kn-color-block-red: #df5452;
+  --kn-color-block-gray-bg: rgba(255, 255, 255, 0.06);
+  --kn-color-block-brown-bg: rgba(147, 114, 100, 0.25);
+  --kn-color-block-orange-bg: rgba(168, 129, 87, 0.25);
+  --kn-color-block-yellow-bg: rgba(151, 131, 101, 0.25);
+  --kn-color-block-green-bg: rgba(116, 155, 133, 0.25);
+  --kn-color-block-blue-bg: rgba(105, 140, 168, 0.25);
+  --kn-color-block-purple-bg: rgba(139, 117, 161, 0.25);
+  --kn-color-block-pink-bg: rgba(167, 111, 146, 0.25);
+  --kn-color-block-red-bg: rgba(186, 110, 105, 0.25);
+
+  --kn-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --kn-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5);
+  --kn-shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.6);
+  --kn-shadow-popover:
+    rgba(255, 255, 255, 0.07) 0 0 0 1px, rgba(0, 0, 0, 0.5) 0 3px 6px,
+    rgba(0, 0, 0, 0.6) 0 9px 24px;
+}
+
+/* 使用者沒有明確選過主題時，跟隨系統 */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+
+    --kn-color-bg: #191919;
+    --kn-color-bg-subtle: #202020;
+    --kn-color-bg-sunken: #161616;
+    --kn-color-surface: #252525;
+    --kn-color-surface-hover: rgba(255, 255, 255, 0.055);
+    --kn-color-surface-active: rgba(255, 255, 255, 0.1);
+    --kn-color-overlay: rgba(0, 0, 0, 0.6);
+
+    --kn-color-text: #d4d4d4;
+    --kn-color-text-secondary: #9b9b9b;
+    --kn-color-text-tertiary: #6f6f6f;
+    --kn-color-text-inverse: #191919;
+
+    --kn-color-border: rgba(255, 255, 255, 0.13);
+    --kn-color-border-strong: rgba(255, 255, 255, 0.22);
+    --kn-color-divider: rgba(255, 255, 255, 0.08);
+
+    --kn-color-accent-hover: #4a9bea;
+    --kn-color-accent-subtle: rgba(35, 131, 226, 0.2);
+    --kn-color-danger: #ff7369;
+    --kn-color-danger-subtle: rgba(255, 115, 105, 0.16);
+    --kn-color-success: #4dab9a;
+    --kn-color-warning: #ffdc49;
+
+    --kn-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --kn-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5);
+    --kn-shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.6);
+    --kn-shadow-popover:
+      rgba(255, 255, 255, 0.07) 0 0 0 1px, rgba(0, 0, 0, 0.5) 0 3px 6px,
+      rgba(0, 0, 0, 0.6) 0 9px 24px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --kn-motion-fast: 0ms;
+    --kn-motion-normal: 0ms;
+    --kn-motion-slow: 0ms;
+  }
+}

@@ -1,0 +1,62 @@
+@import './tokens.css';
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--kn-color-bg);
+  color: var(--kn-color-text);
+  font-family: var(--kn-font-sans);
+  font-size: var(--kn-font-size-md);
+  line-height: var(--kn-line-height-normal);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+input,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+a {
+  color: var(--kn-color-accent);
+  text-decoration: none;
+}
+
+:focus-visible {
+  outline: 2px solid var(--kn-color-focus-ring);
+  outline-offset: 1px;
+}
+
+/* 滾動條（深色也要好看） */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--kn-color-border);
+  border-radius: var(--kn-radius-full);
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--kn-color-border-strong);
+  background-clip: content-box;
+}
