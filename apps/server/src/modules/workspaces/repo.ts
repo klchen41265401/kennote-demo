@@ -1,6 +1,7 @@
 import type { PageTreeNode, WorkspaceMember, WorkspaceRole, WorkspaceSummary } from '@kennote/shared-types';
 import { db, type Queryable } from '../../db/client.js';
 import { sql } from '../../db/sql.js';
+import { buildPermissionIndex, filterTree } from '../permissions/bulk.js';
 
 interface WorkspaceSummaryRow {
   id: string;
@@ -84,8 +85,17 @@ interface TreeRow {
  *
  * 注意：database 的「列」也是 pages 的一列，但不該出現在側邊欄，
  * 所以用 collection_id IS NULL 過濾掉。
+ *
+ * ⭐ 第七輪：**per-page 權限過濾**（第六輪 §5-1）。原本這支連 `userId` 都沒收，
+ * 只在 route 層驗成員身分 —— baseline `none` 的 guest 看得到整個工作區每一頁的
+ * 標題與結構。現在一次 `buildPermissionIndex()`（≤ 3 次查詢）＋記憶體折疊，
+ * 看不見的節點整個拿掉，看得見的往上掛到最近的可見祖先（見 permissions/bulk.ts）。
  */
-export async function getWorkspaceTree(workspaceId: string): Promise<PageTreeNode[]> {
+export async function getWorkspaceTree(
+  workspaceId: string,
+  userId: string,
+  role: WorkspaceRole | null,
+): Promise<PageTreeNode[]> {
   const rows = await db.query<TreeRow>(sql`
     WITH RECURSIVE tree AS (
       SELECT p.id, p.workspace_id, p.parent_id, p.title_plain, p.icon, p.sort_key,
@@ -113,7 +123,8 @@ export async function getWorkspaceTree(workspaceId: string): Promise<PageTreeNod
      ORDER BY depth ASC, sort_key ASC
   `);
 
-  return rows.map((r) => ({
+  const index = await buildPermissionIndex(workspaceId, userId, role);
+  return filterTree(rows.map((r) => ({
     id: r.id,
     workspaceId: r.workspace_id,
     parentId: r.parent_id,
@@ -123,7 +134,7 @@ export async function getWorkspaceTree(workspaceId: string): Promise<PageTreeNod
     isDatabase: r.is_database,
     hasChildren: r.has_children,
     updatedAt: r.updated_at.toISOString(),
-  }));
+  })), index);
 }
 
 export async function createWorkspace(

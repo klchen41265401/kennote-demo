@@ -253,6 +253,20 @@ export async function isDescendantOf(
  * `updated_by` 在 `softDeleteSubtree()` 會被設成刪除者 —— schema 沒有 `deleted_by`，
  * 這是最接近的代理欄位。
  */
+/** 批次版：垃圾桶清單一次判斷 200 頁「誰有資格處置」（第七輪） */
+export async function findPageActors(
+  pageIds: string[],
+  conn: Queryable = db,
+): Promise<Map<string, { created_by: string | null; updated_by: string | null }>> {
+  const out = new Map<string, { created_by: string | null; updated_by: string | null }>();
+  if (pageIds.length === 0) return out;
+  const rows = await conn.query<{ id: string; created_by: string | null; updated_by: string | null }>(sql`
+    SELECT id, created_by, updated_by FROM pages WHERE id = ANY(${pageIds}::uuid[])
+  `);
+  for (const r of rows) out.set(r.id, { created_by: r.created_by, updated_by: r.updated_by });
+  return out;
+}
+
 export async function findPageActorMeta(
   pageId: string,
   conn: Queryable = db,

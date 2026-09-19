@@ -19,7 +19,12 @@
  *   6. 回傳 TransactionResult
  */
 import type { Operation, RichText, Transaction, TransactionResult } from '@kennote/shared-types';
-import { asOtDelta, textDeltaOperation } from '@kennote/shared-types';
+import {
+  asOtDelta,
+  extractMentionedUserIds,
+  richTextToPlainText,
+  textDeltaOperation,
+} from '@kennote/shared-types';
 import type { Tx } from '../../db/client.js';
 import { withTransaction } from '../../db/client.js';
 import { sql } from '../../db/sql.js';
@@ -85,6 +90,24 @@ async function writeChildren(
  * `text.delta` 在這裡會被記成 `block.update{content}`，
  * 讓版本歷史重播（M8）與 LWW 客戶端完全不必認識 OT。
  */
+/**
+ * 第七輪：block 內 `@提及` 的差集（第六輪 §5-3）。
+ * `before` / `after` 是同一個 block 這次變更前後的完整內容 ——
+ * 只有**新增**的提及才發通知，否則使用者每打一個字都會再收到一則。
+ */
+export interface MentionDiff {
+  blockId: string;
+  added: string[];
+  snippet: string;
+}
+
+export function diffMentions(blockId: string, before: RichText, after: RichText): MentionDiff | null {
+  const had = new Set(extractMentionedUserIds(before));
+  const added = extractMentionedUserIds(after).filter((id) => !had.has(id));
+  if (added.length === 0) return null;
+  return { blockId, added, snippet: richTextToPlainText(after).slice(0, 160) };
+}
+
 async function applyOne(
   tx: Tx,
   ctx: ApplyContext & { workspaceId: string },
@@ -92,6 +115,7 @@ async function applyOne(
   conflicts: string[],
   emitted: Operation[],
   history: Operation[],
+  mentions: MentionDiff[],
 ): Promise<void> {
   // block.update 與 text.delta 的 emitted 要在各自的 case 裡決定（OT 模式會改寫），
   // 其餘 op 原封不動地進兩份清單
@@ -127,6 +151,10 @@ async function applyOne(
       });
       const children = await readChildren(tx, ctx.pageId, op.parentId);
       await writeChildren(tx, ctx.pageId, op.parentId, spliceChildren(children, op.blockId, op.afterId));
+      {
+        const diff = diffMentions(op.blockId, [], (op.content ?? []) as RichText);
+        if (diff) mentions.push(diff);
+      }
       return;
     }
 
@@ -172,6 +200,11 @@ async function applyOne(
         });
       }
       await updateBlockRow(tx, op.blockId, patch, ctx.userId);
+
+      if (patch.content !== undefined) {
+        const diff = diffMentions(op.blockId, (block.content ?? []) as RichText, patch.content);
+        if (diff) mentions.push(diff);
+      }
 
       if (contentRev === null) {
         emitted.push(op);
@@ -259,6 +292,10 @@ async function applyOne(
       });
       // 廣播的是「伺服器 transform 過的 delta + 新 rev」
       emitted.push(textDeltaOperation(op.blockId, result.transformed, op.baseRev, result.rev));
+      if (result.changed) {
+        const diff = diffMentions(op.blockId, result.previous, result.content);
+        if (diff) mentions.push(diff);
+      }
       // 版本歷史 / LWW 客戶端看到的是最終 content
       if (result.changed) {
         history.push({ type: 'block.update', blockId: op.blockId, patch: { content: result.content } });
@@ -276,6 +313,28 @@ export function setBroadcaster(fn: BroadcastFn): void {
 }
 
 /**
+ * 第七輪：transaction 提交後的通知掛勾（第六輪 §5-3 / §5-4）。
+ *
+ * 編輯器的 `MentionMenu` 早就插得出正確的 mention atom，但
+ * `fanOutNotifications()` 只在 `comments/service.ts` 被呼叫過 ——
+ * 「在頁面裡 @某人」在產品上完全不會產生通知。這裡補上出口，
+ * 實作在 `notifications/fanout.ts`（由 realtime/index.ts 接上，避免循環相依）。
+ *
+ * **一律在 commit 之後呼叫**，而且是 fire-and-forget：
+ * 通知掛掉不能讓編輯失敗（03 §9.3 同一條原則）。
+ */
+export type TransactionNotifierFn = (input: {
+  ctx: ApplyContext;
+  workspaceId: string;
+  seq: number;
+  mentions: MentionDiff[];
+}) => void;
+let transactionNotifier: TransactionNotifierFn = () => {};
+export function setTransactionNotifier(fn: TransactionNotifierFn): void {
+  transactionNotifier = fn;
+}
+
+/**
  * 權限守門員掛勾（M5）。所有 block 寫入都必經這裡，
  * 因此「guest 只能留言不能編輯」在 HTTP 與 WS 兩條路徑上是同一道檢查。
  * 預設 no-op：M1–M4 只有 workspace 成員檢查（findPageForUser）。
@@ -290,6 +349,8 @@ async function applyWithin(
   tx: Tx,
   ctx: ApplyContext,
   transaction: Transaction,
+  /** 第七輪：提交後要發通知的提及差集（由 applyTransaction 在 commit 之後讀） */
+  mentionSink?: { mentions: MentionDiff[]; workspaceId: string | null },
 ): Promise<TransactionResult> {
   {
     // 權限：非本 workspace 成員一律當作頁面不存在
@@ -316,8 +377,21 @@ async function applyWithin(
     const emitted: Operation[] = [];
     /** 要寫進 page_transactions.ops 的 ops（text.delta 會被記成最終 content 的 block.update） */
     const history: Operation[] = [];
+    const mentions: MentionDiff[] = [];
     for (const op of transaction.ops) {
-      await applyOne(tx, { ...ctx, workspaceId: page.workspace_id }, op, conflicts, emitted, history);
+      await applyOne(
+        tx,
+        { ...ctx, workspaceId: page.workspace_id },
+        op,
+        conflicts,
+        emitted,
+        history,
+        mentions,
+      );
+    }
+    if (mentionSink) {
+      mentionSink.mentions = mentions;
+      mentionSink.workspaceId = page.workspace_id;
     }
 
     const seq = await bumpPageSeq(tx, ctx.pageId, ctx.userId);
@@ -357,11 +431,29 @@ export async function applyTransaction(
 ): Promise<TransactionResult> {
   const transaction: Transaction = parseTransaction(input, ctx.pageId);
 
+  // existingTx（頁面建立時的第一個空 paragraph）由呼叫端 commit 與廣播，
+  // 那條路徑不可能帶提及，所以也不必扇出通知。
   if (existingTx) return applyWithin(existingTx, ctx, transaction);
 
-  const result = await withTransaction((tx) => applyWithin(tx, ctx, transaction));
+  const sink: { mentions: MentionDiff[]; workspaceId: string | null } = {
+    mentions: [],
+    workspaceId: null,
+  };
+  const result = await withTransaction((tx) => applyWithin(tx, ctx, transaction, sink));
   // 廣播一律在 commit 之後（03 §9.3：不要在交易中廣播，否則 rollback 了還是送出去）
   broadcast(result, transaction.originSessionId);
+  if (sink.workspaceId) {
+    try {
+      transactionNotifier({
+        ctx,
+        workspaceId: sink.workspaceId,
+        seq: result.seq,
+        mentions: sink.mentions,
+      });
+    } catch {
+      /* 通知失敗不影響編輯 */
+    }
+  }
   return result;
 }
 

@@ -22,6 +22,7 @@ import {
   requireTrashedPageControl,
   resolvePagePermission,
 } from '../permissions/service.js';
+import { buildPermissionIndex, canSee } from '../permissions/bulk.js';
 import { getMemberRole } from '../workspaces/repo.js';
 import * as repo from './repo.js';
 
@@ -100,12 +101,24 @@ export async function createPage(input: CreatePageRequest, userId: string): Prom
  * 全都還是成員限定，所以被授權者只看得到那一頁，看不到工作區的其他東西。
  */
 async function findVisiblePage(pageId: string, userId: string) {
-  const row = await repo.findPageForUser(pageId, userId);
-  if (row) return row;
+  /*
+   * ⭐ 第七輪 BUG-35：原本這裡是「先 `findPageForUser()`，**有列就直接回**，
+   * 只有非成員才 fallback 去問權限」。`findPageForUser()` 只 JOIN
+   * `workspace_members` —— 於是 baseline `none` 的 guest 對工作區裡的**任何**
+   * 頁面都拿得到 `GET /api/pages/:id` 與 `GET /snapshot`（整份 recordMap，
+   * 含所有 block 內容）。遠端實測：guest 讀得到「CEO 年薪 1234 萬」。
+   *
+   * 寫入路徑（applyTransaction 的 permission guard）一直是對的，
+   * 所以第五 / 六輪的「guest 寫入 403/404」通過並不代表讀取也有守門員。
+   *
+   * 現在**一律**先問 `resolvePagePermission()`：成員與非成員走同一道檢查，
+   * `none` → 404（不洩漏存在性）。已刪除的頁面也會在這裡被擋掉
+   * （`resolvePagePermission` 對 `deleted_at !== null` 一律回 none）。
+   */
   if ((await resolvePagePermission(userId, pageId)) === 'none') throw pageNotFound();
-  const shared = await repo.findPageById(pageId);
-  if (!shared || shared.deleted_at !== null) throw pageNotFound();
-  return shared;
+  const row = (await repo.findPageForUser(pageId, userId)) ?? (await repo.findPageById(pageId));
+  if (!row || row.deleted_at !== null) throw pageNotFound();
+  return row;
 }
 
 export async function getPage(pageId: string, userId: string): Promise<Page> {
@@ -282,6 +295,17 @@ export async function duplicatePage(
   pageId: string,
   userId: string,
 ): Promise<{ page: Page; idMap: Record<string, string> }> {
+  /*
+   * ⭐ 第七輪 BUG-36（第六輪 §5-13 留下來確認的）：原本只有 `findPageForUser()`，
+   * 完全沒問權限 —— 遠端實測 guest（baseline none、沒有任何授權）
+   * `POST /api/pages/:id/duplicate` 回 **201**，整棵子樹被複製成他自己的頁面
+   * （而且他是複本的 `created_by` → 對複本有 full）。等於唯讀被完全繞過。
+   *
+   * 要 `edit` 而不是 `read`：複製會在**同一個工作區**裡長出新頁面，
+   * 那是寫入動作。真的想「讀者也能留一份自己的副本」應該是另一支
+   * 「複製到我的工作區」，不是這一支。
+   */
+  await requirePagePermission(userId, pageId, 'edit');
   return withTransaction(async (tx) => {
     const root = await repo.findPageForUser(pageId, userId, tx);
     if (!root) throw pageNotFound();
@@ -395,9 +419,34 @@ function appendCopySuffix(title: RichText): RichText {
   return copy;
 }
 
+/**
+ * 垃圾桶清單。
+ *
+ * ⭐ 第七輪（第六輪 §5-2）：原本只 `assertMember` —— guest 看得到工作區裡
+ * **每一個**已刪頁面的標題。BUG-29 讓他刪不掉了，但還是看得到。
+ *
+ * 已刪除的頁面對任何人都是 `resolvePagePermission() === 'none'`（開頭就擋掉），
+ * 所以這裡問的是兩個問題的聯集：
+ *   1. 「如果它還在，你看得見嗎」→ `buildPermissionIndex()`（忽略 deleted_at）
+ *   2. 「你有沒有資格處置這份殘骸」→ `canControlTrashedPage()`（建立者 / 刪除者 / 管理員）
+ * 第 2 條是必要的：自己建立、自己刪掉、但從來沒有 page_permissions 條目的頁面，
+ * 對 guest 來說第 1 條會是 none，少了第 2 條他就再也找不回自己的東西。
+ */
 export async function listTrash(workspaceId: string, userId: string): Promise<TrashedPage[]> {
   await assertMember(workspaceId, userId);
-  return repo.listTrash(workspaceId);
+  const role = await getMemberRole(workspaceId, userId);
+  if (!role) throw workspaceNotFound();
+
+  const rows = await repo.listTrash(workspaceId);
+  const index = await buildPermissionIndex(workspaceId, userId, role);
+  if (index.mode === 'all') return rows;
+
+  const actors = await repo.findPageActors(rows.map((r) => r.id));
+  return rows.filter((row) => {
+    if (canSee(index, row.id)) return true;
+    const actor = actors.get(row.id);
+    return actor ? canControlTrashedPage(userId, role, actor) : false;
+  });
 }
 
 /**

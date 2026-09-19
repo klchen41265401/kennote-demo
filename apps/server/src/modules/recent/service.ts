@@ -5,6 +5,8 @@ import type { RecentPage, SearchResultType } from '@kennote/shared-types';
 import { db } from '../../db/client.js';
 import { pageNotFound, workspaceNotFound } from '../../lib/errors.js';
 import { findPageForUser } from '../pages/repo.js';
+import { buildPermissionIndex, canSee } from '../permissions/bulk.js';
+import { resolvePagePermission } from '../permissions/service.js';
 import { getMemberRole } from '../workspaces/repo.js';
 import { loadParentTitles } from '../search/ancestors.js';
 import * as repo from './repo.js';
@@ -24,6 +26,9 @@ export function resultTypeOf(row: {
 
 /** POST /api/pages/:id/visit —— 打開頁面時前端呼叫一次（fire and forget） */
 export async function recordPageVisit(pageId: string, userId: string): Promise<void> {
+  // 第七輪：沒有讀取權限的頁面不該進「最近瀏覽」（BUG-35 之前 guest 讀得到任何頁面，
+  // 連帶把標題留在自己的 recent 裡；讀取補上守門員之後這裡也一起收緊）
+  if ((await resolvePagePermission(userId, pageId)) === 'none') throw pageNotFound();
   const page = await findPageForUser(pageId, userId);
   if (!page) throw pageNotFound();
   await repo.recordVisit(userId, pageId, page.workspace_id, db);
@@ -34,9 +39,14 @@ export async function listRecentPages(
   userId: string,
   limit = DEFAULT_RECENT_LIMIT,
 ): Promise<RecentPage[]> {
-  if (!(await getMemberRole(workspaceId, userId))) throw workspaceNotFound();
+  const role = await getMemberRole(workspaceId, userId);
+  if (!role) throw workspaceNotFound();
   const capped = Math.min(Math.max(1, limit), MAX_RECENT_LIMIT);
-  const rows = await repo.listRecent(userId, workspaceId, capped);
+  const all = await repo.listRecent(userId, workspaceId, capped);
+  // 第七輪：`page_visits` 是「我去過哪裡」的流水帳，權限之後可能被收回
+  // （或當初根本是靠別人貼網址進去的）→ 列出來之前要重新問一次。
+  const index = await buildPermissionIndex(workspaceId, userId, role);
+  const rows = all.filter((r) => canSee(index, r.page_id));
   const parents = await loadParentTitles(rows.map((r) => r.page_id));
 
   return rows.map((row) => ({

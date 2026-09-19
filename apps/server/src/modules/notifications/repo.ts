@@ -144,10 +144,16 @@ export async function upsertSubscription(
 
 export async function listSubscribers(
   pageId: string,
+  kinds?: Array<'explicit' | 'auto'>,
   conn: Queryable = db,
 ): Promise<string[]> {
+  // muted 永遠排除；kinds 沒給就是「沒有靜音的所有人」
+  const kindFilter =
+    kinds && kinds.length > 0
+      ? sql` AND kind::text = ANY(${kinds}::text[])`
+      : sql` AND kind <> 'muted'`;
   const rows = await conn.query<{ user_id: string }>(sql`
-    SELECT user_id FROM subscriptions WHERE page_id = ${pageId} AND kind <> 'muted'
+    SELECT user_id FROM subscriptions WHERE page_id = ${pageId}${kindFilter}
   `);
   return rows.map((r) => r.user_id);
 }

@@ -11,6 +11,7 @@ import {
   listSharedWithMe,
 } from './favorites.js';
 import { pageNotFound } from '../../lib/errors.js';
+import { requirePagePermission } from '../permissions/service.js';
 import * as service from './service.js';
 
 const idParams = z.object({ id: z.string().uuid() });
@@ -76,6 +77,9 @@ export async function pageRoutes(app: FastifyInstance): Promise<void> {
   app.post('/:id/favorite', writeLimit, async (req, reply) => {
     const user = requireUser(req);
     const { id } = idParams.parse(req.params);
+    // 第七輪：`findPageForUser()` 只看「是不是工作區成員」，
+    // 沒有 read 權限的人不該把別人的頁面加進收藏（加得進去 = 標題洩漏）
+    await requirePagePermission(user.id, id, 'read');
     const page = await findPageForUser(id, user.id);
     if (!page) throw pageNotFound();
     await addFavorite(id, page.workspace_id, user.id);

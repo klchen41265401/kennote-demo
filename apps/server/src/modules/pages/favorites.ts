@@ -8,6 +8,8 @@
 import type { PageTreeNode } from '@kennote/shared-types';
 import { db } from '../../db/client.js';
 import { sql } from '../../db/sql.js';
+import { buildPermissionIndex, filterTree } from '../permissions/bulk.js';
+import { getMemberRole } from '../workspaces/repo.js';
 
 interface TreeRow {
   id: string;
@@ -51,7 +53,25 @@ export async function listFavorites(
        AND p.deleted_at IS NULL
      ORDER BY f.sort_key ASC, f.created_at ASC
   `);
-  return rows.map(toNode);
+  // 第七輪：收藏也要過濾 —— 加入收藏之後權限被收回（或本來就是靠別的路徑拿到 id）
+  // 的頁面不該還留在側邊欄上。
+  return filterVisible(workspaceId, userId, rows.map(toNode));
+}
+
+/**
+ * 共用的 per-page 權限過濾（第七輪，第六輪 §5-1）。
+ * `filterTree` 會把看不見的節點拿掉；這兩份清單本來就是扁平的，
+ * 所以 parentId 重新掛載不影響顯示。
+ */
+async function filterVisible(
+  workspaceId: string,
+  userId: string,
+  nodes: PageTreeNode[],
+): Promise<PageTreeNode[]> {
+  const role = await getMemberRole(workspaceId, userId);
+  if (!role) return [];
+  const index = await buildPermissionIndex(workspaceId, userId, role);
+  return filterTree(nodes, index);
 }
 
 export async function isFavorite(pageId: string, userId: string): Promise<boolean> {
@@ -98,7 +118,7 @@ export async function listRecent(
      ORDER BY p.updated_at DESC
      LIMIT ${limit}
   `);
-  return rows.map(toNode);
+  return filterVisible(workspaceId, userId, rows.map(toNode));
 }
 
 /**

@@ -132,8 +132,15 @@ export async function setSubscription(
   );
 }
 
-export async function listPageSubscribers(pageId: string): Promise<string[]> {
-  return repo.listSubscribers(pageId);
+/**
+ * 第七輪：接上 `kinds` 篩選（原本整支是 dead code，見 notifications/fanout.ts）。
+ * 不傳 kinds = 「沒有靜音的所有人」，與原本的行為一致。
+ */
+export async function listPageSubscribers(
+  pageId: string,
+  kinds?: Array<'explicit' | 'auto'>,
+): Promise<string[]> {
+  return repo.listSubscribers(pageId, kinds);
 }
 
 export async function pageTitleOf(pageId: string): Promise<string> {

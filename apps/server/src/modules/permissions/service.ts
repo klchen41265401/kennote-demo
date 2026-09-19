@@ -24,6 +24,7 @@ import { env } from '../../env.js';
 import { AppError, pageNotFound, workspaceNotFound } from '../../lib/errors.js';
 import { hashPassword, verifyPassword } from '../auth/password.js';
 import { setPermissionGuard } from '../blocks/apply-transaction.js';
+import { notifyPageShared, notifyWorkspaceInvite } from '../notifications/fanout.js';
 import * as repo from './repo.js';
 import { resolvePermission, resolvePublicPermission } from './resolve.js';
 
@@ -235,6 +236,21 @@ export async function setPagePermission(
     }
   });
 
+  /*
+   * 第七輪（第六輪 §5-6）：7 種通知型別裡只有 3 種產得出來。
+   * 「頁面被分享給你」是使用者最有感的一種 —— 沒有它，被分享的人
+   * 只能等別人把網址貼過來。失敗不影響授權本身（fire-and-forget）。
+   */
+  if (input.subjectType === 'user' && subjectId && input.permission !== 'none') {
+    void notifyPageShared({
+      workspaceId: page.workspace_id,
+      pageId,
+      actorId,
+      recipientId: subjectId,
+      role: PERMISSION_TO_PAGE_ROLE[input.permission],
+    }).catch(() => {});
+  }
+
   return getPageAccess(pageId, actorId);
 }
 
@@ -355,6 +371,13 @@ export async function inviteMember(
     await withTransaction((tx) =>
       repo.addMember(tx, { workspaceId, userId: existing.id, role, invitedBy: actorId }),
     );
+    // 第七輪：`invite` 通知（已經有帳號的人直接加入工作區，不會收到任何信）
+    void notifyWorkspaceInvite({
+      workspaceId,
+      actorId,
+      recipientId: existing.id,
+      role,
+    }).catch(() => {});
     return {
       status: 'joined',
       member: {

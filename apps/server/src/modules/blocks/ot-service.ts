@@ -66,6 +66,8 @@ export interface ReceiveDeltaResult {
   content: RichText;
   /** 這次有沒有真的改到東西（全部被 transform 掉就是 no-op） */
   changed: boolean;
+  /** 套用**之前**的內容。第七輪用來算 @提及的差集（新增的提及才發通知） */
+  previous: RichText;
 }
 
 /** 基本形狀檢查。zod 在 validate-ops.ts 只驗到 `{ ops: object[] }`，細節在這裡把關。 */
@@ -151,6 +153,7 @@ export async function receiveDelta(tx: Tx, input: ReceiveDeltaInput): Promise<Re
       rev: currentRev,
       content,
       changed: false,
+      previous: content,
     };
   }
 
@@ -175,6 +178,7 @@ export async function receiveDelta(tx: Tx, input: ReceiveDeltaInput): Promise<Re
     rev: nextRev,
     content: nextContent,
     changed: true,
+    previous: content,
   };
 }
 

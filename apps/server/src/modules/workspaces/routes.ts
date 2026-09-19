@@ -20,8 +20,9 @@ export async function workspaceRoutes(app: FastifyInstance): Promise<void> {
   app.get('/:id/tree', async (req, reply) => {
     const user = requireUser(req);
     const { id } = idParams.parse(req.params);
-    if (!(await getMemberRole(id, user.id))) throw workspaceNotFound();
-    return reply.send({ data: await getWorkspaceTree(id) });
+    const role = await getMemberRole(id, user.id);
+    if (!role) throw workspaceNotFound();
+    return reply.send({ data: await getWorkspaceTree(id, user.id, role) });
   });
 
   /* ── 工作區設定（M3 App shell）────────────────────────

@@ -6,10 +6,12 @@
  *   comments/service ──setCommentBroadcaster──▶ RoomManager
  *   notifications/service ──setNotificationPusher──▶ RoomManager（user channel）
  *   applyTransaction ──setPermissionGuard──▶ permissions/service
+ *   applyTransaction ──setTransactionNotifier──▶ notifications/fanout
  */
 import { logger } from '../../lib/logger.js';
 import { setBroadcaster } from '../blocks/apply-transaction.js';
 import { setCommentBroadcaster } from '../comments/service.js';
+import { registerTransactionNotifier } from '../notifications/fanout.js';
 import { setNotificationPusher } from '../notifications/service.js';
 import { registerPermissionGuard } from '../permissions/service.js';
 import { getBroadcastAdapter } from './broadcast.js';
@@ -51,6 +53,10 @@ export function initRealtime(): RoomManager {
 
   // 4) 權限守門員：所有 block 寫入都會經過（guest 只能留言不能編輯）
   registerPermissionGuard();
+
+  // 5) 第七輪：transaction commit 之後的通知扇出
+  //    （block 裡的 @提及 → mention、explicit 訂閱者 → page_updated）
+  registerTransactionNotifier();
 
   return rooms;
 }

@@ -48,9 +48,68 @@ export function minPermission(a: PagePermission, b: PagePermission): PagePermiss
   return PAGE_PERMISSION_RANK[a] <= PAGE_PERMISSION_RANK[b] ? a : b;
 }
 
-export function resolvePermission(input: ResolveInput): PagePermission {
-  const { userId, workspaceRole, entries } = input;
+/**
+ * 第七輪：把「沿繼承鏈收集到的條目」壓成一個**可合併的摘要**（fold）。
+ *
+ * 為什麼要拆出來：側邊欄頁面樹 / 垃圾桶 / 最近 / 收藏都要對**每一頁**問權限，
+ * 一頁一次 `resolvePagePermission()` 等於 N × 2 次查詢（1000 頁 = 2000 次往返）。
+ * fold 是結合律的（`combineFolds`），所以「這一頁的條目」＋「父頁的 fold」
+ * 就是「這一頁的 fold」——整棵樹一次 O(N) 折完（見 permissions/bulk.ts）。
+ *
+ * `resolvePermission()` 自己也走同一條路（fold → resolveFold），
+ * 單頁與批次因此**不可能算出不同答案**。
+ */
+export interface ChainFold {
+  /** 這條鏈上有沒有「適用於這個使用者」的條目（有 → 不套 baseline） */
+  hasApplicable: boolean;
+  /** 適用條目的最大值 */
+  max: PagePermission;
+}
 
+export const EMPTY_FOLD: ChainFold = { hasApplicable: false, max: 'none' };
+
+/** 哪些條目「適用於這個使用者」——與 03 §4.12 的 effective_page_role 同一組規則 */
+export function entryApplies(
+  entry: PermissionEntryInput,
+  userId: string,
+  workspaceRole: WorkspaceRole | null,
+): boolean {
+  if (entry.subjectType === 'user') return entry.subjectId === userId;
+  // 非成員：只認直接指名他的 user 條目（見下方 resolveFold 的說明）
+  if (workspaceRole === null) return false;
+  if (entry.subjectType === 'workspace') return workspaceRole !== 'guest';
+  return false; // public 條目只對匿名訪客有意義
+}
+
+export function foldEntries(
+  userId: string,
+  workspaceRole: WorkspaceRole | null,
+  entries: PermissionEntryInput[],
+): ChainFold {
+  let fold = EMPTY_FOLD;
+  for (const e of entries) {
+    if (!entryApplies(e, userId, workspaceRole)) continue;
+    fold = {
+      hasApplicable: true,
+      max: maxPermission(fold.max, PAGE_ROLE_TO_PERMISSION[e.role]),
+    };
+  }
+  return fold;
+}
+
+/** 子頁面的 fold ⊕ 祖先的 fold（繼承中斷點由呼叫端負責不要往上合併） */
+export function combineFolds(a: ChainFold, b: ChainFold): ChainFold {
+  if (!b.hasApplicable) return a;
+  if (!a.hasApplicable) return b;
+  return { hasApplicable: true, max: maxPermission(a.max, b.max) };
+}
+
+/** fold → 最終權限（工作區角色的 baseline / ceiling 都在這裡套） */
+export function resolveFold(
+  workspaceRole: WorkspaceRole | null,
+  fold: ChainFold,
+  isPageOwner = false,
+): PagePermission {
   /*
    * 第六輪：**工作區外的被授權者**（第五輪 §4-3 留下來要決定的設計）。
    *
@@ -59,45 +118,25 @@ export function resolvePermission(input: ResolveInput): PagePermission {
    * 結果是分享彈窗只好在邀請時把人**塞進整個工作區當 member**
    * （baseline = 對每一頁都 edit），「只想給他看這一頁」做不到。
    *
-   * 決定：非成員也能被頁面層級授權，但**只有直接指名他的 `user` 條目算數**：
-   *   - `workspace` 條目不算（他不是成員）
-   *   - `public` 條目不算（那條路走 `resolvePublicPermission`）
-   *   - 沒有 baseline（沒被指名 → `none`，其他頁面照樣 404）
-   *   - 封頂在 `edit`：非成員永遠拿不到 `full`，不能再分享給別人、
-   *     不能改這一頁的權限設定
-   *
-   * 「只有這一頁看得見」則由呼叫端保證：tree / search / trash 都先
-   * `assertMember` 或 INNER JOIN `workspace_members`，非成員一律不在裡面。
+   * 決定：非成員也能被頁面層級授權，但**只有直接指名他的 `user` 條目算數**
+   * （`entryApplies` 已經濾掉 workspace / public），而且**沒有 baseline**、
+   * 封頂在 `edit`：非成員永遠拿不到 `full`，不能再分享給別人。
    */
-  if (!workspaceRole) {
-    let granted: PagePermission = 'none';
-    for (const e of entries) {
-      if (e.subjectType !== 'user' || e.subjectId !== userId) continue;
-      granted = maxPermission(granted, PAGE_ROLE_TO_PERMISSION[e.role]);
-    }
-    return minPermission(granted, 'edit');
-  }
+  if (!workspaceRole) return minPermission(fold.max, 'edit');
 
   // 管理員直通（03 §4.12 effective_page_role 的 IF v_ws_role IN ('owner','admin')）
   if (workspaceRole === 'owner' || workspaceRole === 'admin') return 'full';
 
   // 頁面建立者視同 full（本專案補充：否則自己建的頁面會被別人的條目綁住）
-  if (input.isPageOwner) return 'full';
+  if (isPageOwner) return 'full';
 
-  const applicable = entries.filter((e) => {
-    if (e.subjectType === 'user') return e.subjectId === userId;
-    if (e.subjectType === 'workspace') return workspaceRole !== 'guest';
-    return false; // public 條目只對匿名訪客有意義
-  });
-
-  let granted: PagePermission =
-    applicable.length > 0 ? 'none' : WORKSPACE_ROLE_BASELINE[workspaceRole];
-
-  for (const entry of applicable) {
-    granted = maxPermission(granted, PAGE_ROLE_TO_PERMISSION[entry.role]);
-  }
-
+  const granted = fold.hasApplicable ? fold.max : WORKSPACE_ROLE_BASELINE[workspaceRole];
   return minPermission(granted, WORKSPACE_ROLE_CEILING[workspaceRole]);
+}
+
+export function resolvePermission(input: ResolveInput): PagePermission {
+  const fold = foldEntries(input.userId, input.workspaceRole, input.entries);
+  return resolveFold(input.workspaceRole, fold, input.isPageOwner ?? false);
 }
 
 /** 公開連結（匿名）能拿到什麼：目前固定唯讀，密碼與到期由呼叫端先驗過 */
