@@ -66,6 +66,13 @@ export function SharePopover({ pageId, workspaceId, onClose }: SharePopoverProps
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
+  /*
+   * 第六輪 BUG-31：這裡本來寫死 `role: 'member'`，UI 上邀不了 guest ——
+   * 而 member 的 baseline 是 **edit（整個工作區的每一頁）**，
+   * 「只想讓他留言」在產品上根本做不到。後端 `inviteSchema` 早就支援
+   * admin / member / guest（guest 的 ceiling 是 comment）。
+   */
+  const [inviteRole, setInviteRole] = useState<'member' | 'guest'>('member');
 
   useEffect(() => {
     setLink(access.data?.publicLink ?? null);
@@ -113,7 +120,7 @@ export function SharePopover({ pageId, workspaceId, onClose }: SharePopoverProps
     try {
       await api.post(COLLAB_API_ROUTES.workspaceInvites(workspaceId), {
         email: inviteEmail.trim(),
-        role: 'member',
+        role: inviteRole,
       });
       setInviteEmail('');
       members.refetch();
@@ -158,10 +165,25 @@ export function SharePopover({ pageId, workspaceId, onClose }: SharePopoverProps
           onChange={(e) => setInviteEmail(e.target.value)}
           aria-label="邀請成員的 email"
         />
+        <select
+          className={styles.select}
+          value={inviteRole}
+          aria-label="邀請的角色"
+          data-invite-role=""
+          onChange={(e) => setInviteRole(e.target.value as 'member' | 'guest')}
+        >
+          <option value="member">成員（可編輯）</option>
+          <option value="guest">訪客（只能留言）</option>
+        </select>
         <button type="button" className={styles.primaryButton} disabled={busy} onClick={() => void invite()}>
           邀請
         </button>
       </div>
+      <p className={styles.hint}>
+        {inviteRole === 'guest'
+          ? '訪客只能留言，看不到你沒有明確分享的頁面。'
+          : '成員預設可以編輯這個工作區裡的所有頁面。'}
+      </p>
 
       <ul className={styles.members}>
         {(members.data ?? []).map((member) => (

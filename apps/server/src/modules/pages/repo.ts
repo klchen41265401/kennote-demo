@@ -248,6 +248,24 @@ export async function isDescendantOf(
   return row?.found ?? false;
 }
 
+/**
+ * 垃圾桶批次清空用：只要判斷權限需要的幾個欄位（`emptyTrash()` 一次要看很多頁）。
+ * `updated_by` 在 `softDeleteSubtree()` 會被設成刪除者 —— schema 沒有 `deleted_by`，
+ * 這是最接近的代理欄位。
+ */
+export async function findPageActorMeta(
+  pageId: string,
+  conn: Queryable = db,
+): Promise<{ created_by: string | null; updated_by: string | null; deleted_at: Date | null } | null> {
+  return conn.queryOne<{
+    created_by: string | null;
+    updated_by: string | null;
+    deleted_at: Date | null;
+  }>(sql`
+    SELECT created_by, updated_by, deleted_at FROM pages WHERE id = ${pageId}
+  `);
+}
+
 export async function softDeleteSubtree(
   conn: Queryable,
   ids: string[],

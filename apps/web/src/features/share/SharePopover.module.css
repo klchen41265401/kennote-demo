@@ -28,6 +28,15 @@
   gap: var(--kn-space-2);
 }
 
+/* 第六輪 BUG-31：邀請角色下拉（member / guest）擠進同一列，手機下換行 */
+.inviteRow {
+  flex-wrap: wrap;
+}
+
+.inviteRow .select {
+  flex: 0 0 auto;
+}
+
 .input {
   flex: 1;
   min-width: 0;

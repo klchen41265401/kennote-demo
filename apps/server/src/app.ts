@@ -18,7 +18,7 @@ import { notificationRoutes } from './modules/notifications/routes.js';
 import { pageRoutes } from './modules/pages/routes.js';
 import { permissionRoutes, publicShareRoutes } from './modules/permissions/routes.js';
 import { initRealtime } from './modules/realtime/index.js';
-import { listTrash } from './modules/pages/service.js';
+import { emptyTrash, listTrash } from './modules/pages/service.js';
 import { websocketRoutes } from './modules/realtime/ws.js';
 import { searchRoutes } from './modules/search/routes.js';
 import { recentRoutes } from './modules/recent/routes.js';
@@ -116,6 +116,17 @@ export async function buildApp(): Promise<FastifyInstance> {
       const { workspaceId } = z.object({ workspaceId: z.string().uuid() }).parse(req.query);
       return reply.send({ data: await listTrash(workspaceId, user.id) });
     });
+
+    /** 批次「清空垃圾桶」（第六輪補）。刪不掉的（別人的頁面）會被跳過，不是整批失敗 */
+    instance.delete(
+      '/api/trash',
+      { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } },
+      async (req, reply) => {
+        const user = requireUser(req);
+        const { workspaceId } = z.object({ workspaceId: z.string().uuid() }).parse(req.query);
+        return reply.send({ data: await emptyTrash(workspaceId, user.id) });
+      },
+    );
   });
 
   await app.register(websocketRoutes);

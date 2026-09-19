@@ -15,6 +15,25 @@ export interface PageMetaRow {
   deleted_at: Date | null;
 }
 
+/**
+ * 垃圾桶專用的 meta。多帶一個 `updated_by` ——
+ * `softDeleteSubtree()` 軟刪除時會把它設成操作者，所以這是「誰把它丟進垃圾桶」
+ * 的代理欄位（schema 目前沒有 `deleted_by`）。
+ */
+export interface TrashedPageMetaRow extends PageMetaRow {
+  updated_by: string | null;
+}
+
+export async function findPageMetaWithActor(
+  pageId: string,
+  conn: Queryable = db,
+): Promise<TrashedPageMetaRow | null> {
+  return conn.queryOne<TrashedPageMetaRow>(sql`
+    SELECT id, workspace_id, created_by, updated_by, inherits_permissions, deleted_at
+      FROM pages WHERE id = ${pageId}
+  `);
+}
+
 export async function findPageMeta(
   pageId: string,
   conn: Queryable = db,

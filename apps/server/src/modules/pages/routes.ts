@@ -8,6 +8,7 @@ import {
   listFavorites,
   listRecent,
   removeFavorite,
+  listSharedWithMe,
 } from './favorites.js';
 import { pageNotFound } from '../../lib/errors.js';
 import * as service from './service.js';
@@ -53,6 +54,12 @@ export async function pageRoutes(app: FastifyInstance): Promise<void> {
       .object({ workspaceId: z.string().uuid() })
       .parse(req.query);
     return reply.send({ data: await listFavorites(workspaceId, user.id) });
+  });
+
+  /** 「與我共用」：別人指名分享給我、但我不是那個工作區成員的頁面（第六輪） */
+  app.get('/shared-with-me', async (req, reply) => {
+    const user = requireUser(req);
+    return reply.send({ data: await listSharedWithMe(user.id) });
   });
 
   app.get('/recent', async (req, reply) => {

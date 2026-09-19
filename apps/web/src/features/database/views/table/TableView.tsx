@@ -139,6 +139,87 @@ export function TableView(props: ViewProps) {
     URL.revokeObjectURL(href);
   }
 
+  /*
+   * 第六輪 BUG-34：列的拖曳排序走的是 **HTML5 DnD**（`draggable` + `dragstart`），
+   * 而行動瀏覽器**不會**從觸控觸發 `dragstart` —— 加上把手只在 `mousemove`
+   * 時才浮出來，手機上根本連把手都看不到。結果是「資料庫表格在觸控下
+   * 完全沒有排序的路」。
+   *
+   * 這裡補一條**只看 touch**的路，語意對齊 `@kennote/ui` 的 dnd：
+   * 長按 400ms（Android 的系統長按值）啟動，期間移動超過 5px 視為想捲動 → 取消。
+   * 啟動後用 `elementFromPoint` 找目前指在哪一列，沿用既有的 `dropAfter`
+   * 指示線與 `commitDrop()`。滑鼠行為一個位元都沒動。
+   *
+   * 註：正解是整個 database 改用 `@kennote/ui` 的 `useDraggable/useDroppable`
+   * （側邊欄樹就是那一套，觸控本來就能動）。那是跨 5 個 view 的改動，
+   * 這一輪先讓表格有路可走，看板 / 日曆 / 屬性排序仍然是觸控死的（見 round6 §4）。
+   */
+  const touchHoldRef = useRef<{ timer: ReturnType<typeof setTimeout>; x: number; y: number } | null>(
+    null,
+  );
+
+  function cancelTouchHold(): void {
+    if (touchHoldRef.current) clearTimeout(touchHoldRef.current.timer);
+    touchHoldRef.current = null;
+  }
+
+  function onRowPointerDown(event: React.PointerEvent<HTMLDivElement>, rowId: string): void {
+    if (event.pointerType !== 'touch') return;
+    if (readOnly || props.reorderRow === undefined) return;
+    cancelTouchHold();
+    const startX = event.clientX;
+    const startY = event.clientY;
+
+    const move = (e: PointerEvent): void => {
+      const hold = touchHoldRef.current;
+      if (hold) {
+        // 門檻前移動 → 使用者想捲動，不是想拖
+        if (Math.hypot(e.clientX - hold.x, e.clientY - hold.y) > 5) {
+          cancelTouchHold();
+          window.removeEventListener('pointermove', move, true);
+          window.removeEventListener('pointerup', up, true);
+          window.removeEventListener('pointercancel', up, true);
+        }
+        return;
+      }
+      e.preventDefault();
+      const el = document.elementFromPoint(e.clientX, e.clientY);
+      const target = el?.closest('[data-row-id]') as HTMLElement | null;
+      const overId = target?.dataset['rowId'];
+      if (!overId) return;
+      const idx = rows.findIndex((r) => r.id === overId);
+      if (idx < 0) return;
+      const box = target!.getBoundingClientRect();
+      setDropAfter(e.clientY - box.top < box.height / 2 ? (rows[idx - 1]?.id ?? null) : overId);
+    };
+
+    const up = (): void => {
+      const wasPending = touchHoldRef.current !== null;
+      cancelTouchHold();
+      window.removeEventListener('pointermove', move, true);
+      window.removeEventListener('pointerup', up, true);
+      window.removeEventListener('pointercancel', up, true);
+      if (!wasPending) commitDrop();
+    };
+
+    window.addEventListener('pointermove', move, true);
+    window.addEventListener('pointerup', up, true);
+    window.addEventListener('pointercancel', up, true);
+
+    touchHoldRef.current = {
+      x: startX,
+      y: startY,
+      timer: setTimeout(() => {
+        touchHoldRef.current = null;
+        setDragRowId(rowId);
+        setHandleRowId(rowId);
+        navigator.vibrate?.(10);
+      }, 400),
+    };
+  }
+
+  useEffect(() => cancelTouchHold, []);
+
   /** 拖曳放開：把 dragRowId 插到 dropAfter 後面 */
   function commitDrop() {
     const rowId = dragRowId;
@@ -386,6 +467,9 @@ export function TableView(props: ViewProps) {
         data-row-id={row.id}
         aria-rowindex={rowIndex + 2}
         aria-selected={selected.has(row.id)}
+        /* 第六輪 BUG-34：觸控長按 400ms 才能拖（HTML5 DnD 在手機上不會觸發） */
+        onPointerDown={(e) => onRowPointerDown(e, row.id)}
+        style={dragRowId === row.id ? { touchAction: 'none' } : undefined}
         onDragOver={(e) => {
           if (!dragRowId) return;
           e.preventDefault();

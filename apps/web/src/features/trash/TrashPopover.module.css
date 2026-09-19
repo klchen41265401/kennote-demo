@@ -115,8 +115,45 @@
 }
 
 .footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   padding: 8px 12px;
   border-top: 1px solid var(--kn-color-divider);
   color: var(--kn-color-text-tertiary);
   font-size: 12px;
+}
+
+/* 第六輪：批次清空垃圾桶 */
+.emptyAll {
+  flex: 0 0 auto;
+  min-height: 28px;
+  padding: 4px 10px;
+  border: 1px solid var(--kn-color-divider);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--kn-color-danger, #e03e3e);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.emptyAll:hover:not(:disabled) {
+  background: var(--kn-color-bg-hover);
+}
+
+.emptyAll:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* 手機：垃圾桶 popover 本來就窄，footer 疊成兩行才不會把按鈕擠掉 */
+@media (max-width: 767px) {
+  .footer {
+    flex-wrap: wrap;
+  }
+
+  .emptyAll {
+    min-height: 36px;
+  }
 }

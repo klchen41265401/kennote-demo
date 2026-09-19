@@ -14,7 +14,10 @@ import {
   plainToBody,
   setDiscussionResolved,
   usePageDiscussions,
+  type MentionCandidate,
 } from './api';
+import { useWorkspaceMembers } from '../../lib/queries';
+import { useWorkspace } from '../../stores/workspace';
 import styles from './CommentsPanel.module.css';
 
 export interface CommentsPanelProps {
@@ -77,6 +80,7 @@ function Thread({
   users,
   canComment,
   currentUserId,
+  members,
   onHighlightBlock,
 }: {
   pageId: string;
@@ -84,6 +88,8 @@ function Thread({
   users: Record<string, PublicUser>;
   canComment: boolean;
   currentUserId: string | null;
+  /** BUG-30：`@某人` 要變成 mention atom 才會產生通知 */
+  members: readonly MentionCandidate[];
   onHighlightBlock?(blockId: string | null): void;
 }): JSX.Element {
   const [draft, setDraft] = useState('');
@@ -91,7 +97,7 @@ function Thread({
   const quote = discussion.anchor.kind === 'inline' ? discussion.anchor.quote : '';
 
   const reply = async (): Promise<void> => {
-    const body = plainToBody(draft);
+    const body = plainToBody(draft, members);
     if (body.length === 0) return;
     setBusy(true);
     try {
@@ -166,6 +172,13 @@ export function CommentsPanel({
 }: CommentsPanelProps): JSX.Element {
   const [showResolved, setShowResolved] = useState(false);
   const { data, isLoading, isError } = usePageDiscussions(pageId);
+  // BUG-30：留言框的 `@某人` 要比對得到人，才生得出 mention atom → 通知
+  const workspace = useWorkspace();
+  const membersQuery = useWorkspaceMembers(workspace?.id ?? null);
+  const members = useMemo(
+    () => (membersQuery.data ?? []) as MentionCandidate[],
+    [membersQuery.data],
+  );
   const [draft, setDraft] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -182,7 +195,7 @@ export function CommentsPanel({
   const openCount = (data?.discussions ?? []).filter((d) => !d.resolvedAt).length;
 
   const startThread = async (): Promise<void> => {
-    const body = plainToBody(draft);
+    const body = plainToBody(draft, members);
     if (body.length === 0) return;
     setBusy(true);
     try {
@@ -220,6 +233,7 @@ export function CommentsPanel({
             users={data?.users ?? {}}
             canComment={canComment}
             currentUserId={currentUserId}
+            members={members}
             {...(onHighlightBlock ? { onHighlightBlock } : {})}
           />
         ))}

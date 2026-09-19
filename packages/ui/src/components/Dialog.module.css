@@ -140,17 +140,26 @@
   }
 }
 
-@media (max-width: 640px) {
+/*
+ * 第六輪 BUG-33：斷點從 640px 拉到 767px（web app 其他地方都用 767px；
+ * 641～767px 之間本來會拿到「手機的堆疊內容 + 桌機的置中圓角面板」），
+ * 並把 `100%` 換成 `100dvh` —— 行動瀏覽器的網址列會吃掉 `vh`/百分比高度的底部。
+ */
+@media (max-width: 767px) {
   .alignCenter,
   .alignTop {
     padding: 0;
     align-items: stretch;
   }
 
+  .backdrop {
+    height: 100dvh;
+  }
+
   .panel {
     max-width: none;
     max-height: none;
-    height: 100%;
+    height: 100dvh;
     border-radius: 0;
   }
 }

@@ -36,7 +36,7 @@ import {
   useUi,
 } from '../../stores/ui';
 import { recordVisit } from '../../stores/pages';
-import { createPage } from '../../lib/queries';
+import { createPage, usePagePermission } from '../../lib/queries';
 import { useGlobalShortcuts } from '../../lib/shortcuts';
 import { applyTheme, getTheme } from '../../lib/theme';
 import styles from './Shell.module.css';
@@ -217,6 +217,8 @@ export function AppShell(): JSX.Element {
 
 function RightPanel({ pageId, userId }: { pageId: string | null; userId: string | null }): JSX.Element {
   const ui = useUi();
+  // 第六輪 BUG-32：留言框與「還原這個版本」都要看權限（見下面兩處用法）
+  const commentPermission = usePagePermission(pageId);
   return (
     <aside className={styles.rightPanel} aria-label="側邊面板">
       <div className={styles.rightHeader}>
@@ -257,6 +259,11 @@ function RightPanel({ pageId, userId }: { pageId: string | null; userId: string 
           <CommentsPanel
             pageId={pageId}
             currentUserId={userId}
+            /*
+             * 第六輪 BUG-32：`canComment` 預設 `true`，所以只有 `read` 權限的人
+             * 也看得到留言輸入框（送出才 403）。`comment` 以上才給。
+             */
+            canComment={commentPermission.permission !== 'read'}
             onHighlightBlock={(blockId) => {
               if (!blockId) return;
               document.querySelector(`[data-block-id="${blockId}"]`)?.scrollIntoView({
@@ -267,7 +274,12 @@ function RightPanel({ pageId, userId }: { pageId: string | null; userId: string 
           />
         )}
         {pageId && ui.rightPanelTab === 'history' && (
-          <HistoryPanel pageId={pageId} onPreview={(seq) => setHistoryPreview(seq)} />
+          <HistoryPanel
+            pageId={pageId}
+            onPreview={(seq) => setHistoryPreview(seq)}
+            /* 還原是寫入：只有 edit / full 能按 */
+            canRestore={commentPermission.canEdit !== false}
+          />
         )}
       </div>
     </aside>

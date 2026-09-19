@@ -70,8 +70,71 @@ export async function deleteComment(pageId: string, commentId: string): Promise<
   invalidateQueries(discussionKey(pageId));
 }
 
-/** 把輸入框的純文字轉成 RichText；`@name` 之後會由編輯器版的 mention atom 取代 */
-export function plainToBody(text: string): RichText {
+/** 提及解析用的最小成員形狀（`useWorkspaceMembers()` 回的那一坨的子集） */
+export interface MentionCandidate {
+  userId: string;
+  user?: { name?: string | null; email?: string | null } | null;
+}
+
+/**
+ * 第六輪 BUG-30：把輸入框的純文字轉成 RichText，**並且把 `@某人` 變成 mention atom**。
+ *
+ * 原本這支是 `[{ text: trimmed }]`，檔頭寫著「`@name` 之後會由編輯器版的
+ * mention atom 取代」—— 那個「之後」沒有來。後果是整條
+ * 「@提及 → 通知 → 收件匣」鏈路**從 UI 完全走不到**：
+ *   - 後端 `extractMentionedUserIds()` 只認 `atom === 'mention'` 的節點
+ *   - 留言框只送得出純文字 → `mentionedUserIds` 永遠是空的
+ *   - 編輯器裡的 mention 有 atom，但後端只掃留言的 body，不掃 block 內容
+ * 實測遠端站台（用 API 直接送 mention atom）：通知**產得出來**，
+ * 所以壞掉的只有這一層轉換。
+ *
+ * 比對規則刻意保守：`@` 之後的字串要**完整等於**某個成員的顯示名稱或 email
+ * 的本地部分（大小寫不計），才換成 atom；比不到就原樣留成文字，
+ * 不會把使用者打的 `@下午三點` 吃掉。長名字優先比，避免
+ * 「小明」先吃掉「小明華」的前綴。
+ */
+export function plainToBody(text: string, members: readonly MentionCandidate[] = []): RichText {
   const trimmed = text.trim();
-  return trimmed.length > 0 ? [{ text: trimmed }] : [];
+  if (trimmed.length === 0) return [];
+  if (members.length === 0) return [{ text: trimmed }];
+
+  // name → userId，長的排前面（最長匹配優先）
+  const table: Array<{ label: string; userId: string; display: string }> = [];
+  for (const m of members) {
+    const name = m.user?.name?.trim();
+    const email = m.user?.email?.trim();
+    if (name) table.push({ label: name.toLowerCase(), userId: m.userId, display: name });
+    const local = email ? email.split('@')[0] : undefined;
+    if (local) table.push({ label: local.toLowerCase(), userId: m.userId, display: local });
+  }
+  table.sort((a, b) => b.label.length - a.label.length);
+
+  const out: RichText = [];
+  let buffer = '';
+  let i = 0;
+
+  const flush = (): void => {
+    if (buffer.length > 0) out.push({ text: buffer });
+    buffer = '';
+  };
+
+  while (i < trimmed.length) {
+    if (trimmed[i] !== '@') {
+      buffer += trimmed[i];
+      i += 1;
+      continue;
+    }
+    const rest = trimmed.slice(i + 1).toLowerCase();
+    const hit = table.find((t) => rest.startsWith(t.label));
+    if (!hit) {
+      buffer += '@';
+      i += 1;
+      continue;
+    }
+    flush();
+    out.push({ atom: 'mention', data: { userId: hit.userId, text: `@${hit.display}` } } as never);
+    i += 1 + hit.label.length;
+  }
+  flush();
+  return out;
 }

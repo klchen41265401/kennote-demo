@@ -94,3 +94,24 @@ export function useNotifications(): NotificationsState {
 export function useUnreadCount(): number {
   return useStore(notificationsStore, (s) => s.unread);
 }
+
+/**
+ * 頁面追蹤 / 靜音（第六輪補）。
+ *
+ * 後端 `POST /api/notifications/subscriptions` 從 M5 就在了，但**前端沒有任何
+ * 呼叫端** —— 「追蹤這一頁 / 不再通知我」在 UI 上完全做不到。
+ * `COLLAB_API_ROUTES` 也沒有這一條，所以路徑寫在這裡。
+ *
+ * 注意後端目前只是把 `kind` 存起來：`listPageSubscribers()` 是 dead code，
+ * 通知只對「留言裡被提及的人 + 討論串參與者」扇出，
+ * 所以 `explicit` 目前不會讓你收到別人的編輯通知（見 round6 §4）。
+ * `muted` 也一樣還沒被扇出端讀到。
+ */
+export const NOTIFICATION_SUBSCRIPTIONS_ROUTE = '/api/notifications/subscriptions';
+
+export async function setPageSubscription(
+  pageId: string,
+  kind: 'explicit' | 'muted',
+): Promise<void> {
+  await api.post(NOTIFICATION_SUBSCRIPTIONS_ROUTE, { pageId, kind });
+}

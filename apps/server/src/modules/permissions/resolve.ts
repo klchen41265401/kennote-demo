@@ -51,8 +51,32 @@ export function minPermission(a: PagePermission, b: PagePermission): PagePermiss
 export function resolvePermission(input: ResolveInput): PagePermission {
   const { userId, workspaceRole, entries } = input;
 
-  // 不是成員 → 一律看不到（呼叫端會轉成 404，不洩漏存在性）
-  if (!workspaceRole) return 'none';
+  /*
+   * 第六輪：**工作區外的被授權者**（第五輪 §4-3 留下來要決定的設計）。
+   *
+   * 原本這裡是 `if (!workspaceRole) return 'none'` ——
+   * 只寫頁面層級授權、沒把人加進工作區時，對方連 `GET /snapshot` 都 404。
+   * 結果是分享彈窗只好在邀請時把人**塞進整個工作區當 member**
+   * （baseline = 對每一頁都 edit），「只想給他看這一頁」做不到。
+   *
+   * 決定：非成員也能被頁面層級授權，但**只有直接指名他的 `user` 條目算數**：
+   *   - `workspace` 條目不算（他不是成員）
+   *   - `public` 條目不算（那條路走 `resolvePublicPermission`）
+   *   - 沒有 baseline（沒被指名 → `none`，其他頁面照樣 404）
+   *   - 封頂在 `edit`：非成員永遠拿不到 `full`，不能再分享給別人、
+   *     不能改這一頁的權限設定
+   *
+   * 「只有這一頁看得見」則由呼叫端保證：tree / search / trash 都先
+   * `assertMember` 或 INNER JOIN `workspace_members`，非成員一律不在裡面。
+   */
+  if (!workspaceRole) {
+    let granted: PagePermission = 'none';
+    for (const e of entries) {
+      if (e.subjectType !== 'user' || e.subjectId !== userId) continue;
+      granted = maxPermission(granted, PAGE_ROLE_TO_PERMISSION[e.role]);
+    }
+    return minPermission(granted, 'edit');
+  }
 
   // 管理員直通（03 §4.12 effective_page_role 的 IF v_ws_role IN ('owner','admin')）
   if (workspaceRole === 'owner' || workspaceRole === 'admin') return 'full';

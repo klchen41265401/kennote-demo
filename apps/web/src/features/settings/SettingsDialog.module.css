@@ -285,7 +285,29 @@
   vertical-align: middle;
 }
 
+/*
+ * 第六輪 BUG-33：手機版設定 Dialog 不是真的滿版（390×844 量到 742.7px 高）。
+ *
+ * 根因不是 `Dialog.module.css` ——它的 `@media (max-width: 640px)` 給了
+ * `.panel { height: 100% }`，但 `.dialog` 的 `height: min(800px, 88vh)` 是
+ * **同樣 (0,1,0) 特異度**且 app 端的 CSS module chunk 排在 `@kennote/ui` 之後，
+ * 所以 `.dialog` 永遠贏 → 88vh ≈ 742.7px。
+ *
+ * 另外兩個坑一起修：
+ *   1. 斷點不一致：Dialog 用 640px，本檔與 shell 其他地方用 767px ——
+ *      641～767px 之間會拿到「堆疊的 nav + 桌機的置中圓角面板」。這裡補到 767px。
+ *   2. `vh` 會被行動瀏覽器的網址列吃掉底部，改用 `100dvh`（`vh` 留作 fallback）。
+ */
 @media (max-width: 767px) {
+  .dialog {
+    width: 100%;
+    max-width: none;
+    height: 100vh;
+    height: 100dvh;
+    max-height: none;
+    border-radius: 0;
+  }
+
   .wrap {
     flex-direction: column;
     height: 100%;

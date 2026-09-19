@@ -97,6 +97,8 @@ export const SHELL_ROUTES = {
   recent: '/api/recent',
   recentFallback: '/api/pages/recent',
   pagePermanent: (id: string) => `/api/pages/${id}/permanent`,
+  /** 第六輪：別人指名分享給我、但我不是那個工作區成員的頁面 */
+  sharedWithMe: '/api/pages/shared-with-me',
   workspace: (id: string) => `/api/workspaces/${id}`,
   workspaces: '/api/workspaces',
 } as const;
@@ -181,6 +183,20 @@ export function useRecentPages(workspaceId: string | null) {
   });
 }
 
+/**
+ * 「與我共用」（第六輪）。跟 workspaceId 無關 —— 這些頁面**就是**在別的工作區裡，
+ * 所以 query key 只綁使用者。後端還沒部署時當成空陣列（與 `useFavorites` 同樣的
+ * 保險絲），不要讓整個側邊欄爆掉。
+ */
+export function useSharedWithMe(enabled: boolean) {
+  return useQuery<PageTreeNode[]>({
+    key: ['shared-with-me'] as const,
+    enabled,
+    fetcher: () =>
+      api.get<PageTreeNode[]>(SHELL_ROUTES.sharedWithMe).catch(() => [] as PageTreeNode[]),
+  });
+}
+
 export function useFavorites(workspaceId: string | null) {
   return useQuery<PageTreeNode[]>({
     key: workspaceId ? (['favorites', workspaceId] as const) : (['favorites', 'none'] as const),
@@ -222,6 +238,21 @@ export async function permanentlyDeletePage(pageId: string, workspaceId: string)
   await api.delete(SHELL_ROUTES.pagePermanent(pageId));
   invalidateQueries(['trash', workspaceId]);
   invalidateQueries(['workspace', workspaceId]);
+}
+
+/**
+ * 清空垃圾桶（第六輪補）。後端會跳過「不是你的」頁面而不是整批失敗，
+ * 所以回傳 `skipped` 讓 UI 可以照實說明。
+ */
+export async function emptyTrash(
+  workspaceId: string,
+): Promise<{ deleted: number; skipped: number }> {
+  const res = await api.delete<{ deleted: number; skipped: number }>(API_ROUTES.trash, {
+    workspaceId,
+  });
+  invalidateQueries(['trash', workspaceId]);
+  invalidateQueries(['workspace', workspaceId]);
+  return res;
 }
 
 export async function patchPage(

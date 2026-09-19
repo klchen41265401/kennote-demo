@@ -16,7 +16,12 @@ import { AppError, pageNotFound, workspaceNotFound } from '../../lib/errors.js';
 import { uuidv7 } from '../../lib/uuidv7.js';
 import { applyTransaction } from '../blocks/apply-transaction.js';
 import { listBlocksByPage, toBlock } from '../blocks/repo.js';
-import { requirePagePermission } from '../permissions/service.js';
+import {
+  canControlTrashedPage,
+  requirePagePermission,
+  requireTrashedPageControl,
+  resolvePagePermission,
+} from '../permissions/service.js';
 import { getMemberRole } from '../workspaces/repo.js';
 import * as repo from './repo.js';
 
@@ -85,10 +90,26 @@ export async function createPage(input: CreatePageRequest, userId: string): Prom
   });
 }
 
-export async function getPage(pageId: string, userId: string): Promise<Page> {
+/**
+ * 第六輪：`findPageForUser()` 只 JOIN `workspace_members`，所以**工作區外的
+ * 被授權者**（只有 `page_permissions` 的 user 條目）會拿到 404。
+ * 這支補一層 fallback：成員照舊走原路，非成員再問一次
+ * `resolvePagePermission()`（它現在認得非成員的直接授權，封頂 `edit`）。
+ *
+ * 刻意**只**補在「讀某一頁」這條路上 —— tree / search / trash / favorites
+ * 全都還是成員限定，所以被授權者只看得到那一頁，看不到工作區的其他東西。
+ */
+async function findVisiblePage(pageId: string, userId: string) {
   const row = await repo.findPageForUser(pageId, userId);
-  if (!row) throw pageNotFound();
-  return repo.toPage(row);
+  if (row) return row;
+  if ((await resolvePagePermission(userId, pageId)) === 'none') throw pageNotFound();
+  const shared = await repo.findPageById(pageId);
+  if (!shared || shared.deleted_at !== null) throw pageNotFound();
+  return shared;
+}
+
+export async function getPage(pageId: string, userId: string): Promise<Page> {
+  return repo.toPage(await findVisiblePage(pageId, userId));
 }
 
 /**
@@ -97,7 +118,7 @@ export async function getPage(pageId: string, userId: string): Promise<Page> {
  * 讓 HTTP 載入與 WebSocket 訂閱之間沒有空窗。
  */
 export async function getSnapshot(pageId: string, userId: string): Promise<PageSnapshot> {
-  const pageRow = await repo.findPageForUser(pageId, userId);
+  const pageRow = await findVisiblePage(pageId, userId);
   if (!pageRow) throw pageNotFound();
 
   const page = repo.toPage(pageRow);
@@ -179,6 +200,8 @@ export async function restorePage(pageId: string, userId: string): Promise<Page>
     const row = await repo.findPageForUser(pageId, userId, tx, { includeDeleted: true });
     if (!row) throw pageNotFound();
     if (row.deleted_at === null) throw new AppError('PAGE_ALREADY_DELETED', '這個頁面不在垃圾桶裡');
+    // BUG-29：`findPageForUser` 只驗「是不是工作區成員」，還原也要看得出是誰的東西
+    await requireTrashedPageControl(userId, pageId, tx);
     const ids = await repo.collectDescendantIds(pageId, tx, { includeDeleted: true });
     await repo.restoreSubtree(tx, ids, userId);
     // 父頁面若還在垃圾桶，還原後改掛到頂層，避免變成看不見的孤兒
@@ -194,10 +217,25 @@ export async function restorePage(pageId: string, userId: string): Promise<Page>
   });
 }
 
+/**
+ * 永久刪除（hard delete，沒有回頭路）。
+ *
+ * **BUG-29**：這裡原本只有 `findPageForUser()` —— 那支只 JOIN `workspace_members`，
+ * 於是任何工作區成員（**包括 guest**）都刪得掉別人的頁面。實測遠端站台：
+ * 一個沒有任何頁面授權的 guest `DELETE /api/pages/:id/permanent` 拿到 **200**。
+ *
+ * 不能用 `requirePagePermission()`：`resolvePagePermission()` 對已刪除的頁面
+ * 一律回 `none`，套下去連擁有者都會 404（第五輪就是因此跳過這條路）。
+ * 改用 `requireTrashedPageControl()`（owner / admin / 建立者 / 刪除者）。
+ */
 export async function permanentlyDeletePage(pageId: string, userId: string): Promise<void> {
   await withTransaction(async (tx) => {
     const row = await repo.findPageForUser(pageId, userId, tx, { includeDeleted: true });
     if (!row) throw pageNotFound();
+    if (row.deleted_at === null) {
+      throw new AppError('PAGE_ALREADY_DELETED', '這個頁面不在垃圾桶裡，請先刪除再永久刪除');
+    }
+    await requireTrashedPageControl(userId, pageId, tx);
     const ids = await repo.collectDescendantIds(pageId, tx, { includeDeleted: true });
     await repo.hardDeleteSubtree(tx, ids);
   });
@@ -360,4 +398,40 @@ function appendCopySuffix(title: RichText): RichText {
 export async function listTrash(workspaceId: string, userId: string): Promise<TrashedPage[]> {
   await assertMember(workspaceId, userId);
   return repo.listTrash(workspaceId);
+}
+
+/**
+ * 批次「清空垃圾桶」（第六輪補）。
+ *
+ * 逐頁套用與 `permanentlyDeletePage()` 相同的判斷，**刪不了的就跳過**
+ * 而不是整批失敗 —— 不然一個 member 只要垃圾桶裡有一頁別人的東西就永遠清不掉。
+ * 回傳 `{ deleted, skipped }`，前端據此提示「N 頁不是你的，已保留」。
+ */
+export async function emptyTrash(
+  workspaceId: string,
+  userId: string,
+): Promise<{ deleted: number; skipped: number }> {
+  await assertMember(workspaceId, userId);
+  const role = await getMemberRole(workspaceId, userId);
+  if (!role) throw workspaceNotFound();
+
+  const trashed = await repo.listTrash(workspaceId);
+  let deleted = 0;
+  let skipped = 0;
+
+  for (const page of trashed) {
+    // 一頁一個 transaction：中途有一頁出錯不會把已經刪掉的又拖回來
+    const done = await withTransaction(async (tx) => {
+      const meta = await repo.findPageActorMeta(page.id, tx);
+      if (!meta || meta.deleted_at === null) return false;
+      if (!canControlTrashedPage(userId, role, meta)) return false;
+      const ids = await repo.collectDescendantIds(page.id, tx, { includeDeleted: true });
+      await repo.hardDeleteSubtree(tx, ids);
+      return true;
+    });
+    if (done) deleted += 1;
+    else skipped += 1;
+  }
+
+  return { deleted, skipped };
 }

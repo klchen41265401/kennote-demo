@@ -145,7 +145,9 @@ export const api = {
   post: <T>(path: string, body?: unknown) => request<T>(path, { method: 'POST', body: body ?? {} }),
   patch: <T>(path: string, body?: unknown) =>
     request<T>(path, { method: 'PATCH', body: body ?? {} }),
-  delete: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
+  // query 是第六輪加的：`DELETE /api/trash?workspaceId=…`（清空垃圾桶）要用
+  delete: <T>(path: string, query?: RequestOptions['query']) =>
+    request<T>(path, { method: 'DELETE', ...(query ? { query } : {}) }),
   upload: <T>(path: string, formData: FormData) => request<T>(path, { method: 'POST', formData }),
   /** 下載二進位資料時用（帶 Authorization，不做 JSON 解析） */
   raw: (path: string) =>

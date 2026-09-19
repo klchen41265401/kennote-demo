@@ -24,6 +24,7 @@ import {
   setFavorite,
   useFavorites,
   useRecentPages,
+  useSharedWithMe,
   useWorkspaceTree,
 } from '../../lib/queries';
 import {
@@ -66,6 +67,13 @@ export function Sidebar({ workspace }: SidebarProps): JSX.Element {
   const tree = useWorkspaceTree(workspace.id);
   const favorites = useFavorites(workspace.id);
   const recent = useRecentPages(workspace.id);
+  /*
+   * 第六輪：「與我共用」。頁面層級授權現在對**工作區外的人**也有效
+   * （`resolvePermission()` 只認直接指名的 user 條目，封頂 edit），
+   * 但 tree / search / trash 都是成員限定 —— 沒有這一區，被分享的人
+   * 在側邊欄上完全看不到那一頁，只能靠別人把網址貼給他。
+   */
+  const shared = useSharedWithMe(true);
   const expanded = useExpanded();
   const collapsedSections = useCollapsedSections();
   const [showAll, setShowAll] = useState<Record<string, boolean>>({});
@@ -310,6 +318,17 @@ export function Sidebar({ workspace }: SidebarProps): JSX.Element {
             onToggle={() => toggleSection('favorites')}
           >
             {renderFlatList(favorites.data ?? [], 'favorites')}
+          </Section>
+        )}
+
+        {(shared.data?.length ?? 0) > 0 && (
+          <Section
+            id="shared"
+            title="與我共用"
+            open={sectionOpen('shared')}
+            onToggle={() => toggleSection('shared')}
+          >
+            {renderFlatList(shared.data ?? [], 'shared')}
           </Section>
         )}
 

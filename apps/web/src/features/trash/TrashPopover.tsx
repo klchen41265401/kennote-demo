@@ -2,7 +2,7 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Icon, Popover, toast } from '@kennote/ui';
-import { permanentlyDeletePage, restorePage, useTrash } from '../../lib/queries';
+import { emptyTrash, permanentlyDeletePage, restorePage, useTrash } from '../../lib/queries';
 import { displayTitle } from '../page-tree/tree';
 import { relativeTime } from '../../stores/pages';
 import styles from './TrashPopover.module.css';
@@ -16,6 +16,7 @@ export interface TrashPopoverProps {
 export function TrashPopover({ workspaceId, trigger, onRestored }: TrashPopoverProps): JSX.Element {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
+  const [emptying, setEmptying] = useState(false);
   const navigate = useNavigate();
   const trash = useTrash(open ? workspaceId : null);
 
@@ -91,7 +92,37 @@ export function TrashPopover({ workspaceId, trigger, onRestored }: TrashPopoverP
             </div>
           ))}
         </div>
-        <div className={styles.footer}>垃圾桶裡的頁面 30 天後會自動清除。</div>
+        <div className={styles.footer}>
+          <span>垃圾桶裡的頁面 30 天後會自動清除。</span>
+          {/* 第六輪補：批次清空。後端會跳過不是自己的頁面，所以提示要講清楚 */}
+          <button
+            type="button"
+            className={styles.emptyAll}
+            disabled={emptying || items.length === 0}
+            onClick={async () => {
+              if (!window.confirm('清空垃圾桶？你有權處置的頁面會被永久刪除，這個動作無法復原。')) {
+                return;
+              }
+              setEmptying(true);
+              try {
+                const res = await emptyTrash(workspaceId);
+                await trash.refetch();
+                toast.show({
+                  title:
+                    res.skipped > 0
+                      ? `已永久刪除 ${res.deleted} 頁；${res.skipped} 頁不是你的，已保留`
+                      : `已永久刪除 ${res.deleted} 頁`,
+                });
+              } catch {
+                toast.error('清空垃圾桶失敗');
+              } finally {
+                setEmptying(false);
+              }
+            }}
+          >
+            {emptying ? '清空中…' : '清空垃圾桶'}
+          </button>
+        </div>
       </div>
     </Popover>
   );

@@ -38,7 +38,8 @@ export async function resolvePagePermission(
   if (!page || page.deleted_at !== null) return 'none';
 
   const workspaceRole = await repo.getWorkspaceRole(page.workspace_id, userId, conn);
-  if (!workspaceRole) return 'none';
+  // 第六輪：`workspaceRole === null`（工作區外的被授權者）也往下走 ——
+  // `resolvePermission()` 會只認直接指名他的 `user` 條目，並封頂在 `edit`。
   if (workspaceRole === 'owner' || workspaceRole === 'admin') return 'full';
 
   const entries = await repo.collectInheritedEntries(pageId, conn);
@@ -46,7 +47,8 @@ export async function resolvePagePermission(
     userId,
     workspaceRole,
     entries,
-    isPageOwner: page.created_by === userId,
+    // 非成員不適用「建立者視同 full」：他本來就不可能是建立者
+    isPageOwner: workspaceRole !== null && page.created_by === userId,
   });
 }
 
@@ -68,6 +70,50 @@ export async function requirePagePermission(
     throw new AppError('FORBIDDEN', permissionMessage(need), { pageId, have, need });
   }
   return have;
+}
+
+/**
+ * ⭐ 垃圾桶裡的頁面**不能**用 `requirePagePermission()` 判斷。
+ *
+ * `resolvePagePermission()` 開頭就是 `if (!page || page.deleted_at !== null) return 'none'`，
+ * 所以已刪除的頁面對**任何人**（含擁有者）都是 `none` → 直接套上去會讓擁有者
+ * 連自己的東西都還原不了。第五輪 BUG-27 因此刻意跳過 `permanentlyDeletePage`，
+ * 結果留下一個更糟的洞（第六輪 BUG-29）：
+ * `findPageForUser()` 只 JOIN `workspace_members`，於是**任何工作區成員（含 guest）
+ * 都能永久刪掉別人的頁面** —— 而且是 hard delete，沒有回頭路。
+ *
+ * 已刪除的頁面沒有「現在的權限」可言，改問「誰有資格處置這份殘骸」：
+ *   1. 工作區 owner / admin
+ *   2. 頁面的建立者（`created_by`）
+ *   3. 把它丟進垃圾桶的人（軟刪除時 `updated_by` 會被設成操作者）
+ *
+ * 其他人 → 403；完全不是工作區成員 → 404（不洩漏頁面存在性）。
+ */
+export async function requireTrashedPageControl(
+  userId: string,
+  pageId: string,
+  conn: Queryable = db,
+): Promise<repo.TrashedPageMetaRow> {
+  const page = await repo.findPageMetaWithActor(pageId, conn);
+  if (!page) throw pageNotFound();
+
+  const workspaceRole = await repo.getWorkspaceRole(page.workspace_id, userId, conn);
+  if (!workspaceRole) throw pageNotFound();
+
+  if (canControlTrashedPage(userId, workspaceRole, page)) return page;
+  throw new AppError('FORBIDDEN', '只有頁面的建立者、刪除者或工作區管理員可以處置垃圾桶裡的頁面', {
+    pageId,
+  });
+}
+
+/** 純判斷，`emptyTrash()` 要逐頁篩選時共用（也方便單元測試） */
+export function canControlTrashedPage(
+  userId: string,
+  workspaceRole: WorkspaceRole,
+  page: { created_by: string | null; updated_by: string | null },
+): boolean {
+  if (workspaceRole === 'owner' || workspaceRole === 'admin') return true;
+  return page.created_by === userId || page.updated_by === userId;
 }
 
 function permissionMessage(need: PagePermission): string {

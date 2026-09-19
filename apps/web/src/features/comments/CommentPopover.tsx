@@ -10,7 +10,9 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import { createId } from '../../lib/sync-client';
-import { createDiscussion, plainToBody } from './api';
+import { createDiscussion, plainToBody, type MentionCandidate } from './api';
+import { useWorkspaceMembers } from '../../lib/queries';
+import { useWorkspace } from '../../stores/workspace';
 import styles from './CommentPopover.module.css';
 
 export interface CommentPopoverProps {
@@ -38,12 +40,16 @@ export function CommentPopover({
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
+  // BUG-30：行內留言框也要認得 `@某人`
+  const workspace = useWorkspace();
+  const membersQuery = useWorkspaceMembers(workspace?.id ?? null);
+
   useEffect(() => {
     inputRef.current?.focus();
   }, []);
 
   const submit = async (): Promise<void> => {
-    const body = plainToBody(draft);
+    const body = plainToBody(draft, (membersQuery.data ?? []) as MentionCandidate[]);
     if (body.length === 0) return;
     setBusy(true);
     setError(null);

@@ -100,3 +100,43 @@ export async function listRecent(
   `);
   return rows.map(toNode);
 }
+
+/**
+ * 「與我共用」（第六輪，第五輪 §4-3 的設計決定）。
+ *
+ * 工作區外的人也能被**頁面層級**授權（`resolvePermission()` 現在認得
+ * 非成員的直接 `user` 條目，封頂 `edit`）。但 tree / search / trash 都是
+ * 成員限定，所以他在側邊欄上什麼都看不到 —— 需要這一支把
+ * 「別人指名分享給我、而我不是那個工作區的成員」的頁面列出來。
+ *
+ * 刻意只列 `subject_type = 'user'` 的**直接**條目（不展開繼承鏈）：
+ * 那是「被分享的那一頁」的定義，子頁面照樣點得進去（`getPage` 的 fallback
+ * 會沿繼承鏈解析），只是不佔側邊欄的位置。
+ */
+export async function listSharedWithMe(userId: string): Promise<PageTreeNode[]> {
+  const rows = await db.query<TreeRow>(sql`
+    SELECT p.id, p.workspace_id, p.parent_id, p.title_plain, p.icon, p.sort_key,
+           p.is_database, p.updated_at,
+           EXISTS (
+             SELECT 1 FROM pages ch
+              WHERE ch.parent_id = p.id AND ch.deleted_at IS NULL AND ch.collection_id IS NULL
+           ) AS has_children
+      FROM page_permissions pp
+      JOIN pages p ON p.id = pp.page_id
+     WHERE pp.subject_type = 'user'
+       AND pp.subject_id = ${userId}
+       AND pp.role <> 'none'
+       AND p.deleted_at IS NULL
+       AND p.collection_id IS NULL
+       -- 已經是那個工作區的成員 → 頁面本來就在側邊欄的樹裡，不重複列
+       AND NOT EXISTS (
+             SELECT 1 FROM workspace_members m
+              WHERE m.workspace_id = p.workspace_id
+                AND m.user_id = ${userId}
+                AND m.deleted_at IS NULL
+           )
+     ORDER BY p.updated_at DESC
+     LIMIT 100
+  `);
+  return rows.map(toNode);
+}

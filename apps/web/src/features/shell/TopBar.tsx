@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { PageTreeNode } from '@kennote/shared-types';
 import { Icon, Menu, MenuItem, MenuSeparator, Popover, Switch, Tooltip, toast } from '@kennote/ui';
+import { setPageSubscription } from '../../stores/notifications';
 import { ConnectionBadge } from '../../components/ConnectionBadge';
 import { PresenceAvatars } from '../../components/PresenceAvatars';
 import { SharePopover } from '../share/SharePopover';
@@ -256,6 +257,36 @@ export function TopBar({
             onSelect={() => pageId && openOverlay('moveTo', { moveTargetId: pageId })}
           >
             移動到
+          </MenuItem>
+          <MenuSeparator />
+          {/* 第六輪 BUG-30：後端的追蹤 / 靜音端點從 M5 就在，但前端沒有任何入口 */}
+          <MenuItem
+            icon={<Icon name="bell" size={16} />}
+            onSelect={async () => {
+              if (!pageId) return;
+              try {
+                await setPageSubscription(pageId, 'explicit');
+                toast.success('已追蹤這個頁面');
+              } catch {
+                toast.error('追蹤失敗');
+              }
+            }}
+          >
+            追蹤這個頁面
+          </MenuItem>
+          <MenuItem
+            icon={<Icon name="hide" size={16} />}
+            onSelect={async () => {
+              if (!pageId) return;
+              try {
+                await setPageSubscription(pageId, 'muted');
+                toast.show({ title: '已靜音，不再收到這一頁的通知' });
+              } catch {
+                toast.error('靜音失敗');
+              }
+            }}
+          >
+            靜音這個頁面
           </MenuItem>
           <MenuSeparator />
           <MenuItem icon={<Icon name="import" size={16} />} onSelect={() => setImportOpen(true)}>
