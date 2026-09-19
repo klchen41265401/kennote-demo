@@ -1990,3 +1990,82 @@ body.kn-dragging { cursor: grabbing; user-select: none; }
 .kn-synced-line--heading2 { font-size: 1.25em; font-weight: var(--kn-font-weight-bold); }
 .kn-synced-line--heading3 { font-size: 1.1em; font-weight: var(--kn-font-weight-bold); }
 .kn-synced-check { color: var(--kn-color-text-tertiary); }
+
+/* ═══════════════════════════════════════════════════════════
+   第五輪：行動版 bottom sheet（規格 02 §2.5）
+   由下滑入、佔 60% 視窗高、貼齊左右與底部（含 safe-area）。
+   只有 `sheetOnMobile` 的浮層會拿到 `.kn-popover--sheet`，
+   桌機寬度完全不套用（media query + 元件端的 matchMedia 雙重把關）。
+   ═══════════════════════════════════════════════════════════ */
+
+.kn-sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: calc(var(--kn-z-popover) - 1);
+  background: rgb(15 15 15 / 32%);
+  animation: kn-sheet-fade var(--kn-motion-fast) var(--kn-motion-ease);
+}
+
+.kn-popover--sheet {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  top: auto;
+  width: auto;
+  max-width: none;
+  height: 60vh;
+  max-height: 60vh;
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--kn-radius-lg) var(--kn-radius-lg) 0 0;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  animation: kn-sheet-up var(--kn-motion-normal, 180ms) var(--kn-motion-ease);
+}
+
+/* 捲動區把剩下的高度吃滿，不然 60% 的 sheet 只會露出一半清單 */
+.kn-popover--sheet .kn-slash-scroll,
+.kn-popover--sheet .kn-menu-scroll {
+  flex: 1 1 auto;
+  max-height: none;
+}
+
+.kn-sheet-grip {
+  flex: none;
+  width: 36px;
+  height: 4px;
+  margin: 8px auto 4px;
+  border-radius: 2px;
+  background: var(--kn-color-border);
+}
+
+/* 觸控目標放大到 44px（02 §2.5） */
+.kn-popover--sheet .kn-slash-item,
+.kn-popover--sheet .kn-menu-item {
+  min-height: 44px;
+}
+
+@keyframes kn-sheet-up {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+@keyframes kn-sheet-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kn-popover--sheet,
+  .kn-sheet-backdrop { animation: none; }
+}
+
+/* 行動版的浮動工具列：吸在鍵盤上緣時要撐滿寬度才點得到 */
+@media (max-width: 720px) {
+  .kn-popover--bubble {
+    max-width: calc(100vw - 16px);
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .kn-popover--bubble::-webkit-scrollbar { display: none; }
+}

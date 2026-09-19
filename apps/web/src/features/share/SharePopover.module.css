@@ -130,3 +130,11 @@
   color: var(--kn-color-danger);
   font-size: var(--kn-font-size-xs);
 }
+
+/* 公開分享被站台關閉時的說明（第五輪） */
+.hint {
+  margin: 4px 0 0;
+  font-size: var(--kn-font-size-xs, 12px);
+  line-height: 1.5;
+  color: var(--kn-color-text-muted, #787774);
+}

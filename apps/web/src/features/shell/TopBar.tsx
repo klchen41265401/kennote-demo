@@ -18,7 +18,8 @@ import {
 } from '../../stores/ui';
 import { duplicatePage, deletePage, setFavorite } from '../../lib/queries';
 import { Breadcrumbs } from './Breadcrumbs';
-import { exportPage } from './export';
+import { ExportDialog } from '../export';
+import { ImportDialog } from '../import';
 import styles from './TopBar.module.css';
 
 export interface TopBarProps {
@@ -52,6 +53,12 @@ export function TopBar({
   const layout = usePageLayout(pageId);
   const [shareOpen, setShareOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
+  /* 第五輪 BUG-19：`features/export` / `features/import` 早就寫好了（後端的
+     /api/pages/:id/export 與 /api/import 也都在），只是從來沒有人 import 它們。
+     選單原本走的是 shell/export.ts 的「最小版」（只吐 Markdown、不含子頁），
+     而「匯入」甚至只彈一個「尚未開放」的 toast。這裡接上真正的對話框。 */
+  const [exportOpen, setExportOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   /** 首頁 / 收件匣沒有「目前頁面」，右側那一組動作整組不畫 */
   const hasPage = Boolean(pageId);
 
@@ -251,13 +258,10 @@ export function TopBar({
             移動到
           </MenuItem>
           <MenuSeparator />
-          <MenuItem
-            icon={<Icon name="import" size={16} />}
-            onSelect={() => toast.show({ title: '匯入功能尚未開放', description: '排在 M6。' })}
-          >
+          <MenuItem icon={<Icon name="import" size={16} />} onSelect={() => setImportOpen(true)}>
             匯入
           </MenuItem>
-          <MenuItem icon={<Icon name="export" size={16} />} onSelect={() => pageId && void exportPage(pageId)}>
+          <MenuItem icon={<Icon name="export" size={16} />} onSelect={() => setExportOpen(true)}>
             匯出
           </MenuItem>
           <MenuSeparator />
@@ -294,6 +298,21 @@ export function TopBar({
           </MenuItem>
         </Menu>
         )}
+
+        {exportOpen && pageId ? (
+          <ExportDialog pageId={pageId} onClose={() => setExportOpen(false)} />
+        ) : null}
+        {importOpen ? (
+          <ImportDialog
+            workspaceId={workspaceId}
+            parentId={pageId}
+            onClose={() => setImportOpen(false)}
+            onImported={(result) => {
+              onTreeChanged();
+              if (result.rootPageId) navigate(`/page/${result.rootPageId}`);
+            }}
+          />
+        ) : null}
       </div>
     </header>
   );

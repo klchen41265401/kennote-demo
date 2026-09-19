@@ -14,7 +14,8 @@ import type {
 } from '@kennote/shared-types';
 import { API_ROUTES, COLLAB_API_ROUTES } from '@kennote/shared-types';
 import { useQuery } from '@kennote/ui';
-import { api } from '../../lib/api-client';
+import { ApiError, api } from '../../lib/api-client';
+import { serverFeatures } from '../../lib/features';
 import styles from './SharePopover.module.css';
 
 const PERMISSION_LABEL: Record<PagePermission, string> = {
@@ -40,6 +41,24 @@ export function SharePopover({ pageId, workspaceId, onClose }: SharePopoverProps
     key: ['workspace', workspaceId, 'members'],
     fetcher: () => api.get<WorkspaceMember[]>(API_ROUTES.workspaceMembers(workspaceId)),
   });
+
+  /*
+   * 第五輪 BUG-21：`FEATURE_PUBLIC_SHARE=false` 時後端會回 501，但這個開關原本
+   * 長得跟可用的一模一樣 —— 使用者要按下去、等一輪 API、才看到一行紅字。
+   * 先問伺服器的功能旗標，關閉時直接把開關停用並寫明原因。
+   * （旗標拿不到時維持「可以按」，寧可多一次 501 也不要誤擋掉真的能用的站台；
+   *  真的吃到 501 時下面的 catch 也會把它標成關閉。）
+   */
+  const [publicShareOff, setPublicShareOff] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    void serverFeatures().then((f) => {
+      if (alive && f?.publicShare === false) setPublicShareOff(true);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   const [link, setLink] = useState<PublicLinkInfo | null>(null);
   const [password, setPassword] = useState('');
@@ -79,6 +98,8 @@ export function SharePopover({ pageId, workspaceId, onClose }: SharePopoverProps
       });
       setLink(info);
     } catch (err) {
+      // 501 = 站台沒開 FEATURE_PUBLIC_SHARE：把開關停用，不要讓使用者一直按
+      if (err instanceof ApiError && err.status === 501) setPublicShareOff(true);
       setError(err instanceof Error ? err.message : '公開連結設定失敗（可能未啟用此功能）');
     } finally {
       setBusy(false);
@@ -171,11 +192,16 @@ export function SharePopover({ pageId, workspaceId, onClose }: SharePopoverProps
           <input
             type="checkbox"
             checked={link !== null}
-            disabled={busy}
+            disabled={busy || publicShareOff}
             onChange={(e) => void toggleLink(e.target.checked)}
           />
           公開連結（任何人都能檢視）
         </label>
+        {publicShareOff ? (
+          <p className={styles.hint} data-public-share="disabled">
+            這個站台沒有開啟公開分享（FEATURE_PUBLIC_SHARE）。請改用上面的「邀請」把人加進工作區。
+          </p>
+        ) : null}
 
         {link ? (
           <>

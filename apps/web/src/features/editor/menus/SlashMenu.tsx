@@ -167,6 +167,8 @@ export function SlashMenu({ state, blockHasContent = false, onClose, onSelect }:
       ariaLabel="區塊指令"
       role="listbox"
       maxHeight={370}
+      /* 行動版改成 bottom sheet（規格 02 §2.5；第五輪補上） */
+      sheetOnMobile
     >
       <div className="kn-slash-scroll" ref={listRef}>
         {items.length === 0 ? (

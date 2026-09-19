@@ -24,6 +24,9 @@ interface HandleState {
   left: number;
 }
 
+/** 觸控長按要撐多久才算「長按」。Android 的系統值就是 400ms。 */
+const LONG_PRESS_MS = 400;
+
 export function BlockHandle({ host, wrapperRef, dragging, onStartDrag, onOpenMenu }: BlockHandleProps) {
   const [state, setState] = useState<HandleState | null>(null);
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -68,6 +71,74 @@ export function BlockHandle({ host, wrapperRef, dragging, onStartDrag, onOpenMen
       if (hideTimer.current) clearTimeout(hideTimer.current);
     };
   }, [wrapperRef, update]);
+
+  /*
+   * 觸控裝置的替代路徑（第五輪）：長按 400ms 開 block 選單。
+   *
+   * gutter 是 `mousemove` 驅動的，手機上永遠不會出現（而且 720px 以下 CSS 直接把它
+   * 藏起來），所以「插入 / 拖曳 / 區塊選單」在觸控裝置上原本一條路都沒有。
+   * 這裡只掛 `pointerType === 'touch'`，桌機的滑鼠行為一個位元都沒動。
+   *
+   * 取消條件照 Android / iOS 的慣例：手指移動超過 10px（在捲動）、放開、
+   * 或多指（縮放）就不算長按。
+   */
+  useEffect(() => {
+    const wrapper = wrapperRef.current;
+    if (!wrapper || host.readOnly) return;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let origin: { x: number; y: number } | null = null;
+
+    const cancel = (): void => {
+      if (timer) clearTimeout(timer);
+      timer = null;
+      origin = null;
+    };
+
+    const onPointerDown = (event: PointerEvent): void => {
+      if (event.pointerType !== 'touch' || !event.isPrimary) return;
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      const blockEl = target.closest<HTMLElement>('[data-block-id]');
+      if (!blockEl || !wrapper.contains(blockEl)) return;
+      const id = blockEl.getAttribute('data-block-id');
+      if (!id) return;
+      origin = { x: event.clientX, y: event.clientY };
+      timer = setTimeout(() => {
+        timer = null;
+        origin = null;
+        // 長按已成立：把選單開在 block 左上角，並給一下觸覺回饋
+        const rect = blockEl.getBoundingClientRect();
+        navigator.vibrate?.(10);
+        onOpenMenu(id, {
+          left: rect.left,
+          right: rect.left,
+          top: rect.top,
+          bottom: rect.top + Math.min(rect.height, 24),
+          width: 0,
+          height: Math.min(rect.height, 24),
+        });
+      }, LONG_PRESS_MS);
+    };
+
+    const onPointerMove = (event: PointerEvent): void => {
+      if (!origin || event.pointerType !== 'touch') return;
+      if (Math.abs(event.clientX - origin.x) > 10 || Math.abs(event.clientY - origin.y) > 10) cancel();
+    };
+
+    wrapper.addEventListener('pointerdown', onPointerDown);
+    wrapper.addEventListener('pointermove', onPointerMove);
+    wrapper.addEventListener('pointerup', cancel);
+    wrapper.addEventListener('pointercancel', cancel);
+    window.addEventListener('scroll', cancel, true);
+    return () => {
+      cancel();
+      wrapper.removeEventListener('pointerdown', onPointerDown);
+      wrapper.removeEventListener('pointermove', onPointerMove);
+      wrapper.removeEventListener('pointerup', cancel);
+      wrapper.removeEventListener('pointercancel', cancel);
+      window.removeEventListener('scroll', cancel, true);
+    };
+  }, [wrapperRef, host.readOnly, onOpenMenu]);
 
   if (!state || dragging || host.readOnly) return null;
 

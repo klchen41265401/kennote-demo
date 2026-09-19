@@ -161,6 +161,7 @@ export function MentionMenu({ state, workspaceId, onClose, onSelect }: MentionMe
       role="listbox"
       ariaLabel={state?.mode === 'page' ? '連結頁面' : '提及'}
       maxHeight={320}
+      sheetOnMobile
     >
       <div className="kn-menu-scroll" ref={listRef}>
         {items.length === 0 ? (

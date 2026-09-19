@@ -46,8 +46,31 @@ export function BlockMenu({ host, anchor, blockIds, onClose }: BlockMenuProps) {
 
   return (
     <>
-      <Popover anchor={anchor} open={open && sub === null} onClose={onClose} className="kn-popover--list" ariaLabel="區塊操作">
+      <Popover
+        anchor={anchor}
+        open={open && sub === null}
+        onClose={onClose}
+        className="kn-popover--list"
+        ariaLabel="區塊操作"
+        sheetOnMobile
+      >
         <div className="kn-menu-scroll">
+          {/*
+            觸控裝置沒有 gutter（`.kn-gutter` 在 720px 以下是 display:none，而且它是
+            mousemove 驅動的），所以「在下方插入區塊」必須在這個選單裡也有一份，
+            否則手機上完全沒有插入新 block 的路（第五輪）。
+          */}
+          <MenuItem
+            icon={<Icon name="plus" />}
+            label="在下方插入區塊"
+            onSelect={() => {
+              if (!primary) return;
+              const id = host.insertAfter(primary, { type: 'paragraph' });
+              if (id) host.focus(id, 0);
+              onClose();
+            }}
+          />
+          <MenuSeparator />
           <MenuItem
             icon={<Icon name="arrow-right" />}
             label="轉換成"

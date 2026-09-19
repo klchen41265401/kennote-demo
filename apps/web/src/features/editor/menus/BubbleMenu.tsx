@@ -116,6 +116,8 @@ export function BubbleMenu({ editor, rev, readOnly, linkRequest, onConvert, onCo
         className="kn-popover--bubble"
         ariaLabel="文字格式"
         closeOnOutside={false}
+        /* 行動版：虛擬鍵盤打開時吸在鍵盤上緣，不然工具列會被鍵盤蓋掉（第五輪） */
+        keyboardAware
       >
         <button
           type="button"

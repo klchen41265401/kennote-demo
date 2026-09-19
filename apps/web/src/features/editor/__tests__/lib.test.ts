@@ -11,6 +11,8 @@ import { domainOf, isDirectImage, isDirectVideo, normalizeUrlInput, resolveEmbed
 import { latexToMathML } from '../lib/mathml';
 import { pointRect, positionFloating } from '../lib/floating';
 import { autoScrollSpeed, computeDropTarget, indicatorGeometry, type BlockRect } from '../dnd/drop-target';
+import { bareUrl, linkRichText, parseMarkdownTable, tableOps } from '../lib/paste-extras';
+import { hostAtomText } from '../useEditorHost';
 
 describe('語法高亮 tokenizer', () => {
   it('提供 30 種以上語言', () => {
@@ -264,5 +266,78 @@ describe('拖放落點計算', () => {
     expect(autoScrollSpeed(400, 800)).toBe(0);
     expect(autoScrollSpeed(10, 800)).toBeLessThan(0);
     expect(autoScrollSpeed(795, 800)).toBeGreaterThan(0);
+  });
+});
+
+/* ═══════════════════════════════════════════════════════════
+   第五輪：貼上 Markdown 表格 / 純 URL、mention 的「@@」修補
+   ═══════════════════════════════════════════════════════════ */
+
+describe('貼上補丁（第五輪 §3）', () => {
+  it('標準 GFM 表格解析得出來，短列會補齊成表頭的欄數', () => {
+    const rows = parseMarkdownTable('| 欄一 | 欄二 |\n| --- | --- |\n| a1 | b1 |\n| a2 |');
+    expect(rows).toEqual([
+      ['欄一', '欄二'],
+      ['a1', 'b1'],
+      ['a2', ''],
+    ]);
+  });
+
+  it('對齊語法（:--: / --: ）也算分隔列', () => {
+    expect(parseMarkdownTable('| a | b |\n|:--:|---:|\n| 1 | 2 |')).toEqual([
+      ['a', 'b'],
+      ['1', '2'],
+    ]);
+  });
+
+  it('沒有分隔列就不接手 —— 那多半是使用者正在打字，不該偷偷變成表格', () => {
+    expect(parseMarkdownTable('| 欄一 | 欄二 |\n| a1 | b1 |')).toBeNull();
+    expect(parseMarkdownTable('一般文字')).toBeNull();
+    expect(parseMarkdownTable('| 只有一欄 |\n| --- |')).toBeNull();
+  });
+
+  it('tableOps 生出 table + 每列一個 tableRow，cells 是 RichText 陣列', () => {
+    const ops = tableOps(
+      [
+        ['h1', 'h2'],
+        ['v1', ''],
+      ],
+      { table: 't', rows: ['r0', 'r1'] },
+      null,
+      'anchor',
+    );
+    expect(ops[0]).toMatchObject({ type: 'block.insert', blockId: 't', blockType: 'table', afterId: 'anchor' });
+    expect((ops[0] as unknown as { props: Record<string, unknown> }).props).toMatchObject({ columnCount: 2 });
+    expect(ops[1]).toMatchObject({ blockId: 'r0', parentId: 't', blockType: 'tableRow', afterId: null });
+    expect((ops[1] as unknown as { props: { cells: unknown } }).props.cells).toEqual([[{ text: 'h1' }], [{ text: 'h2' }]]);
+    // 空白儲存格是空陣列，不是 [{ text: '' }]（normalize 會把空字串丟掉）
+    expect((ops[2] as unknown as { props: { cells: unknown } }).props.cells).toEqual([[{ text: 'v1' }], []]);
+  });
+
+  it('只有「整段就是一條 http(s) 網址」才當成連結', () => {
+    expect(bareUrl('https://example.com/a?b=1')).toBe('https://example.com/a?b=1');
+    expect(bareUrl('  http://example.com  ')).toBe('http://example.com');
+    expect(bareUrl('看這個 https://example.com')).toBeNull();
+    expect(bareUrl('https://a.com\nhttps://b.com')).toBeNull();
+    expect(bareUrl('javascript:alert(1)')).toBeNull();
+    expect(bareUrl('example.com')).toBeNull();
+  });
+
+  it('linkRichText 產生帶 link mark 的一段文字', () => {
+    expect(linkRichText('https://example.com')).toEqual([
+      { text: 'https://example.com', marks: [{ t: 'link', href: 'https://example.com' }] },
+    ]);
+  });
+});
+
+describe('mention 顯示（第四輪 BUG-15 的殘留資料）', () => {
+  it('舊資料 text 裡已經有 @ 時，渲染只留一個', () => {
+    expect(hostAtomText({ atom: 'mention', data: { text: '@訪客' } })).toBe('@訪客');
+    expect(hostAtomText({ atom: 'mention', data: { text: '訪客' } })).toBe('@訪客');
+  });
+
+  it('其他 atom 不受影響', () => {
+    expect(hostAtomText({ atom: 'date', data: { iso: '2026-09-20' } })).toBe('2026-09-20');
+    expect(hostAtomText({ atom: 'pageLink', data: { title: '@工作區' } })).toBe('@工作區');
   });
 });

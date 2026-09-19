@@ -17,6 +17,7 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  type PointerEvent as ReactPointerEvent,
   type ReactNode,
   type RefObject,
 } from 'react';
@@ -107,6 +108,62 @@ export function useReturnFocus(open: boolean): void {
   }, [open]);
 }
 
+/* ── 行動版：bottom sheet / 虛擬鍵盤 ───────────────────── */
+
+/** 規格 02 §2.5 的行動版斷點（與 editor.css 的 `@media (max-width: 720px)` 一致） */
+export const MOBILE_QUERY = '(max-width: 720px)';
+
+/** 目前是不是行動版寬度。SSR / 沒有 matchMedia 時一律回 false（桌機行為不變）。 */
+export function useIsMobileViewport(): boolean {
+  const [mobile, setMobile] = useState(() =>
+    typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+      ? window.matchMedia(MOBILE_QUERY).matches
+      : false,
+  );
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
+    const mq = window.matchMedia(MOBILE_QUERY);
+    const onChange = (): void => setMobile(mq.matches);
+    onChange();
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
+  return mobile;
+}
+
+/**
+ * 虛擬鍵盤佔掉之後，**還看得到的**可視區底緣（相對於 layout viewport 的 y）。
+ *
+ * iOS / Android 的軟鍵盤不會改變 `window.innerHeight`，只會把 `visualViewport`
+ * 縮短；`offsetTop` 則是頁面被推上去的距離。兩者相加就是鍵盤上緣。
+ * 沒有 `visualViewport`（或鍵盤沒開）時回 `null`，呼叫端就走原本的定位。
+ */
+export function keyboardTop(): number | null {
+  const vv = typeof window !== 'undefined' ? window.visualViewport : undefined;
+  if (!vv) return null;
+  const bottom = vv.offsetTop + vv.height;
+  // 少於 80px 的差距多半是網址列收合，不是鍵盤
+  if (window.innerHeight - bottom < 80) return null;
+  return bottom;
+}
+
+/** `visualViewport` 變動（鍵盤開合、捲動）時重新計算 */
+export function useVisualViewport(enabled: boolean, onChange: () => void): void {
+  const cb = useRef(onChange);
+  cb.current = onChange;
+  useEffect(() => {
+    const vv = typeof window !== 'undefined' ? window.visualViewport : undefined;
+    if (!enabled || !vv) return;
+    const handler = (): void => cb.current();
+    vv.addEventListener('resize', handler);
+    vv.addEventListener('scroll', handler);
+    return () => {
+      vv.removeEventListener('resize', handler);
+      vv.removeEventListener('scroll', handler);
+    };
+  }, [enabled]);
+}
+
 /* ── Popover ───────────────────────────────────────────── */
 
 export interface PopoverProps {
@@ -124,6 +181,16 @@ export interface PopoverProps {
   /** 點外部是否關閉 */
   closeOnOutside?: boolean;
   maxHeight?: number;
+  /**
+   * 行動版改成「由下滑入、佔 60% 高」的 bottom sheet（規格 02 §2.5）。
+   * 桌機寬度時這個 flag 完全沒作用，維持原本的 anchored popover。
+   */
+  sheetOnMobile?: boolean;
+  /**
+   * 行動版虛擬鍵盤打開時，把浮層吸在鍵盤上緣（`visualViewport`）。
+   * 給浮動工具列用：鍵盤蓋住的位置放工具列等於沒有工具列。
+   */
+  keyboardAware?: boolean;
 }
 
 export function Popover({
@@ -139,24 +206,39 @@ export function Popover({
   allowFocus = false,
   closeOnOutside = true,
   maxHeight,
+  sheetOnMobile = false,
+  keyboardAware = false,
 }: PopoverProps) {
   const ref = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ left: number; top: number; maxHeight: number } | null>(null);
+  const mobile = useIsMobileViewport();
+  const sheet = sheetOnMobile && mobile;
 
   useOverlayStack(open, onClose);
   useOutsideClick(ref, onClose, open && closeOnOutside);
 
   const reposition = useCallback(() => {
     const el = ref.current;
-    if (!el || !anchor) return;
+    if (!el || !anchor || sheet) return;
     const rect = el.getBoundingClientRect();
     const result = positionFloating(
       anchor,
       { width: rect.width || 260, height: rect.height || 200 },
       { placement, offset },
     );
-    setPos({ left: result.left, top: result.top, maxHeight: result.maxHeight });
-  }, [anchor, placement, offset]);
+    let top = result.top;
+    let limit = result.maxHeight;
+    // 鍵盤上緣吸附：浮層底部不能低於 visualViewport 的底緣
+    const kb = keyboardAware ? keyboardTop() : null;
+    if (kb !== null) {
+      const h = rect.height || 40;
+      top = Math.max(8, Math.min(top, kb - h - 8));
+      limit = Math.min(limit, kb - top - 8);
+    }
+    setPos({ left: result.left, top, maxHeight: limit });
+  }, [anchor, placement, offset, sheet, keyboardAware]);
+
+  useVisualViewport(open && keyboardAware && !sheet, reposition);
 
   useLayoutEffect(() => {
     if (!open) {
@@ -179,6 +261,33 @@ export function Popover({
 
   if (!open || !anchor) return null;
 
+  const onPointerDown = (event: ReactPointerEvent): void => {
+    // 不讓編輯器失去 selection（除非浮層裡有輸入框）
+    if (!allowFocus) event.preventDefault();
+    event.stopPropagation();
+  };
+
+  if (sheet) {
+    return createPortal(
+      <>
+        <div className="kn-sheet-backdrop" data-kn-sheet-backdrop="" onPointerDown={() => onClose()} />
+        <div
+          ref={ref}
+          data-kn-overlay=""
+          data-sheet="true"
+          className={`kn-popover kn-popover--sheet ${className ?? ''}`}
+          role={role}
+          aria-label={ariaLabel}
+          onPointerDown={onPointerDown}
+        >
+          <div className="kn-sheet-grip" aria-hidden="true" />
+          {children}
+        </div>
+      </>,
+      document.body,
+    );
+  }
+
   return createPortal(
     <div
       ref={ref}
@@ -192,11 +301,7 @@ export function Popover({
         maxHeight: maxHeight ?? pos?.maxHeight,
         visibility: pos ? 'visible' : 'hidden',
       }}
-      onPointerDown={(event) => {
-        // 不讓編輯器失去 selection（除非浮層裡有輸入框）
-        if (!allowFocus) event.preventDefault();
-        event.stopPropagation();
-      }}
+      onPointerDown={onPointerDown}
     >
       {children}
     </div>,

@@ -11,7 +11,11 @@
  */
 import { describe, expect, it } from 'vitest';
 import type { CollectionSchema, ViewFormat } from '@kennote/shared-types';
-import { alignViewProperties } from '../src/modules/databases/service.js';
+import {
+  DEFAULT_PROPERTY_WIDTH,
+  DEFAULT_TITLE_WIDTH,
+  alignViewProperties,
+} from '../src/modules/databases/service.js';
 
 const schema: CollectionSchema = {
   title: { name: '名稱', type: 'title' },
@@ -34,7 +38,7 @@ describe('alignViewProperties', () => {
     const grown: CollectionSchema = { ...schema, Aa1: { name: '文字', type: 'text' } };
     const next = alignViewProperties(format, grown, ['Aa1']);
     expect(next.map((p) => p.property)).toEqual(['title', 'Mul1', 'Sel1', 'Dat1', 'Aa1']);
-    expect(next.at(-1)).toEqual({ property: 'Aa1', visible: true, width: 160 });
+    expect(next.at(-1)).toEqual({ property: 'Aa1', visible: true, width: DEFAULT_PROPERTY_WIDTH });
   });
 
   it('多個 add op 依新增順序接在尾端', () => {
@@ -65,7 +69,7 @@ describe('alignViewProperties', () => {
     const next = alignViewProperties(undefined, schema, []);
     expect(next.map((p) => p.property)).toEqual(['title', 'Mul1', 'Sel1', 'Dat1']);
     expect(next.every((p) => p.visible)).toBe(true);
-    expect(next[0]?.width).toBe(320);
+    expect(next[0]?.width).toBe(DEFAULT_TITLE_WIDTH);
   });
 
   it('沒被視圖列到的既有欄位補在「這次新增的」前面', () => {

@@ -16,6 +16,7 @@ import { AppError, pageNotFound, workspaceNotFound } from '../../lib/errors.js';
 import { uuidv7 } from '../../lib/uuidv7.js';
 import { applyTransaction } from '../blocks/apply-transaction.js';
 import { listBlocksByPage, toBlock } from '../blocks/repo.js';
+import { requirePagePermission } from '../permissions/service.js';
 import { getMemberRole } from '../workspaces/repo.js';
 import * as repo from './repo.js';
 
@@ -147,6 +148,13 @@ export async function patchPage(
 ): Promise<Page> {
   const row = await repo.findPageForUser(pageId, userId);
   if (!row) throw pageNotFound();
+  /*
+   * 第五輪 BUG-27：`findPageForUser` 只回答「看不看得見」，不看權限等級 ——
+   * 所以只有 comment / read 權限的人（例如被分享進來的 guest）可以改標題、
+   * 換 icon、換封面。block 的寫入早就有 permission guard 了
+   * （permissions/service.ts 的 registerPermissionGuard），頁面 meta 漏掉了。
+   */
+  await requirePagePermission(userId, pageId, 'edit');
   const updated = await repo.updatePageMeta(db, pageId, patch, userId);
   if (!updated) throw pageNotFound();
   return repo.toPage(updated);
@@ -157,6 +165,8 @@ export async function deletePage(pageId: string, userId: string): Promise<{ dele
   return withTransaction(async (tx) => {
     const row = await repo.findPageForUser(pageId, userId, tx);
     if (!row) throw pageNotFound();
+    // BUG-27：只有 comment / read 權限的人不能把整棵子樹丟進垃圾桶
+    await requirePagePermission(userId, pageId, 'edit', tx);
     const ids = await repo.collectDescendantIds(pageId, tx);
     await repo.softDeleteSubtree(tx, ids, userId);
     return { deleted: ids };
@@ -202,6 +212,8 @@ export async function movePage(
   return withTransaction(async (tx) => {
     const row = await repo.findPageForUser(pageId, userId, tx);
     if (!row) throw pageNotFound();
+    // BUG-27：搬頁面也算編輯
+    await requirePagePermission(userId, pageId, 'edit', tx);
 
     if (input.parentId !== null) {
       const parent = await repo.findPageForUser(input.parentId, userId, tx);

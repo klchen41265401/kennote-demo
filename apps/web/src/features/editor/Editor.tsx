@@ -45,6 +45,7 @@ import { getImportSource } from './lib/embed-services';
 import { useBlockDrag } from './dnd/useBlockDrag';
 import { useHostKeymap } from './keyboard/hostKeymap';
 import { consumeTrigger, insertAtom, textBeforeCaret } from './lib/model-helpers';
+import { bareUrl, linkRichText, parseMarkdownTable, tableOps } from './lib/paste-extras';
 import { pointRect, rectFromDOMRect, type RectLike } from './lib/floating';
 import { overlayDepth, Popover } from './ui/overlay';
 import { ToastHost, toast } from './ui/toast';
@@ -345,10 +346,59 @@ export function Editor({
 
     const onPaste = (event: ClipboardEvent): void => {
       const files = [...(event.clipboardData?.files ?? [])];
-      if (files.length === 0) return;
-      event.preventDefault();
-      event.stopPropagation();
-      void insertFiles(files, currentBlockId());
+      if (files.length > 0) {
+        event.preventDefault();
+        event.stopPropagation();
+        void insertFiles(files, currentBlockId());
+        return;
+      }
+
+      /*
+       * 第五輪 §3：editor-core 的 markdown parser 沒有 table 規則，
+       * 而純 URL 只會變成純文字。這兩條在宿主這一層補上 ——
+       * 只有「整段確定是表格 / 確定是一條網址」才接手，
+       * 其餘一律放行給 editor-core 原本的貼上流程。
+       */
+      const clip = event.clipboardData;
+      // 有 HTML 就交給 editor-core：它的 HTML 解析比純文字準得多
+      if (!clip || clip.types.includes('text/html')) return;
+      const text = clip.getData('text/plain');
+      if (!text) return;
+
+      const anchorId = currentBlockId();
+      if (!anchorId) return;
+      const anchor = host.getBlock(anchorId);
+      if (!anchor) return;
+
+      const table = parseMarkdownTable(text);
+      if (table) {
+        event.preventDefault();
+        event.stopPropagation();
+        const ids = {
+          table: host.editor.newId(),
+          rows: table.map(() => host.editor.newId()),
+        };
+        const ops = tableOps(table, ids, anchor.parentId ?? null, anchorId);
+        // 原本停在一個空段落上 → 把它收掉，不然表格前面會多一行空白
+        const empty = anchor.type === 'paragraph' && (anchor.content?.length ?? 0) === 0;
+        if (empty) ops.push({ type: 'block.delete', blockId: anchorId });
+        host.applyOps(ops);
+        return;
+      }
+
+      const url = bareUrl(text);
+      if (url) {
+        event.preventDefault();
+        event.stopPropagation();
+        const empty = (anchor.content?.length ?? 0) === 0;
+        if (empty) {
+          host.setContent(anchorId, linkRichText(url));
+          host.focus(anchorId, url.length);
+        } else {
+          const id = host.insertAfter(anchorId, { type: 'paragraph', content: linkRichText(url) });
+          if (id) host.focus(id, url.length);
+        }
+      }
     };
 
     const onDragOver = (event: DragEvent): void => {
