@@ -331,6 +331,30 @@ describe('送出變更', () => {
     ]);
   });
 
+  /*
+   * 第九輪（回歸分診 §8-6）：`submitDelta()` 身上留著同一個形狀的 early return
+   * （`if (!entry) return txId;`）。它與 `submit()` 是同一類洞 ——
+   * **寫入路徑上的 early return 不能吞資料**，所以改成走同一條 preAttach 佇列。
+   */
+  it('attach 之前送進來的 delta 也進 preAttach，attach 後補送', async () => {
+    const h = setup({ attach: false });
+    const blockId = '22222222-2222-7222-8222-222222222222';
+    const txId = h.client.submitDelta(PAGE, blockId, { ops: [{ insert: 'x' }] }, 7);
+    expect(txId).toBeTruthy();
+
+    h.attach();
+    const socket = handshake(0);
+    await vi.advanceTimersByTimeAsync(300);
+
+    const sent = socket.messagesOfType('tx');
+    expect(sent).toHaveLength(1);
+    const ops = sent[0]!.tx.ops as Array<{ type: string; blockId: string; baseRev?: number }>;
+    expect(ops).toHaveLength(1);
+    expect(ops[0]?.type).toBe('text.delta');
+    expect(ops[0]?.blockId).toBe(blockId);
+    expect(ops[0]?.baseRev).toBe(7);
+  });
+
   it('收到 txApplied 才把佇列清掉，並更新 localSeq / 衝突提示', async () => {
     const h = setup();
     const socket = handshake(10);

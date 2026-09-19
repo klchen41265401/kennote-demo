@@ -26,6 +26,8 @@ export interface GcResult {
   deletedBlocks: number;
   deletedFiles: number;
   prunedVisits: number;
+  /** 第九輪：同一頁重複的空種子段落（見 pruneDuplicateSeedParagraphs） */
+  prunedSeedParagraphs: number;
   retentionDays: number;
   durationMs: number;
 }
@@ -46,6 +48,7 @@ export async function runGarbageCollection(options: GcOptions = {}): Promise<GcR
     deletedBlocks: 0,
     deletedFiles: 0,
     prunedVisits: 0,
+    prunedSeedParagraphs: 0,
     retentionDays,
     durationMs: 0,
   };
@@ -139,8 +142,86 @@ export async function runGarbageCollection(options: GcOptions = {}): Promise<GcR
     result.prunedVisits = pruned.length;
   }
 
+  // ── 5. 重複的空種子段落（第九輪）────────────────────
+  result.prunedSeedParagraphs = await pruneDuplicateSeedParagraphs(dryRun);
+
   result.durationMs = Date.now() - started;
   return result;
+}
+
+const SEED_BATCH = 200;
+
+/**
+ * ⭐ 一次性清理：**同一頁多於一個、而且全部都是空內容的根層 paragraph**，只留第一個。
+ *
+ * 來源（第一輪分診 §8-5）：`createRow()` 以前不建任何 block，
+ * 「補一個空段落」落在每個讀 snapshot 的客戶端身上 —— 多人同時開同一列
+ * 就各補一個，伺服器上留下 2 個以上的空段落。第九輪已經改成後端種，
+ * 但**既有資料**還躺在那裡，所以這裡順手掃掉。
+ *
+ * 紅線（誤刪一次就是使用者的內容不見）：
+ *   1. **只在這一頁沒有任何非空 block 時才動手**。只要有一個有內容的 block，
+ *      整頁跳過 —— 空段落在有內容的頁面裡是使用者刻意留的空行。
+ *   2. 「空」定義得很窄：根層（`parent_id IS NULL`）、`paragraph`、
+ *      `content = []`、`children = {}`、`props = {}`。有 props（顏色 / 縮排）就不算空。
+ *   3. 一定**留下第一個**（uuidv7 = 建立順序），頁面不會變成 0 個 block。
+ *   4. 刪完要把 id 從 `pages.children` 拿掉 —— 排序真值在那個陣列上，
+ *      留著會變成指向不存在 block 的孤兒（前端 `snapshotToDoc()` 雖有防禦，
+ *      但那道防禦正是「以為這頁是空的 → 再補一個」的來源）。
+ */
+export async function pruneDuplicateSeedParagraphs(dryRun = false): Promise<number> {
+  const pages = await db.query<{ page_id: string }>(sql`
+    SELECT b.page_id
+      FROM blocks b
+     WHERE b.deleted_at IS NULL
+     GROUP BY b.page_id
+    HAVING count(*) > 1
+       AND count(*) = count(*) FILTER (
+             WHERE b.parent_id IS NULL
+               AND b.type = 'paragraph'
+               AND b.content = '[]'::jsonb
+               AND b.props = '{}'::jsonb
+               AND b.children = '{}'::uuid[]
+           )
+     LIMIT ${SEED_BATCH}
+  `);
+  if (pages.length === 0) return 0;
+
+  const pageIds = pages.map((p) => p.page_id);
+  if (dryRun) {
+    const counted = await db.query<{ extra: number }>(sql`
+      SELECT (count(*) - 1)::int AS extra FROM blocks
+       WHERE deleted_at IS NULL AND page_id = ANY(${pageIds}::uuid[])
+       GROUP BY page_id
+    `);
+    return counted.reduce((sum, r) => sum + r.extra, 0);
+  }
+
+  return withTransaction(async (tx) => {
+    const removed = await tx.query<{ id: string; page_id: string }>(sql`
+      WITH ranked AS (
+        SELECT b.id, b.page_id,
+               row_number() OVER (PARTITION BY b.page_id ORDER BY b.id) AS rn
+          FROM blocks b
+         WHERE b.deleted_at IS NULL AND b.page_id = ANY(${pageIds}::uuid[])
+      )
+      DELETE FROM blocks
+       WHERE id IN (SELECT id FROM ranked WHERE rn > 1)
+      RETURNING id, page_id
+    `);
+    if (removed.length === 0) return 0;
+
+    const ids = removed.map((r) => r.id);
+    await tx.query(sql`
+      UPDATE pages p
+         SET children = ARRAY(
+               SELECT c FROM unnest(p.children) AS c WHERE c <> ALL(${ids}::uuid[])
+             )
+       WHERE p.id = ANY(${pageIds}::uuid[])
+    `);
+    logger.info({ pages: pageIds.length, blocks: removed.length }, 'GC：清掉重複的空種子段落');
+    return removed.length;
+  });
 }
 
 /* ── 排程 ─────────────────────────────────────────────── */
@@ -163,7 +244,13 @@ export function startGcScheduler(intervalMs: number = DAY_MS): void {
     void runGarbageCollection()
       .then((result) => {
         lastResult = result;
-        if (result.deletedPages + result.deletedBlocks + result.deletedFiles > 0) {
+        if (
+          result.deletedPages +
+            result.deletedBlocks +
+            result.deletedFiles +
+            result.prunedSeedParagraphs >
+          0
+        ) {
           logger.info({ gc: result }, '垃圾桶 GC 完成');
         }
       })

@@ -24,9 +24,46 @@ import { env } from '../../env.js';
 import { AppError, pageNotFound, workspaceNotFound } from '../../lib/errors.js';
 import { hashPassword, verifyPassword } from '../auth/password.js';
 import { setPermissionGuard } from '../blocks/apply-transaction.js';
-import { notifyPageShared, notifyWorkspaceInvite } from '../notifications/fanout.js';
+import {
+  notifyPageShared,
+  notifyPermissionChanged,
+  notifyWorkspaceInvite,
+} from '../notifications/fanout.js';
 import * as repo from './repo.js';
 import { resolvePermission, resolvePublicPermission } from './resolve.js';
+
+/* ── 撤權事件（第七輪 §4-4 / 第八輪 §4-3） ─────────────── */
+
+/**
+ * ⭐ **REST 的權限檢查管不到已經連上的 WebSocket。**
+ *
+ * 第七、八輪把每一支 REST 端點都鎖上了，但房間只認「subscribe 當下算過的那一次」——
+ * 撤權之後那條連線照樣收 `txBroadcast`（= 頁面內容持續外流）。
+ *
+ * 這裡只是**發事件**：權限服務不認識 WS（04 §7.3 鐵則 1），
+ * 由 `realtime/index.ts` 把它接到 `RoomManager.publishPermissionChanged()`，
+ * 房間再重新 `resolvePagePermission()` 決定踢人還是降級。
+ * 預設 no-op —— CLI / 測試沒有 realtime 也要跑得起來。
+ */
+export type PermissionChangeNotifier = (target: {
+  userId?: string | null;
+  pageId?: string | null;
+}) => void;
+
+let permissionChangeNotifier: PermissionChangeNotifier = () => {};
+
+export function setPermissionChangeNotifier(fn: PermissionChangeNotifier | null): void {
+  permissionChangeNotifier = fn ?? (() => {});
+}
+
+/** 失敗不能影響授權本身：撤權要先成功，通知房間是後續動作 */
+function emitPermissionChange(target: { userId?: string | null; pageId?: string | null }): void {
+  try {
+    permissionChangeNotifier(target);
+  } catch {
+    /* 廣播失敗不影響授權結果 */
+  }
+}
 
 /* ── 解析 ─────────────────────────────────────────────── */
 
@@ -221,6 +258,13 @@ export async function setPagePermission(
   // workspace 主體在 0004 的 CHECK 下需要 subject_id（= workspaceId）
   const storedSubjectId = input.subjectType === 'workspace' ? page.workspace_id : subjectId;
 
+  // 寫入之前先看有沒有舊條目：有 → 這是「變更」，沒有 → 這是「第一次分享」。
+  // 兩者的通知型別不同（permission_changed / page_shared），只能在寫入前分辨。
+  const existingEntries = await repo.listPageEntries(pageId);
+  const previous = existingEntries.find(
+    (e) => e.subject_type === input.subjectType && e.subject_id === storedSubjectId,
+  );
+
   await withTransaction(async (tx) => {
     if (input.permission === 'none') {
       await repo.deletePageEntry(tx, pageId, input.subjectType, storedSubjectId);
@@ -241,14 +285,39 @@ export async function setPagePermission(
    * 「頁面被分享給你」是使用者最有感的一種 —— 沒有它，被分享的人
    * 只能等別人把網址貼過來。失敗不影響授權本身（fire-and-forget）。
    */
-  if (input.subjectType === 'user' && subjectId && input.permission !== 'none') {
-    void notifyPageShared({
-      workspaceId: page.workspace_id,
-      pageId,
-      actorId,
-      recipientId: subjectId,
-      role: PERMISSION_TO_PAGE_ROLE[input.permission],
-    }).catch(() => {});
+  if (input.subjectType === 'user' && subjectId) {
+    /*
+     * 第九輪：7 種通知型別的**最後一種**（`permission_changed`）終於有發送端。
+     *   沒有舊條目 + 給權限 → `page_shared`（「有人把一頁分享給你」，第七輪接的）
+     *   有舊條目（升級 / 降級）或撤銷（`none`）→ `permission_changed`
+     * 兩者互斥，所以改權限不會同時收到兩則。
+     */
+    if (!previous && input.permission !== 'none') {
+      void notifyPageShared({
+        workspaceId: page.workspace_id,
+        pageId,
+        actorId,
+        recipientId: subjectId,
+        role: PERMISSION_TO_PAGE_ROLE[input.permission],
+      }).catch(() => {});
+    } else if (previous) {
+      void notifyPermissionChanged({
+        workspaceId: page.workspace_id,
+        pageId,
+        actorId,
+        recipientId: subjectId,
+        permission: input.permission,
+        previousPermission: PAGE_ROLE_TO_PERMISSION[previous.role],
+      }).catch(() => {});
+    }
+  }
+
+  // 已經連上的 WS 連線要立刻重新算權限（撤權 → 踢出房間；降級 → 切唯讀）
+  if (input.subjectType === 'user' && subjectId) {
+    emitPermissionChange({ userId: subjectId, pageId: null });
+  } else {
+    // workspace 條目影響**房間裡的每一個人**，逐人重算
+    emitPermissionChange({ pageId });
   }
 
   return getPageAccess(pageId, actorId);
@@ -283,6 +352,8 @@ export async function setPageShare(
       await repo.revokePublicLink(tx, pageId);
       await repo.deletePageEntry(tx, pageId, 'public', null);
     });
+    // 關閉公開分享 = 撤權，房間裡的人要重算一次
+    emitPermissionChange({ pageId });
     return null;
   }
 
@@ -428,6 +499,8 @@ export async function changeMemberRole(
     repo.updateMemberRole(tx, workspaceId, targetUserId, role),
   );
   if (!ok) throw new AppError('NOT_FOUND', '這個人不是工作區成員');
+  // 工作區角色是每一頁權限的 baseline / ceiling → 這個人**所有**訂閱中的頁面都要重算
+  emitPermissionChange({ userId: targetUserId, pageId: null });
   return { userId: targetUserId, role };
 }
 
@@ -443,5 +516,7 @@ export async function removeMember(
   }
   const ok = await withTransaction((tx) => repo.removeMember(tx, workspaceId, targetUserId));
   if (!ok) throw new AppError('NOT_FOUND', '這個人不是工作區成員');
+  // 被踢出工作區 = 對這個工作區的每一頁都變成 none（除非另有直接授權）
+  emitPermissionChange({ userId: targetUserId, pageId: null });
   return { removed: targetUserId };
 }

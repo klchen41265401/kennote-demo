@@ -8,12 +8,18 @@
  *   applyTransaction ──setPermissionGuard──▶ permissions/service
  *   applyTransaction ──setTransactionNotifier──▶ notifications/fanout
  */
+import { db } from '../../db/client.js';
+import { sql } from '../../db/sql.js';
 import { logger } from '../../lib/logger.js';
 import { setBroadcaster } from '../blocks/apply-transaction.js';
 import { setCommentBroadcaster } from '../comments/service.js';
 import { registerTransactionNotifier } from '../notifications/fanout.js';
 import { setNotificationPusher } from '../notifications/service.js';
-import { registerPermissionGuard } from '../permissions/service.js';
+import {
+  registerPermissionGuard,
+  resolvePagePermission,
+  setPermissionChangeNotifier,
+} from '../permissions/service.js';
 import { getBroadcastAdapter } from './broadcast.js';
 import { getRoomManager, RoomManager, setRoomManager } from './room-manager.js';
 
@@ -54,7 +60,24 @@ export function initRealtime(): RoomManager {
   // 4) 權限守門員：所有 block 寫入都會經過（guest 只能留言不能編輯）
   registerPermissionGuard();
 
-  // 5) 第七輪：transaction commit 之後的通知扇出
+  // 5) 第九輪：撤權 → 把房間裡受影響的連線踢出去 / 降級成唯讀
+  //    （REST 的權限檢查對「已經連上的 WS」完全無效，見 permissions/service 的註解）
+  rooms.setPermissionResolver(async (userId, pageId) => {
+    const permission = await resolvePagePermission(userId, pageId);
+    if (permission === 'none') return { permission, seq: 0 };
+    const row = await db.queryOne<{ seq: number }>(sql`
+      SELECT seq FROM pages WHERE id = ${pageId} AND deleted_at IS NULL
+    `);
+    if (!row) return null;
+    return { permission, seq: Number(row.seq) };
+  });
+  setPermissionChangeNotifier((target) => {
+    void rooms
+      .publishPermissionChanged(target)
+      .catch((err) => logger.warn({ err }, 'permission_changed 廣播失敗'));
+  });
+
+  // 6) 第七輪：transaction commit 之後的通知扇出
   //    （block 裡的 @提及 → mention、explicit 訂閱者 → page_updated）
   registerTransactionNotifier();
 
@@ -64,6 +87,8 @@ export function initRealtime(): RoomManager {
 /** 測試 / 關機：拆掉掛勾與房間 */
 export async function shutdownRealtime(): Promise<void> {
   const rooms = getRoomManager(getBroadcastAdapter());
+  setPermissionChangeNotifier(null);
+  rooms.setPermissionResolver(null);
   await rooms.dispose();
   setRoomManager(null);
   initialized = false;

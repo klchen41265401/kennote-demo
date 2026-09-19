@@ -12,6 +12,7 @@ import { exportCsv } from '../databases/service.js';
 import { toBlock, type BlockRow } from '../blocks/repo.js';
 import { toPage, PAGE_COLUMNS, type PageRow } from '../pages/repo.js';
 import { createStorage } from '../files/storage/index.js';
+import { resolvePagePermission } from '../permissions/service.js';
 import { loadPageTree, safeFileName, walkTree, type ExportNode } from './doc.js';
 import { pageToHtml, docToHtmlFragment, EXPORT_CSS } from './html.js';
 import { pageToMarkdown, type SerializeContext } from './markdown.js';
@@ -51,7 +52,7 @@ export async function exportPage(
   if (request.format === 'json') return exportAsJson(tree, nodes, userId, includeSubpages);
 
   const multi = nodes.length > 1 || databases.length > 0;
-  const attachments = includeAttachments ? await collectAttachments(nodes) : new Map();
+  const attachments = includeAttachments ? await collectAttachments(nodes, userId) : new Map();
 
   if (!multi && attachments.size === 0) {
     const ctx = singleFileContext();
@@ -190,7 +191,20 @@ function collectFileIds(nodes: ExportNode[]): Set<string> {
   return ids;
 }
 
-async function collectAttachments(nodes: ExportNode[]): Promise<Map<string, Attachment>> {
+/**
+ * ⭐ 第九輪：**匯出打包的附件走與 `GET /api/files/:id` 完全相同的檢查**。
+ *
+ * 第八輪 BUG-42 已經把子樹逐頁過濾了，但附件是另一個出口：
+ * `collectFileIds()` 掃的是「看得見的頁面」裡的 `props.fileId`，
+ * 而同一個 fileId 可以被貼進看不見的頁面裡（或反過來 —— block 被搬走了、
+ * 附件的 `page_id` 仍指向原本那一頁）。既然 0070 之後有正向關聯，
+ * 這裡就照著它再問一次；`page_id` 是 NULL 的舊資料維持成員限定
+ * （loadPageTree 已經保證呼叫者是工作區成員）。
+ */
+async function collectAttachments(
+  nodes: ExportNode[],
+  userId: string,
+): Promise<Map<string, Attachment>> {
   const ids = [...collectFileIds(nodes)];
   const out = new Map<string, Attachment>();
   if (ids.length === 0) return out;
@@ -200,14 +214,27 @@ async function collectAttachments(nodes: ExportNode[]): Promise<Map<string, Atta
     storage_key: string;
     original_name: string;
     size: number;
+    page_id: string | null;
   }>(sql`
-    SELECT id, storage_key, original_name, size FROM files
+    SELECT id, storage_key, original_name, size, page_id FROM files
      WHERE id = ANY(${ids}::uuid[]) AND deleted_at IS NULL
   `);
+
+  // 同一頁的多個附件只問一次權限（一份匯出裡附件數量遠多於頁面數量）
+  const pagePermission = new Map<string, boolean>();
+  const readable = async (pageId: string | null): Promise<boolean> => {
+    if (!pageId) return true;
+    const cached = pagePermission.get(pageId);
+    if (cached !== undefined) return cached;
+    const ok = (await resolvePagePermission(userId, pageId)) !== 'none';
+    pagePermission.set(pageId, ok);
+    return ok;
+  };
 
   const used = new Set<string>();
   let total = 0;
   for (const row of rows) {
+    if (!(await readable(row.page_id))) continue;
     total += Number(row.size);
     if (total > MAX_ATTACHMENT_BYTES) break;
     const ext = row.original_name.includes('.') ? row.original_name.split('.').pop()! : 'bin';

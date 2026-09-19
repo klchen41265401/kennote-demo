@@ -26,6 +26,15 @@ export interface BroadcastEnvelope {
   excludeSessionId?: string | null;
   /** presence 離開通知：把這個 session 從房間的 presence 表移除 */
   leave?: { pageId: string; sessionId: string } | null;
+  /**
+   * 第九輪：權限變更事件。**不是要轉發給客戶端的訊息** ——
+   * RoomManager 收到就重新解析受影響連線的權限（`msg` 只是不得已的佔位，
+   * 所有實例跑的是同一份程式碼，一定會走攔截分支）。
+   *   `{ pageId }`        → 這一頁房間裡的**每個人**都重新檢查（workspace 授權、關閉公開分享）
+   *   `{ pageId: null }`  → 這個 user channel 上的連線**所有訂閱中的頁面**都重新檢查
+   *                         （權限是繼承的：改父頁會影響子頁，逐頁重算比爬樹可靠）
+   */
+  permissionChanged?: { pageId: string | null } | null;
   instanceId: string;
 }
 

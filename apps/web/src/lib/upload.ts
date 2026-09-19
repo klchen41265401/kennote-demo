@@ -24,6 +24,13 @@ export interface UploadHandle {
 export interface UploadOptions {
   onProgress?(percent: number): void;
   signal?: AbortSignal;
+  /**
+   * 這個附件要掛在哪一頁（第九輪 / migration 0070）。
+   * 後端存進 `files.page_id`，之後 `GET /api/files/:id` 就**依那一頁的權限**放行 ——
+   * 沒帶的話退回「工作區成員限定」，同工作區的 guest 拿得到私密頁面的附件。
+   * **頭像刻意不帶**（不屬於任何頁面）。
+   */
+  pageId?: string | null;
 }
 
 export function uploadFile(
@@ -46,6 +53,7 @@ export function uploadFile(
 
     const form = new FormData();
     form.append('workspaceId', workspaceId);
+    if (options.pageId) form.append('pageId', options.pageId);
     form.append('file', file, file.name);
 
     xhr.open('POST', `${BASE_URL}${API_ROUTES.fileUpload}`);

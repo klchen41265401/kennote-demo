@@ -6,7 +6,8 @@ import { AppError } from '../../lib/errors.js';
 import { uuidv7 } from '../../lib/uuidv7.js';
 import { requireUser } from '../../plugins/auth.js';
 import { getMemberRole } from '../workspaces/repo.js';
-import { findFileForUser, insertFile } from './repo.js';
+import { requirePagePermission, resolvePagePermission } from '../permissions/service.js';
+import { findFileInUserWorkspace, insertFile } from './repo.js';
 import { buildStorageKey, createStorage, detectFileType } from './storage/index.js';
 
 /** 使用者上傳的 HTML / SVG 一律強制下載，避免儲存型 XSS（04 §5.6） */
@@ -28,6 +29,19 @@ export async function fileRoutes(app: FastifyInstance): Promise<void> {
         .uuid('缺少 workspaceId 欄位')
         .parse((part.fields.workspaceId as { value?: string } | undefined)?.value);
       if (!(await getMemberRole(workspaceId, user.id))) throw new AppError('FORBIDDEN');
+
+      /*
+       * 第九輪：附件從這一刻起記住「它屬於哪一頁」（migration 0070）。
+       * 前端在編輯器 / 封面上傳時帶 `pageId`；頭像不帶（不屬於任何頁面）。
+       * 帶了就要有那一頁的 `edit` —— 把附件塞進別人的頁面本身就是寫入。
+       */
+      const pageId =
+        z
+          .string()
+          .uuid()
+          .optional()
+          .parse((part.fields.pageId as { value?: string } | undefined)?.value) ?? null;
+      if (pageId) await requirePagePermission(user.id, pageId, 'edit');
 
       let buffer: Buffer;
       try {
@@ -59,6 +73,7 @@ export async function fileRoutes(app: FastifyInstance): Promise<void> {
         contentType: detected.mime,
         size: buffer.length,
         uploadedBy: user.id,
+        pageId,
       });
 
       return reply.status(201).send({
@@ -68,6 +83,7 @@ export async function fileRoutes(app: FastifyInstance): Promise<void> {
           originalName: row.original_name,
           contentType: row.content_type,
           size: Number(row.size),
+          pageId: row.page_id,
           url: `/api/files/${row.id}`,
           createdAt: row.created_at.toISOString(),
         },
@@ -78,8 +94,24 @@ export async function fileRoutes(app: FastifyInstance): Promise<void> {
   app.get('/:id', async (req, reply) => {
     const user = requireUser(req);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
-    const file = await findFileForUser(id, user.id);
+    /*
+     * ⭐ 第八輪 §4-1 的已知缺口，第九輪補上。
+     *
+     * 先用「工作區成員」把範圍收斂（不是成員 → 404，不洩漏存在性），
+     * 再看 `page_id`：
+     *   有值 → 依**那一頁的權限**（`resolvePagePermission(read)`），
+     *          同工作區的 guest 從此拿不到私密頁面裡的附件；
+     *   NULL → 0070 之前上傳的舊資料、頭像、匯入暫存檔 → 維持成員限定（退路）。
+     *
+     * 沒權限一律回 `FILE_NOT_FOUND`（404）而不是 403：
+     * 403 等於承認「這個 fileId 存在」。
+     */
+    const file = await findFileInUserWorkspace(id, user.id);
     if (!file) throw new AppError('FILE_NOT_FOUND');
+    if (file.page_id) {
+      const permission = await resolvePagePermission(user.id, file.page_id);
+      if (permission === 'none') throw new AppError('FILE_NOT_FOUND');
+    }
 
     const storage = createStorage();
     const stream = await storage.get(file.storage_key);

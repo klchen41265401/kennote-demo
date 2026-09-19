@@ -114,7 +114,8 @@ export function PageHeader({ page, workspaceId, readOnly = false, onLeaveTitle }
   const pickCoverFile = async (file: File): Promise<void> => {
     if (!workspaceId) return;
     try {
-      const meta = await uploadFile(workspaceId, file).promise;
+      // 封面也是這一頁的附件（0070）：帶 pageId，權限才跟著頁面走
+      const meta = await uploadFile(workspaceId, file, { pageId: page.id }).promise;
       await patch({ cover: withCoverPosition(fileUrl(meta), 50) });
     } catch {
       toast('封面上傳失敗', { kind: 'error' });

@@ -141,6 +141,42 @@ export async function notifyPageShared(input: {
   });
 }
 
+/**
+ * 頁面權限**被變更或撤銷** → `permission_changed`（第九輪）。
+ *
+ * 七種通知型別裡的最後一種，在這之前完全沒有發送端（第七輪 §4-2、第八輪 §4-4）。
+ * 與 `page_shared` 互斥：第一次授權是 `page_shared`，之後的升 / 降 / 撤是這一則。
+ *
+ * **撤銷（`none`）也要通知** —— 而且這是唯一一種「收件人現在對那一頁沒有讀取權」
+ * 仍然要送的通知，所以這裡刻意**不**套 `resolvePagePermission` 的紅線：
+ * payload 只帶頁面標題（他本來就看得到過），不帶任何內容片段。
+ */
+export async function notifyPermissionChanged(input: {
+  workspaceId: string;
+  pageId: string;
+  actorId: string;
+  recipientId: string;
+  permission: string;
+  previousPermission?: string;
+}): Promise<void> {
+  if (input.recipientId === input.actorId) return;
+  const pageTitle = await pageTitleOf(input.pageId);
+  await notify({
+    workspaceId: input.workspaceId,
+    recipientId: input.recipientId,
+    actorId: input.actorId,
+    type: 'permission_changed',
+    pageId: input.pageId,
+    payload: {
+      pageTitle,
+      permission: input.permission,
+      ...(input.previousPermission ? { previousPermission: input.previousPermission } : {}),
+    },
+    // 連改好幾次（editor → reader → none）5 分鐘內只留第一則
+    groupKey: notificationGroupKey('permission_changed', input.pageId),
+  });
+}
+
 /** 被加進工作區 → `invite`（已經有帳號的人才收得到；純 email 邀請走信件） */
 export async function notifyWorkspaceInvite(input: {
   workspaceId: string;

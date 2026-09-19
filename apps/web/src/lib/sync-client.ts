@@ -435,7 +435,17 @@ export class SyncClient {
   submitDelta(pageId: string, blockId: string, delta: OtDelta, baseRev: number): string {
     const entry = this.pages.get(pageId);
     const txId = createId(this.now());
-    if (!entry) return txId;
+    if (!entry) {
+      /*
+       * 第九輪（第一輪分診 §8-6）：`submit()` 的靜默 early return 已經改成排隊，
+       * 這一支卻還留著同一個形狀的 `return txId` —— 一樣是**寫入路徑上的 early return**，
+       * 一樣沒有 log、沒有佇列、沒有 rollback。
+       * 現在走同一條路：交給 `submit()`，它會收進 `preAttach`，
+       * `attachPage()` 再原順序補送。delta 本來就是 Operation，不必特別處理。
+       */
+      this.submit(pageId, [textDeltaOperation(blockId, delta, baseRev)]);
+      return txId;
+    }
     entry.deltaTxBlocks.set(txId, blockId);
     const queued: QueuedTransaction = {
       txId,

@@ -54,12 +54,6 @@ const ALLOWLIST: Record<string, string> = {
   'GET /api/public/:token':
     '匿名分享連結，token 本身就是憑證；`resolvePublicAccess()` 另外驗 ' +
     'FEATURE_PUBLIC_SHARE / 密碼 / 到期，而且永遠封頂在 read。',
-  'GET /:id':
-    '⚠️ 附件下載（files/routes.ts）。目前只做到**工作區成員限定**' +
-    '（`findFileForUser()` JOIN workspace_members）——' +
-    'files 表沒有 page_id，附件與頁面之間只有 block.props 裡的 URL 可循，' +
-    '要依頁面權限得先補一張 file→page 的關聯表。第八輪列為已知缺口' +
-    '（docs/qa/functional-round8.md §4），**不是**已經做對的事。',
 };
 
 interface RouteDecl {

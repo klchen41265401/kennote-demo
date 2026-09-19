@@ -347,8 +347,19 @@ export function useEditorHost(options: UseEditorHostOptions): EditorHostResult {
       }
     });
 
-    // 空頁面：補一個段落，讓游標有地方去（這一筆也會被持久化）
-    if (startDoc.rootIds.length === 0 && !readOnly) {
+    /*
+     * 空頁面：補一個段落，讓游標有地方去（這一筆也會被持久化）。
+     *
+     * 第九輪：`createPage()` 與 `createRow()` **後端都會種一個段落**了，
+     * 所以這裡退成**純防禦**（只有舊資料、或使用者把最後一個 block 刪光才會走到）。
+     * 多加一道 `recordMap.block` 必須確實是空的：
+     * `rootIds` 會被 `snapshotToDoc()` 的防禦過濾掉「children 指到不存在的 block」，
+     * 只看 `rootIds.length === 0` 的話，「snapshot 有 block 但 rootBlockIds 壞掉」
+     * 也會被當成空頁而**再補一個** —— 多人同時開同一頁就各補一個，
+     * 伺服器上長出一串空段落（第一輪分診 §8-5 實測看到 2 個）。
+     */
+    const snapshotHasNoBlock = Object.keys(snapshot?.recordMap.block ?? {}).length === 0;
+    if (startDoc.rootIds.length === 0 && snapshotHasNoBlock && !readOnly) {
       instance.insertBlockAfter(null, { type: 'paragraph' });
     }
 
@@ -408,7 +419,11 @@ export function useEditorHost(options: UseEditorHostOptions): EditorHostResult {
   const upload = useCallback(
     async (file: File, onProgress?: (percent: number) => void): Promise<UploadedFile> => {
       if (!workspaceId) throw new Error('找不到工作區，無法上傳');
-      const handle = uploadFile(workspaceId, file, onProgress ? { onProgress } : {});
+      // pageId 一定要帶：後端靠它把附件的讀取權限綁在這一頁上（0070）
+      const handle = uploadFile(workspaceId, file, {
+        pageId,
+        ...(onProgress ? { onProgress } : {}),
+      });
       const meta = await handle.promise;
       return {
         id: meta.id,
@@ -418,7 +433,7 @@ export function useEditorHost(options: UseEditorHostOptions): EditorHostResult {
         contentType: meta.contentType,
       };
     },
-    [workspaceId],
+    [workspaceId, pageId],
   );
 
   const hostApi = useMemo<EditorHostApi | null>(() => {

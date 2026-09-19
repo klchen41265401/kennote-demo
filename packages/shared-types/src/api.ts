@@ -131,6 +131,8 @@ export interface FileMeta {
   originalName: string;
   contentType: string;
   size: number;
+  /** 這個附件屬於哪一頁（migration 0070）。null = 頭像 / 匯入暫存 / 0070 之前的舊資料 */
+  pageId?: string | null;
   url: string;
   createdAt: string;
 }

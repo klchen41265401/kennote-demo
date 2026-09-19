@@ -37,6 +37,8 @@ import { db, withTransaction, type Queryable } from '../../db/client.js';
 import { sql, type Sql } from '../../db/sql.js';
 import { AppError, workspaceNotFound } from '../../lib/errors.js';
 import { getMemberRole } from '../workspaces/repo.js';
+import { applyTransaction } from '../blocks/apply-transaction.js';
+import { uuidv7 } from '../../lib/uuidv7.js';
 import { buildPermissionIndex, canSee } from '../permissions/bulk.js';
 import { requirePagePermission } from '../permissions/service.js';
 import * as pagesRepo from '../pages/repo.js';
@@ -1278,6 +1280,37 @@ export async function createRow(
       properties: properties as Record<string, unknown>,
       createdBy: userId,
     });
+
+    /*
+     * ⭐ 第九輪（第一輪分診 §8-5）：**列頁的種子段落由後端建**，與 `createPage()` 一致。
+     *
+     * 在這之前 `createRow()` 只 `insertPage()`，列頁天生 `rootBlockIds: []` ——
+     * 於是「補一個空段落」這件事落在**每一個讀 snapshot 的客戶端**身上：
+     *   1. 多人同時開同一列 → 各補一個 → 伺服器上長出好幾個空段落（實測留了 2 個）
+     *   2. 前端補的那一筆要經過 sync 才寫得回去，mount 時序一抖就整批掉光
+     *      （分診 §2 的 BUG：使用者打的字整段消失）
+     * 建立當下種一個，兩個問題的**來源**都不見了；前端那段 fallback 退成純防禦。
+     */
+    await applyTransaction(
+      { pageId: page.id, userId },
+      {
+        txId: uuidv7(),
+        pageId: page.id,
+        originSessionId: 'server:row-create',
+        ops: [
+          {
+            type: 'block.insert',
+            blockId: uuidv7(),
+            parentId: null,
+            afterId: null,
+            blockType: 'paragraph',
+            props: {},
+            content: [],
+          },
+        ],
+      },
+      tx,
+    );
 
     await syncRelations(tx, {
       workspaceId: collection.workspace_id,
