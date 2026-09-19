@@ -48,6 +48,9 @@ export interface PageTreeNode {
 
 export interface TrashedPage extends PageTreeNode {
   deletedAt: string;
+  /** 這一筆是某個資料庫的「列」時，帶回所屬 collection 與它的名稱 */
+  collectionId?: string | null;
+  collectionTitle?: string | null;
 }
 
 export type RecordRole = 'owner' | 'editor' | 'commenter' | 'reader' | 'none';
