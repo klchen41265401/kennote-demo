@@ -104,7 +104,22 @@ export function TreeRow({
     actions.navigate(node.id);
   }
 
+  /**
+   * ⚠️ `<Menu>` / `<Tooltip>` 的浮層是用 `createPortal` 掛到 overlay root 的，
+   * 但 **React 的事件仍然沿著 React 樹冒泡** —— 也就是說在選單項目上按下滑鼠，
+   * 這一列的 `onPointerDown` 照樣會收到。接著 `useDraggable` 就 `setPointerCapture()`
+   * 到這一列上，後續的 pointerup / click 全被重新指派到列身上：
+   * 選單項目收不到 click（重新命名 / 收藏 / 複本 / 移動到 / 垃圾桶全部失效），
+   * 反而變成「點了一下這一列」而跳頁。
+   * 所以所有列層級的指標 / 鍵盤處理都要先確認事件真的發生在這一列的 DOM 子樹裡。
+   */
+  function isInsideRow(target: EventTarget | null): boolean {
+    const row = rowRef.current;
+    return !!row && target instanceof Node && row.contains(target);
+  }
+
   function onPointerDownRow(e: React.PointerEvent<HTMLDivElement>): void {
+    if (!isInsideRow(e.target)) return;
     pressRef.current = { x: e.clientX, y: e.clientY };
     if (!draggable) return;
     /**
@@ -130,6 +145,7 @@ export function TreeRow({
   }
 
   function onPointerUpRow(e: React.PointerEvent<HTMLDivElement>): void {
+    if (!isInsideRow(e.target)) return;
     const start = pressRef.current;
     pressRef.current = null;
     if (!start) return; // pointerdown 被 ⋯ / ＋ / 箭頭攔下了
@@ -138,6 +154,7 @@ export function TreeRow({
   }
 
   function onKeyDown(e: KeyboardEvent<HTMLDivElement>): void {
+    if (!isInsideRow(e.target)) return;
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
       actions.navigate(node.id);
@@ -203,13 +220,18 @@ export function TreeRow({
         aria-selected={active}
         tabIndex={0}
         onClick={(e) => {
+          // 浮層（選單 / 提示）雖然 portal 出去了，React 事件還是會冒泡到這一列
+          if (!isInsideRow(e.target)) return;
           // 點在 ⋯ / ＋ / 展開箭頭上時不要導頁
           if ((e.target as HTMLElement).closest('[data-row-action]')) return;
           if (Date.now() - navigatedAt.current < 400) return;
           go();
         }}
         onKeyDown={onKeyDown}
-        onContextMenu={ctx.onContextMenu}
+        onContextMenu={(e) => {
+          if (!isInsideRow(e.target)) return;
+          ctx.onContextMenu(e);
+        }}
         onPointerDown={onPointerDownRow}
         onPointerUp={onPointerUpRow}
       >

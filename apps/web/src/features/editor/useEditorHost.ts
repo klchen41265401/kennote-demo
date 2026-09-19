@@ -169,17 +169,25 @@ export function useEditorHost(options: UseEditorHostOptions): EditorHostResult {
   syncRef.current = sync;
 
   // doc 以 (pageId, reloadToken) 為 key 只建一次 → snapshot revalidate 不會重建編輯器（不閃爍）
-  const builtRef = useRef<{ key: string; doc: EditorDoc } | null>(null);
+  const builtRef = useRef<{ key: string; doc: EditorDoc; seq: number } | null>(null);
   const docKey = `${pageId}:${reloadToken}`;
   let initialDoc: EditorDoc | null = null;
   if (snapshot && snapshot.pageId === pageId) {
     if (builtRef.current?.key === docKey) initialDoc = builtRef.current.doc;
     else {
       initialDoc = snapshotToDoc(snapshot);
-      builtRef.current = { key: docKey, doc: initialDoc };
+      builtRef.current = { key: docKey, doc: initialDoc, seq: snapshot.seq };
     }
   }
-  const initialSeq = snapshot?.seq ?? 0;
+  /**
+   * ⚠️ 這個值會進下面 useLayoutEffect 的依賴陣列，所以**必須跟 initialDoc 一樣穩定**。
+   * 以前這裡直接寫 `snapshot?.seq ?? 0`：只要 snapshot 被重新驗證（改標題 / 改 icon /
+   * 改封面都會 `invalidateQueries(snapshot)`），seq 一變 effect 就整段重跑 ——
+   * cleanup 砸掉現在的 editor，再用**快取裡那份舊 doc** 重建，
+   * 使用者剛打的字就這樣被清空（實測：打完字改標題 → 內文整段消失）。
+   * seq 要取「建出這份 doc 的那個 snapshot 的 seq」，兩者本來就該是一組的。
+   */
+  const initialSeq = builtRef.current?.key === docKey ? builtRef.current.seq : (snapshot?.seq ?? 0);
 
   useLayoutEffect(() => {
     const container = containerRef.current;

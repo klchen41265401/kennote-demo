@@ -275,7 +275,7 @@ export async function duplicatePage(
       tx,
     );
 
-    for (const p of pages) {
+    for (const p of orderParentsFirst(pages)) {
       const isRoot = p.id === pageId;
       await tx.query(sql`
         INSERT INTO pages (id, workspace_id, parent_id, title, icon, cover, sort_key,
@@ -290,7 +290,7 @@ export async function duplicatePage(
       `);
     }
 
-    for (const b of blocks) {
+    for (const b of orderParentsFirst(blocks)) {
       await tx.query(sql`
         INSERT INTO blocks (id, workspace_id, page_id, parent_id, type, props, content,
                             children, created_by, updated_by)
@@ -305,6 +305,38 @@ export async function duplicatePage(
     const fresh = await repo.findPageById(idMap[pageId]!, tx);
     return { page: repo.toPage(fresh!), idMap };
   });
+}
+
+/**
+ * `pages.parent_id` 與 `blocks.parent_id` 都有指向自己那張表的外鍵，
+ * 所以**插入時父一定要先於子**。原本的查詢是用 `sort_key` / `created_at` 排序，
+ * 兩者都不保證這件事（子頁的 sort_key 字典序常常排在父頁前面），
+ * 一旦排到子在前，INSERT 就撞外鍵，整個 `duplicatePage` 交易回滾 → 500。
+ * 這裡先把列重排成「父先於子」的前序。
+ */
+export function orderParentsFirst<T extends { id: string; parent_id: string | null }>(rows: T[]): T[] {
+  const ids = new Set(rows.map((r) => r.id));
+  const byParent = new Map<string | null, T[]>();
+  for (const r of rows) {
+    const key = r.parent_id !== null && ids.has(r.parent_id) ? r.parent_id : null;
+    const list = byParent.get(key);
+    if (list) list.push(r);
+    else byParent.set(key, [r]);
+  }
+  const out: T[] = [];
+  const walk = (key: string | null): void => {
+    for (const r of byParent.get(key) ?? []) {
+      out.push(r);
+      walk(r.id);
+    }
+  };
+  walk(null);
+  if (out.length < rows.length) {
+    // 資料異常（例如成環）時不要默默掉資料，把剩下的接在後面
+    const seen = new Set(out.map((r) => r.id));
+    for (const r of rows) if (!seen.has(r.id)) out.push(r);
+  }
+  return out;
 }
 
 function appendCopySuffix(title: RichText): RichText {
