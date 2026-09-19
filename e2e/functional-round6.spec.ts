@@ -24,13 +24,22 @@ import { expect, test, type Browser, type Page } from '@playwright/test';
 const HOST = '.kn-editor-host';
 
 async function signIn(page: Page): Promise<void> {
-  await page.goto('/login', { waitUntil: 'domcontentloaded' });
-  await page.waitForTimeout(1200);
-  if (!page.url().includes('/login')) return;
-  const guest = page.getByRole('button', { name: /不輸入|直接進入|訪客/ }).first();
-  if (await guest.isVisible().catch(() => false)) {
-    await guest.click();
-    await page.waitForTimeout(3000);
+  // `POST /api/auth/open` 有 write rate limit，一條測試開兩個帳號時特別容易撞到
+  // （撞到的症狀是停在 /login，接著 `/api/auth/me` 回 401 → 「第二個帳號要登得進去」紅）。
+  // 與 functional-round8.spec.ts 同一套 backoff：1.5s × n，最多 5 次。
+  for (let attempt = 0; attempt < 5; attempt++) {
+    await page.goto('/login', { waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(1200);
+    if (!page.url().includes('/login')) return;
+    const guest = page.getByRole('button', { name: /不輸入|直接進入|訪客/ }).first();
+    if (await guest.isVisible().catch(() => false)) {
+      // 點下去的瞬間頁面可能已經在導頁（element detached）—— 那不是失敗，
+      // 下一行的 URL 檢查才是判準，所以這裡吞掉 click 的例外。
+      await guest.click({ timeout: 8000 }).catch(() => undefined);
+      await page.waitForTimeout(3000);
+      if (!page.url().includes('/login')) return;
+    }
+    await page.waitForTimeout(1500 * (attempt + 1));
   }
 }
 
@@ -180,6 +189,20 @@ async function unreadOf(page: Page): Promise<number> {
   const res = await api<{ unread: number }>(page, 'GET', '/api/notifications');
   expect(res.status).toBe(200);
   return res.data.unread;
+}
+
+interface InboxItem {
+  id: string;
+  type: string;
+  pageId: string | null;
+  readAt: string | null;
+}
+
+/** B 的收件匣內容（第七輪之後裡面不只有 mention，見下面那條測試的註解） */
+async function inboxOf(page: Page): Promise<InboxItem[]> {
+  const res = await api<{ notifications: InboxItem[] }>(page, 'GET', '/api/notifications');
+  expect(res.status).toBe(200);
+  return res.data.notifications;
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -454,7 +477,23 @@ test('提及 → 通知 → 標為已讀 → 全部已讀', async ({ page, brows
   expect(hit!.readAt, '剛收到的通知是未讀').toBeNull();
 
   expect((await api(b.p2, 'POST', `/api/notifications/${hit!.id}/read`)).status).toBe(200);
-  await expect.poll(() => unreadOf(b.p2), { timeout: 20_000 }).toBe(0);
+  /*
+   * ⭐ 回歸分診第一輪：這裡本來是 `expect.poll(unreadOf).toBe(0)` —— 那是第六輪的巧合。
+   * 第七輪 BUG-39 之後 `inviteMember()` 會對「已經有帳號的受邀者」多發一則 `invite`
+   * 通知（同一輪還接上了 `page_shared` 與 `page_updated`），所以 B 的收件匣裡
+   * **本來就不只有 mention 這一則**，把 mention 標成已讀之後未讀數是 1 不是 0。
+   * 這一條要釘的是「標為已讀真的生效」，所以只看那一則本身；
+   * 「全部已讀」那一段（下面）才是真正該斷言未讀歸零的地方。
+   */
+  await expect
+    .poll(async () => (await inboxOf(b.p2)).find((n) => n.id === hit!.id)?.readAt ?? null, {
+      timeout: 20_000,
+    })
+    .not.toBeNull();
+  expect(
+    (await inboxOf(b.p2)).filter((n) => n.type === 'mention' && n.readAt === null),
+    'mention 型別的通知全部變成已讀',
+  ).toEqual([]);
 
   const readAll = await api<{ updated: number; unread: number }>(b.p2, 'POST', '/api/notifications/read-all');
   expect(readAll.status).toBe(200);

@@ -8,7 +8,7 @@
  *
  * 元件層永遠不直接碰 WebSocket，也不直接呼叫寫入 API（04 §7.3 / 00-README 風險二）。
  */
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useLayoutEffect, useRef, useState } from 'react';
 import type {
   Operation,
   PagePermission,
@@ -151,7 +151,26 @@ export function usePageSync(
   const [seq, setSeq] = useState(0);
   const [permission, setPermission] = useState<PagePermission>('read');
 
-  useEffect(() => {
+  /*
+   * ⭐ 回歸分診第一輪：這裡**必須**是 `useLayoutEffect`，不能是 `useEffect`。
+   *
+   * `useEditorHost()` 先呼叫 `usePageSync()`、後面才用 `useLayoutEffect` 建編輯器。
+   * React 的 layout effect 一律排在 passive effect（`useEffect`）之前，所以原本的
+   * 順序是「建編輯器 → 送 op → （很久以後才）attachPage」。而
+   * `SyncClient.submit()` 對**還沒 attach 的頁面會直接 `return`**（ops 靜悄悄丟掉），
+   * 於是編輯器在 mount 當下送出的那一批 op 全部消失。
+   *
+   * 踩到的現場：`rootIds.length === 0` 的頁面（＝資料庫的「列」頁，`createRow()`
+   * 不會建任何 block）。`useEditorHost` 會補一個空段落並送出 `block.insert` ——
+   * 那一筆被丟掉之後，使用者打的字走 OT 的 `text.delta` 打到一個伺服器不認識的
+   * block → `txRejected BLOCK_NOT_FOUND` → `onRollback` → 整頁重抓重建 →
+   * 剛打的字全部不見（重整後編輯器是空的）。
+   *
+   * 改成 layout effect 之後，attach 一定發生在編輯器送出第一批 op 之前。
+   * （另一半的保險在 `lib/sync-client.ts` 的 `submit()`：改成先進 pending 佇列，
+   * attach 時再補送，而不是默默丟掉。）
+   */
+  useLayoutEffect(() => {
     if (!pageId) return;
     const sync = getSyncClient();
     sync.start();

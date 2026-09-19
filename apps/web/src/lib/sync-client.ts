@@ -183,6 +183,13 @@ export class SyncClient {
   private readonly opts: SyncClientOptions;
   private readonly queue: OfflineQueue;
   private readonly pages = new Map<string, PageEntry>();
+  /**
+   * 還沒 `attachPage()` 就送進來的 ops（每頁最多留一批）。
+   * 以前 `submit()` 遇到「這一頁還沒 attach」是直接 `return` —— ops 靜悄悄消失。
+   * 宿主的 mount 順序只要稍微變動就會掉資料（見 `stores/sync.ts` 的註解），
+   * 所以改成先收下來，`attachPage()` 時原順序補回 buffer。
+   */
+  private readonly preAttach = new Map<string, Operation[]>();
   private readonly inflight = new Map<string, ReturnType<typeof setTimeout>>();
   private readonly stateListeners = new Set<(state: SyncState) => void>();
 
@@ -348,6 +355,15 @@ export class SyncClient {
     if (initialSeq > entry.localSeq) entry.localSeq = initialSeq;
     this.pages.set(pageId, entry);
 
+    // attach 之前就送進來的 ops（宿主在 layout effect 裡建編輯器時可能比這裡早）
+    const pending = this.preAttach.get(pageId);
+    if (pending && pending.length > 0) {
+      this.preAttach.delete(pageId);
+      this.submit(pageId, pending);
+    } else {
+      this.preAttach.delete(pageId);
+    }
+
     this.subscribe(pageId);
     void this.resendQueued(pageId);
 
@@ -447,7 +463,13 @@ export class SyncClient {
   submit(pageId: string, ops: Operation[]): void {
     if (ops.length === 0) return;
     const entry = this.pages.get(pageId);
-    if (!entry) return;
+    if (!entry) {
+      // 還沒 attach：收進 pending，`attachPage()` 會原順序補送（絕對不要默默丟掉）
+      const pending = this.preAttach.get(pageId) ?? [];
+      pending.push(...ops);
+      this.preAttach.set(pageId, pending.slice(-200));
+      return;
+    }
     entry.buffer.push(...ops);
     // 一次最多 200 個 op（MAX_OPS_PER_TRANSACTION）→ 滿了就立刻送，不等 debounce
     if (entry.buffer.length >= 200) {

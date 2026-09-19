@@ -15,7 +15,14 @@
  * 同一頁重新整理不閃爍：doc 以 pageId 為 key 只建一次，snapshot 重新驗證不會重建編輯器。
  */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react';
-import { createEditor, type Block as CoreBlock, type Editor, type EditorDoc, type OtDelta } from '@kennote/editor-core';
+import {
+  createEditor,
+  type Block as CoreBlock,
+  type Editor,
+  type EditorDoc,
+  type EditorSelection,
+  type OtDelta,
+} from '@kennote/editor-core';
 import { defaultAtomText, type InlineAtom } from '@kennote/editor-core';
 
 /**
@@ -226,6 +233,24 @@ export function useEditorHost(options: UseEditorHostOptions): EditorHostResult {
    * 等 cleanup 再寫回去已經來不及。
    */
   const liveDocRef = useRef<{ key: string; doc: EditorDoc } | null>(null);
+  /*
+   * ⭐ 回歸分診第一輪：重建時**連游標一起接回去**。
+   *
+   * `otEnabled` 在依賴陣列裡，而 `useOtEnabled()` 第一次載入時是
+   * 「先回 false → `/api/health` 探測回來 → setState(true)」——
+   * 也就是**每個 session 的第一個編輯器一定會被砸掉重建一次**，時機大約是
+   * 開頁後 0.5～2 秒（站台忙的時候更晚）。`liveDocRef` 讓內容活了下來，
+   * 但焦點沒有：舊的 contenteditable 被 destroy，焦點掉回 <body>，
+   * 使用者在那之後敲的鍵**一個字都不會進編輯器**（不是掉資料，是根本沒收到）。
+   *
+   * 症狀就是「開頁後馬上打字，前幾個字（或整段）不見」——
+   * e2e 的資料庫列整頁那一條踩得最準：它 click 完 600ms 就開始打字。
+   *
+   * 這裡記下舊實例的 selection，新實例建好之後接回去。
+   * 只有「同一個 docKey 的重建」才接 —— 第一次建立時沒有舊 selection，
+   * 所以**不會**在開頁時搶焦點。
+   */
+  const liveSelRef = useRef<{ key: string; sel: EditorSelection } | null>(null);
   const docKeyAtSetup = docKey;
 
   useLayoutEffect(() => {
@@ -313,6 +338,7 @@ export function useEditorHost(options: UseEditorHostOptions): EditorHostResult {
     });
     // 讓別人看得到我的游標（presence 不進 operation log）
     const offSel = instance.on('selectionChange', (sel) => {
+      if (sel.type !== 'none') liveSelRef.current = { key: docKeyAtSetup, sel };
       if (HTTP_FALLBACK) return;
       if (sel.type === 'text') {
         syncRef.current.updatePresence(sel.focus.blockId, [sel.anchor.offset, sel.focus.offset]);
@@ -324,6 +350,16 @@ export function useEditorHost(options: UseEditorHostOptions): EditorHostResult {
     // 空頁面：補一個段落，讓游標有地方去（這一筆也會被持久化）
     if (startDoc.rootIds.length === 0 && !readOnly) {
       instance.insertBlockAfter(null, { type: 'paragraph' });
+    }
+
+    // 重建：把游標接回去（見 liveSelRef 的註解）。第一次建立時 restore 是 null。
+    const restore = liveSelRef.current?.key === docKeyAtSetup ? liveSelRef.current.sel : null;
+    if (restore && restore.type !== 'none') {
+      try {
+        instance.setSelection(restore);
+      } catch {
+        /* 那個 block 可能已經不在了 —— 接不回去就算了，不能讓整頁建不起來 */
+      }
     }
 
     setEditor(instance);

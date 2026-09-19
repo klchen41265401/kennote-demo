@@ -170,10 +170,22 @@ test.describe('兩個分頁的即時同步', () => {
       await b.keyboard.type('BBBB', { delay: 50 });
       await page.keyboard.press('End');
       await page.keyboard.type('CCCC', { delay: 50 });
-      await page.waitForTimeout(2500);
 
       const settle = async (p: Page): Promise<string> =>
         (await blocks(p)).map(([, t]) => t).join('|');
+      /*
+       * 回歸分診第一輪：這裡本來是 `await page.waitForTimeout(2500)`。
+       * 遠端站台忙的時候（例如接在 database-gaps 的 1000 列測試後面跑）
+       * 2.5 秒不夠讓最後一筆 delta 傳到另一個分頁，
+       * 失敗訊息會是 `Expected "BBBBAAAACCCC" / Received "BBBBAAAA"` ——
+       * 看起來像收斂錯誤，其實只是還沒到。等條件，不要等時間。
+       */
+      const hasAll = async (p: Page): Promise<boolean> => {
+        const text = await settle(p);
+        return ['AAAA', 'BBBB', 'CCCC'].every((s) => text.includes(s));
+      };
+      await expect.poll(() => hasAll(page), { timeout: 15_000 }).toBe(true);
+      await expect.poll(() => hasAll(b), { timeout: 15_000 }).toBe(true);
       const aText = await settle(page);
       const bText = await settle(b);
       expect(aText, 'A 端應該同時看得到雙方的字').toContain('BBBB');

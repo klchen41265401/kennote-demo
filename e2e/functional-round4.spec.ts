@@ -15,13 +15,20 @@ import { expect, test, type Page } from '@playwright/test';
 const HOST = '.kn-editor-host';
 
 async function signIn(page: Page): Promise<void> {
-  await page.goto('/login', { waitUntil: 'domcontentloaded' });
-  await page.waitForTimeout(1200);
-  if (!page.url().includes('/login')) return;
-  const guest = page.getByRole('button', { name: /不輸入|直接進入|訪客/ }).first();
-  if (await guest.isVisible().catch(() => false)) {
-    await guest.click();
-    await page.waitForTimeout(3000);
+  // `POST /api/auth/open` 有 write rate limit（第六～八輪的報告都記過）。撞到的時候
+  // 會停在 /login，後面每一個斷言都會紅得像產品壞掉。與 functional-round6/7/8 同一套
+  // backoff：1.5s × n，最多 5 次；click 的例外吞掉（導頁中 element 會 detach）。
+  for (let attempt = 0; attempt < 5; attempt++) {
+    await page.goto('/login', { waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(1200);
+    if (!page.url().includes('/login')) return;
+    const guest = page.getByRole('button', { name: /不輸入|直接進入|訪客/ }).first();
+    if (await guest.isVisible().catch(() => false)) {
+      await guest.click({ timeout: 8000 }).catch(() => undefined);
+      await page.waitForTimeout(3000);
+      if (!page.url().includes('/login')) return;
+    }
+    await page.waitForTimeout(1500 * (attempt + 1));
   }
 }
 
@@ -93,7 +100,20 @@ async function newPage(page: Page, title: string): Promise<{ id: string }> {
 
 async function openPage(page: Page, id: string): Promise<void> {
   await page.goto(`/page/${id}`, { waitUntil: 'domcontentloaded' });
-  await page.waitForTimeout(3500);
+  /*
+   * ⚠️ 不能只等固定秒數。`/page/:id` 在 snapshot 還沒回來之前畫的是 Skeleton，
+   * 連 `.kn-editor-host` 都還不存在 —— 遠端站台被整份 e2e 連續打的時候，
+   * 3.5 秒常常不夠（單跑 11 秒的這一條，接在別的檔案後面跑要 70 秒以上），
+   * `lastTopBlockId()` 就會拿到 null，錯誤訊息變成「文件裡至少要有一個 block」，
+   * 看起來像產品掉資料，其實只是還沒畫出來。
+   * 改成等「編輯器真的畫出第一個 block」——`newPage()` 建的頁面一定有一個段落。
+   */
+  await page
+    .locator(`${HOST} [data-block-id]`)
+    .first()
+    .waitFor({ state: 'visible', timeout: 45_000 });
+  // 畫出來之後再讓同步層 / presence 安定一下（游標要放得進去）
+  await page.waitForTimeout(800);
 }
 
 /** 最後一個最上層 block 的 id（table 這種沒有可編輯內容的也算） */
@@ -302,7 +322,9 @@ test.describe('功能 QA 第四輪回歸（編輯器）', () => {
     const before = await blockDump(page);
     await page.waitForTimeout(3500);
     await page.reload({ waitUntil: 'domcontentloaded' });
-    await page.waitForTimeout(5000);
+    // 固定 5 秒在全量跑的時候不夠（遠端站台忙）→ 等結構真的長回來
+    await page.locator(`${HOST} [data-block-id]`).first().waitFor({ state: 'visible', timeout: 45_000 });
+    await expect.poll(() => blockDump(page), { timeout: 30_000 }).toEqual(before);
     const after = await blockDump(page);
     expect(after, '重整前後的 block 結構一致').toEqual(before);
     const types = after.join(',');

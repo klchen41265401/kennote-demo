@@ -20,13 +20,22 @@ import { expect, test, type Browser, type Page } from '@playwright/test';
 const HOST = '.kn-editor-host';
 
 async function signIn(page: Page): Promise<void> {
-  await page.goto('/login', { waitUntil: 'domcontentloaded' });
-  await page.waitForTimeout(1200);
-  if (!page.url().includes('/login')) return;
-  const guest = page.getByRole('button', { name: /不輸入|直接進入|訪客/ }).first();
-  if (await guest.isVisible().catch(() => false)) {
-    await guest.click();
-    await page.waitForTimeout(3000);
+  // `POST /api/auth/open` 有 write rate limit，一條測試開兩個帳號時特別容易撞到
+  // （撞到的症狀是停在 /login，接著 `/api/auth/me` 回 401 → 「第二個帳號要登得進去」紅）。
+  // 與 functional-round8.spec.ts 同一套 backoff：1.5s × n，最多 5 次。
+  for (let attempt = 0; attempt < 5; attempt++) {
+    await page.goto('/login', { waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(1200);
+    if (!page.url().includes('/login')) return;
+    const guest = page.getByRole('button', { name: /不輸入|直接進入|訪客/ }).first();
+    if (await guest.isVisible().catch(() => false)) {
+      // 點下去的瞬間頁面可能已經在導頁（element detached）—— 那不是失敗，
+      // 下一行的 URL 檢查才是判準，所以這裡吞掉 click 的例外。
+      await guest.click({ timeout: 8000 }).catch(() => undefined);
+      await page.waitForTimeout(3000);
+      if (!page.url().includes('/login')) return;
+    }
+    await page.waitForTimeout(1500 * (attempt + 1));
   }
 }
 
@@ -50,12 +59,19 @@ async function installTokenSniffer(page: Page): Promise<void> {
   });
 }
 
+/**
+ * ⚠️ `raw` 是整份回應的原文，`data` 只有成功回應才有（錯誤的 envelope 是
+ * `{ error: { code, message } }`，`.data` 會是 `undefined`）。
+ * 「內容一個字都不能外流」這種斷言**必須打 `raw`** ——
+ * 打 `JSON.stringify(data)` 的話，404 之後拿到的是字串 `"undefined"`，
+ * `not.toContain()` 直接噴 matcher error，測試看起來像紅其實是測試自己寫錯。
+ */
 async function api<T = unknown>(
   page: Page,
   method: string,
   path: string,
   body?: unknown,
-): Promise<{ status: number; data: T }> {
+): Promise<{ status: number; data: T; raw: string }> {
   return page.evaluate(
     async ([m, p, b]) => {
       const headers: Record<string, string> = {
@@ -71,13 +87,13 @@ async function api<T = unknown>(
       });
       const text = await r.text();
       try {
-        return { status: r.status, data: JSON.parse(text).data };
+        return { status: r.status, data: JSON.parse(text).data, raw: text };
       } catch {
-        return { status: r.status, data: text as never };
+        return { status: r.status, data: text as never, raw: text };
       }
     },
     [method, path, body ?? null] as const,
-  ) as Promise<{ status: number; data: T }>;
+  ) as Promise<{ status: number; data: T; raw: string }>;
 }
 
 async function wsId(page: Page): Promise<string> {
@@ -178,7 +194,7 @@ test('BUG-35 guest 讀不到未被授權的頁面（/pages/:id 與 /snapshot 都
 
     const snapshotRes = await api(b.p2, 'GET', `/api/pages/${secret}/snapshot`);
     expect(snapshotRes.status, 'snapshot 也要 404').toBe(404);
-    expect(JSON.stringify(snapshotRes.data), '內容一個字都不能外流').not.toContain('1234');
+    expect(snapshotRes.raw, '內容一個字都不能外流').not.toContain('1234');
   } finally {
     await b.close();
   }

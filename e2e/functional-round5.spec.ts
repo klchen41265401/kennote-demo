@@ -17,13 +17,20 @@ import { expect, test, type Browser, type Page } from '@playwright/test';
 const HOST = '.kn-editor-host';
 
 async function signIn(page: Page): Promise<void> {
-  await page.goto('/login', { waitUntil: 'domcontentloaded' });
-  await page.waitForTimeout(1200);
-  if (!page.url().includes('/login')) return;
-  const guest = page.getByRole('button', { name: /不輸入|直接進入|訪客/ }).first();
-  if (await guest.isVisible().catch(() => false)) {
-    await guest.click();
-    await page.waitForTimeout(3000);
+  // `POST /api/auth/open` 有 write rate limit（第六～八輪的報告都記過）。撞到的時候
+  // 會停在 /login，後面每一個斷言都會紅得像產品壞掉。與 functional-round6/7/8 同一套
+  // backoff：1.5s × n，最多 5 次；click 的例外吞掉（導頁中 element 會 detach）。
+  for (let attempt = 0; attempt < 5; attempt++) {
+    await page.goto('/login', { waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(1200);
+    if (!page.url().includes('/login')) return;
+    const guest = page.getByRole('button', { name: /不輸入|直接進入|訪客/ }).first();
+    if (await guest.isVisible().catch(() => false)) {
+      await guest.click({ timeout: 8000 }).catch(() => undefined);
+      await page.waitForTimeout(3000);
+      if (!page.url().includes('/login')) return;
+    }
+    await page.waitForTimeout(1500 * (attempt + 1));
   }
 }
 

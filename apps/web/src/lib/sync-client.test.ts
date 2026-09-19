@@ -89,9 +89,11 @@ interface Harness {
   rollbacks: Array<{ txId: string; code: string }>;
   conflicts: string[][];
   httpSubmit: ReturnType<typeof vi.fn>;
+  /** 手動 attachPage（`setup({ attach: false })` 時才有意義） */
+  attach: () => void;
 }
 
-function setup(options: { online?: boolean } = {}): Harness {
+function setup(options: { online?: boolean; attach?: boolean } = {}): Harness {
   const queue = new MemoryQueue();
   const states: SyncState[] = [];
   const remote: Harness['remote'] = [];
@@ -120,19 +122,25 @@ function setup(options: { online?: boolean } = {}): Harness {
   });
 
   client.start();
-  client.attachPage(
-    PAGE,
-    {
-      onRemoteOps: (ops, meta) => remote.push({ ops, seq: meta.seq, catchUp: meta.catchUp }),
-      onResync: (reason) => resyncs.push(reason),
-      onRollback: (tx, reason) => rollbacks.push({ txId: tx.txId, code: reason.code }),
-      onConflict: (blockIds) => conflicts.push(blockIds),
-    },
-    0,
-  );
+  const attach = (): void => {
+    client.attachPage(
+      PAGE,
+      {
+        onRemoteOps: (ops, meta) => remote.push({ ops, seq: meta.seq, catchUp: meta.catchUp }),
+        onResync: (reason) => resyncs.push(reason),
+        onRollback: (tx, reason) => rollbacks.push({ txId: tx.txId, code: reason.code }),
+        onConflict: (blockIds) => conflicts.push(blockIds),
+      },
+      0,
+    );
+  };
+  // `attach: false` 用來模擬「宿主還沒 attachPage 就送出 op」（見「送出變更」那一段）
+  if (options.attach !== false) attach();
 
-  return { client, queue, states, remote, resyncs, rollbacks, conflicts, httpSubmit };
+  return { client, queue, states, remote, resyncs, rollbacks, conflicts, httpSubmit, attach };
 }
+
+
 
 /** 走完 connecting → authenticating → syncing → ready */
 function handshake(seq = 10): FakeSocket {
@@ -297,6 +305,30 @@ describe('送出變更', () => {
     expect(sent[0]?.tx.originSessionId).toBe('my-session');
     // 送出前就先寫進佇列（斷電也不會丟）
     expect(await h.queue.size()).toBe(1);
+  });
+
+  /*
+   * 回歸分診第一輪：`submit()` 以前遇到「這一頁還沒 attachPage」是直接 `return`，
+   * ops 靜悄悄消失。宿主（useEditorHost）在 layout effect 裡建編輯器，
+   * 對空頁面會補一個 `block.insert` —— 那一筆被丟掉之後，接著打的字走 OT
+   * `text.delta` 就會打到伺服器不認識的 block（BLOCK_NOT_FOUND → 整頁重載 → 掉字）。
+   */
+  it('attach 之前送進來的 ops 不會被丟掉，attach 後照原順序補送', async () => {
+    const h = setup({ attach: false });
+    // 還沒 attachPage：以前這一行等於什麼都沒發生
+    h.client.submit(PAGE, [op('seed')]);
+
+    h.attach();
+    const socket = handshake(0);
+    h.client.submit(PAGE, [op('after')]);
+    await vi.advanceTimersByTimeAsync(300);
+
+    const sent = socket.messagesOfType('tx');
+    expect(sent).toHaveLength(1);
+    expect(sent[0]?.tx.ops.map((o) => (o as { blockId: string }).blockId)).toEqual([
+      'seed',
+      'after',
+    ]);
   });
 
   it('收到 txApplied 才把佇列清掉，並更新 localSeq / 衝突提示', async () => {

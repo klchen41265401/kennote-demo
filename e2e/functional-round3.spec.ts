@@ -16,13 +16,20 @@ import { expect, test, type Page } from '@playwright/test';
 const HOST = '.kn-editor-host';
 
 async function signIn(page: Page): Promise<void> {
-  await page.goto('/login', { waitUntil: 'domcontentloaded' });
-  await page.waitForTimeout(1200);
-  if (!page.url().includes('/login')) return;
-  const guest = page.getByRole('button', { name: /不輸入|直接進入|訪客/ }).first();
-  if (await guest.isVisible().catch(() => false)) {
-    await guest.click();
-    await page.waitForTimeout(3000);
+  // `POST /api/auth/open` 有 write rate limit（第六～八輪的報告都記過）。撞到的時候
+  // 會停在 /login，後面每一個斷言都會紅得像產品壞掉。與 functional-round6/7/8 同一套
+  // backoff：1.5s × n，最多 5 次；click 的例外吞掉（導頁中 element 會 detach）。
+  for (let attempt = 0; attempt < 5; attempt++) {
+    await page.goto('/login', { waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(1200);
+    if (!page.url().includes('/login')) return;
+    const guest = page.getByRole('button', { name: /不輸入|直接進入|訪客/ }).first();
+    if (await guest.isVisible().catch(() => false)) {
+      await guest.click({ timeout: 8000 }).catch(() => undefined);
+      await page.waitForTimeout(3000);
+      if (!page.url().includes('/login')) return;
+    }
+    await page.waitForTimeout(1500 * (attempt + 1));
   }
 }
 
@@ -233,16 +240,32 @@ test.describe('功能 QA 第三輪回歸', () => {
     const row = (await api<Row>(page, 'POST', `/api/databases/${c.id}/rows`, { title: '列一' })).data;
 
     await page.goto(`/page/${row.id}`, { waitUntil: 'domcontentloaded' });
-    await page.waitForTimeout(4000);
     const block = page.locator(`${HOST} [data-block-id]`).first();
-    await expect(block).toBeVisible();
+    // 列頁（`collection_id` 不為空）的 snapshot 是 0 個 block，編輯器會自己補一個段落，
+    // 那一筆 `block.insert` 要真的送到伺服器 —— 這一條測的就是它。
+    await block.waitFor({ state: 'visible', timeout: 45_000 });
     await block.click();
     await page.waitForTimeout(600);
     await page.keyboard.type('列頁新增的段落');
-    await page.waitForTimeout(3000);
+
+    /*
+     * 重整之前先確認「伺服器真的收到了」。
+     * 原本這裡是 `await page.waitForTimeout(3000)` —— 送出是 debounce 300ms + WS 往返，
+     * 遠端站台忙的時候（整份 e2e 連續跑）3 秒不一定夠，重整後會看到空白，
+     * 錯誤訊息長得跟「掉資料」一模一樣。等條件，不要等時間。
+     */
+    await expect
+      .poll(
+        async () => {
+          const snap = await api(page, 'GET', `/api/pages/${row.id}/snapshot`);
+          return snap.status === 200 ? JSON.stringify(snap.data) : '';
+        },
+        { timeout: 30_000 },
+      )
+      .toContain('列頁新增的段落');
 
     await page.reload({ waitUntil: 'domcontentloaded' });
-    await page.waitForTimeout(4000);
+    await page.locator(`${HOST} [data-block-id]`).first().waitFor({ state: 'visible', timeout: 45_000 });
     await expect(page.locator(HOST).first()).toContainText('列頁新增的段落');
   });
 });
