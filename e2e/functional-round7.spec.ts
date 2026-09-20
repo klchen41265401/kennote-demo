@@ -459,11 +459,12 @@ test('版本預覽期間編輯器唯讀，而且一筆 transaction 都不會送�
   }
   const entry = page.getByText('版本歷史', { exact: true }).first();
   await entry.click();
-  const panel = page.locator('aside[aria-label="版本歷史"]');
+  // 協作面板改版後：版本紀錄檢視在側邊面板內（region aria-label="版本紀錄"）
+  const panel = page.locator('[aria-label="版本紀錄"], aside[aria-label="版本歷史"]').first();
   await expect(panel).toBeVisible({ timeout: 10_000 });
 
   await panel.locator('ul li button').first().click();
-  await expect(panel.getByRole('status')).toContainText('編輯已停用', { timeout: 10_000 });
+  await expect(page.getByRole('status').filter({ hasText: /正在預覽|編輯已停用/ }).first()).toBeVisible({ timeout: 10_000 });
 
   // 從這裡開始數 transaction
   const posted: string[] = [];

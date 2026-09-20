@@ -187,7 +187,8 @@ test('版本歷史：改一次內容就有版本，面板列得出來', async ({
   await page.locator('[aria-label="動作"]').first().click();
   await page.getByRole('menuitem', { name: /版本歷史/ }).click();
   await page.waitForTimeout(2000);
-  await expect(page.locator('[aria-label="側邊面板"]')).toContainText('版本歷史');
+  // 協作面板改版後：版本紀錄是側邊面板內的獨立檢視（Notion 原文「版本紀錄」）
+  await expect(page.locator('[aria-label="側邊面板"]')).toContainText(/版本紀錄|版本歷史/);
   await expect(page.locator('[aria-label="側邊面板"]')).toContainText('次變更');
 });
 
