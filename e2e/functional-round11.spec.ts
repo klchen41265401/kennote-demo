@@ -527,27 +527,34 @@ test('R11-11 手機：列 peek 的「開啟」鈕看得見（BUG-53）', async (
      * 這是整個手機版走查最容易漏掉的一類缺陷：桌機上每一次都看得到，
      * 而手機上它連「難用」都算不上。
      */
-    const opener = b.p2.getByRole('button', { name: /開啟|展開/ }).first();
+    /*
+     * ⚠️ 第十二輪修正：這一條原本寫 `name: /開啟|展開/` + `.first()` ——
+     * 而**側邊欄的收合鈕 `aria-label="開啟側邊欄"` 排在 DOM 第 0 個**，
+     * 手機上它一定看得見，於是這條斷言從頭到尾量的都是那顆按鈕。
+     * 它是綠的，但它綠得**與 BUG-53 無關**。
+     * 名字用 exact 才指得到表格列上那一顆（它的可及名稱就是「開啟」）。
+     */
+    const opener = b.p2.getByRole('button', { name: '開啟', exact: true }).first();
     await expect(opener, '手機上列 peek 的開啟鈕必須看得見（BUG-53）').toBeVisible();
   } finally {
     await b.close();
   }
 });
 
-test.fixme('R11-13 手機：點開啟鈕之後列 peek 要滿版（**未收斂**）', async ({ browser }) => {
+test('R11-13 手機：點開啟鈕之後列 peek 要滿版（第十二輪解開）', async ({ browser }) => {
   /*
-   * ⚠️ 這一條**沒有跑綠，而且原因還沒查清楚**，所以照第七輪起的紅線標成 fixme
-   * 並寫明現況，而不是調寬容值讓它變綠。
+   * ✅ 第十二輪解開（O-31）。
    *
-   * 實測（390×844）：BUG-53 修完之後「開啟」鈕確實看得見、點得到，
-   * 但點完之後 DOM 上**一個 `[role="dialog"]` 都沒有** ——
-   * `DatabaseView` 的 `setPeekRowId()` 看起來沒有讓 `RowPeek` 掛上來。
-   * 桌機同一條路是通的（第十輪 R10-8 之前的輪次都走過），
-   * 所以這是一個**只在手機尺寸出現**的問題，與這一輪加的 `.dialogSide`
-   * 斷點是兩件事（斷點本身在桌機 DevTools 的行動模擬下量得到）。
+   * 第十一輪的結論「`RowPeek` 在手機上沒有掛上來」是**錯的**，
+   * 而且錯在量測而不是產品：`name: /開啟|展開/` 的 `.first()`
+   * 抓到的是側邊欄的 `aria-label="開啟側邊欄"`（DOM 第 0 個按鈕）。
+   * 點下去只是把側邊欄拉開，當然不會有 `[role="dialog"]`。
    *
-   * 下一輪接手時**先查「有沒有掛上來」，不要先調 CSS** ——
-   * 版面對不對是第二個問題，元件根本沒渲染是第一個。
+   * 換成 `name: '開啟', exact: true` 之後實測 390×844：
+   * `.dialogSide` 量到 390×844，與視窗同寬 —— 第十一輪加的斷點一直都是對的。
+   *
+   * ⭐ 「元件沒渲染」與「我沒點到那顆按鈕」在 DOM 上長得一模一樣。
+   *   下一次要先確認**點到的是哪一個元素**，再去懷疑元件。
    */
   test.setTimeout(300_000);
   const b = await secondAccount(browser, { viewport: PHONE, isMobile: true, hasTouch: true });
@@ -558,7 +565,7 @@ test.fixme('R11-13 手機：點開啟鈕之後列 peek 要滿版（**未收斂**
     });
     await b.p2.goto(`/page/${db.pageId}`, { waitUntil: 'domcontentloaded' });
     await b.p2.waitForTimeout(5000);
-    await b.p2.getByRole('button', { name: /開啟|展開/ }).first().click();
+    await b.p2.getByRole('button', { name: '開啟', exact: true }).first().click();
     await b.p2.waitForTimeout(3000);
 
     const width = await b.p2.evaluate(() => {

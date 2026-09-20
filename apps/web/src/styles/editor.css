@@ -2069,3 +2069,52 @@ body.kn-dragging { cursor: grabbing; user-select: none; }
   }
   .kn-popover--bubble::-webkit-scrollbar { display: none; }
 }
+
+/* ────────────────────────────────────────────────────────────
+   第十二輪：hover-only 的入口在觸控裝置上等於不存在
+   （第十一輪 BUG-53 的一般化 —— 那一輪只修了資料庫表格的「開啟」鈕）
+
+   下面每一條的基底規則都是 `opacity: 0` / `display: none`，
+   只有 `:hover` 會把它顯形。觸控裝置**沒有 hover**，所以這些
+   入口在手機／平板上不是「難按」，是**從來沒有出現過**：
+
+     · 頁面標題上方的「新增圖示 / 新增封面 / 新增留言」
+     · 封面的「變更封面 / 重新定位 / 移除」
+     · 圖片 / 影片的工具列與調整大小把手、「新增說明文字」
+     · 表格 block 的「加一列 / 加一欄」
+     · button block 的設定、synced block 的來源列
+
+   ⭐ 斷點用 `(hover: none)` 而不是 `(max-width: 767px)`：
+   會撞到這件事的是「沒有滑鼠」，不是「螢幕很窄」——
+   iPad 橫置 1180px、觸控筆電 1440px 都有這個問題，
+   而 767px 的桌機視窗縮小其實**有**滑鼠、不需要常駐顯示。
+   `shell.css` §4 的頂欄動作列從一開始就是這樣寫的，這裡沿用同一個判準。
+   ──────────────────────────────────────────────────────────── */
+@media (hover: none) {
+  .kn-page-header-tools,
+  .kn-cover-actions,
+  .kn-media-toolbar,
+  .kn-resize-handle,
+  .kn-table-actions,
+  .kn-button-settings,
+  .kn-code-toolbar {
+    opacity: 1;
+  }
+
+  /* 說明文字的入口是「高度 0 + opacity 0」，兩個都要還原 */
+  .kn-caption-add {
+    height: auto;
+    padding: 2px 0;
+    margin-top: 6px;
+    opacity: 1;
+  }
+
+  /* synced block 的來源列同樣是高度 0 */
+  .kn-synced-chrome {
+    height: auto;
+    padding: 2px 0;
+    overflow: visible;
+    opacity: 1;
+  }
+  .kn-synced-tools { opacity: 1; }
+}

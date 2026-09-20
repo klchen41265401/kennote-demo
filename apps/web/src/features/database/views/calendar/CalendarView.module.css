@@ -192,3 +192,11 @@
   justify-content: space-between;
   gap: var(--kn-space-2);
 }
+
+/* 第十二輪：`.dayAdd`（格子裡的 `+`）是 `display: none` + `.day:hover`，
+   觸控上等於**沒有辦法在某一天新增一筆** —— 同 BUG-53 的形狀。 */
+@media (hover: none) {
+  .day .dayAdd {
+    display: inline-flex;
+  }
+}

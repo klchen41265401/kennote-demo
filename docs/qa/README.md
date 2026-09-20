@@ -7,8 +7,14 @@
 >   `NOTES-round2~8.md` 是逐輪根因筆記。**不共用 BUG 編號**，遺留項目走 `KNOWN_GAPS`。
 >
 > 每一輪都有對應的回歸測試 `e2e/functional-roundN.spec.ts`
-> ——「每一條對應報告裡的一個已修 bug」。目前 18 支 spec、約 101 條 e2e，
-> **`test.fixme` 已經全部解開**（等部署的那些都部署完了）。
+> ——「每一條對應報告裡的一個已修 bug」。目前 19 支 spec、約 112 條 e2e，
+> **`test.fixme` 已經全部解開**（最後一條 R11-13 在第十二輪解開並跑綠）。
+>
+> ⚠️ 第十二輪的教訓：**綠燈不等於量對了東西。**
+> R11-11 / R10-8 都是綠的，而兩條量的都是側邊欄的收合鈕而不是資料庫列的「開啟」鈕
+> （`name: /開啟/` 的模糊比對吃掉了 `aria-label="開啟側邊欄"`）。
+> 凡是 `getByRole(..., { name: /短詞/ })` + `.first()`，都要先問
+> 「這個頁面上還有誰的名字以它開頭」。
 
 | 報告 | 主題 | 結論一句話 |
 |---|---|---|
@@ -23,6 +29,7 @@
 | [functional-round9.md](functional-round9.md) | 附件權限 / WS 撤權踢人 / 列頁種子段落 | 補完「一份資料的出口清單」最後兩格；`permission_changed` 通知終於有發送端 |
 | [functional-round10.md](functional-round10.md) | 搜尋 guest 正例 / 協作即時性 / 觸控 | 連三輪的「未驗證」其實從頭就可驗；抓到 `pointercancel` 被當成 `pointerup`（手機上捲動 = 搬頁） |
 | [functional-round11.md](functional-round11.md) | 殘餘佔位入口 / 跨頁搬移 / 觸控拖曳 / 手機版資料庫 | `_fallback/dnd.ts` 刪掉了；抓到「hover-only 的入口在觸控上等於不存在」（BUG-53） |
+| [functional-round12.md](functional-round12.md) | O-31 / O-32 反轉 / hover-only 全站掃描 / `/settings` | **第十一輪交出的兩個「產品缺陷」都不是缺陷**——一個死在測試 locator、一個死在 grep 字串；另外抓到兩盞假綠燈 |
 | [database-gaps.md](database-gaps.md) | 資料庫功能缺口補完（relation 反向欄位、RowPeek、垃圾桶、CSV、欄寬、列選取） | 7 項全部做完；§4 另列 6 項未做 |
 | [regression-triage-1.md](regression-triage-1.md) | 第一次全量 e2e（78 條）之後的紅燈分診 | 4 條紅燈 = 2 條產品缺陷（前端時序競態，只在 0 block 的列頁看得見）+ 3 條測試過時 |
 
@@ -55,6 +62,15 @@
 下面是跨所有輪次**明確標為未修 / 延後 / 已知限制**的清單。
 各 feature README 的「已知限制」段落指向這裡。
 
+> ✅ **第十 / 十一輪已經 commit**（`ac3b70a`），線上站也是這個版本。
+> 第十二輪的修正（`routes/SettingsRoute.tsx`、四支 CSS 的 `(hover: none)`、
+> 三支 e2e 的 locator）**尚未 commit**，動手前先 `git status` 看一眼。
+> 第十二輪**沒有後端改動，不需要部署**。
+>
+> 第十二輪結案的是 **O-12**、**O-31**、**O-32**，並新增 **O-33**。
+>
+> <details><summary>（歷史）第十輪寫下的 commit 提醒</summary>
+>
 > 🚧 **第十 / 十一輪的修正都還沒 commit。**
 > `docs/qa/functional-round10.md` 與 `functional-round11.md` 都已經寫完，
 > 對應的 `e2e/functional-round10.spec.ts` / `functional-round11.spec.ts` 也都在，
@@ -66,6 +82,7 @@
 >
 > 第十一輪結案的是 **O-11**（`_fallback/dnd.ts` 已刪除）與 **O-13**（表格橫捲已走查），
 > 並新增 **O-31 / O-32**（見 D 段）。
+> </details>
 
 ### A. 有編號但從未結案
 
@@ -103,12 +120,13 @@
 | # | 一句話 | 元件 |
 |---|---|---|
 | ~~O-11~~ | ~~看板卡片、日曆、`PropertyList`、`SortBuilder` 仍是 HTML5 DnD → 觸控全死~~ **第十一輪結案**：`_fallback/dnd.ts` 已刪除 | database / ui |
-| O-12 | **`/settings` 這個 URL 根本不存在**（`App.tsx` 沒宣告，會掉到 NotFound）；設定是 store 裡的 overlay，不支援深連結 | shell |
+| ~~O-12~~ | ~~**`/settings` 這個 URL 根本不存在**~~ **第十二輪結案**：`routes/SettingsRoute.tsx` 讓 `/settings` 與 `/settings/:tab` 驅動既有的 overlay（R12-8～11） | shell |
 | ~~O-13~~ | ~~**資料庫表格橫捲**（手機版）連續五～六輪沒走查~~ **第十一輪走查完畢**（R11-12：首欄 sticky 有效） | database |
 | O-14 | 編輯器 5 項未走：媒體 URL 實際填入、圖片檔案拖放上傳、程式碼語言切換、block selection 的複製貼上、Word/GDocs 剪貼簿 HTML | editor |
 | O-15 | 觸控的**拖曳排序**只做到「長按開選單」與表格列（最小版），一般 block 的拖曳搬移仍無替代路徑 | editor / ui |
-| O-31 | **手機上點「開啟」鈕不會開列 peek**（`RowPeek` 沒掛上來，原因未明；桌機正常）。`e2e/functional-round11.spec.ts` R11-13 是 `fixme` | database |
-| O-32 | **`properties` 面板（「此視圖顯示的屬性」）沒有任何觸發點** —— `DatabaseHeader.tsx` 有完整的 `<Popover>`，但全檔案沒有 `open('properties', …)` | database |
+| ~~O-31~~ | ~~手機上點「開啟」鈕不會開列 peek~~ **第十二輪：誤判，產品沒壞**。R11-13 的 `name` 用模糊比對 + `.first()` 指到側邊欄的 `aria-label="開啟側邊欄"`；改 `exact` 之後 peek 量到 390×844 滿版（R12-1） | database |
+| ~~O-32~~ | ~~`properties` 面板沒有任何觸發點~~ **第十二輪：誤判，入口一直都在**。⋯ →「屬性能見度」／「編輯屬性」走 `ViewSettingsPanel` 的 `onOpen('properties')` → `setPanel({ kind, … })`，grep `open('properties'` 當然找不到（R12-2～4） | database |
+| O-33 | `DatabaseHeader` 的 ⋯ 按鈕 `aria-label="設定"` 與側邊欄底部的「設定」**同名**，一頁兩顆同名不同功能的按鈕（螢幕閱讀器與 `getByRole` 都分不出來）。改名會動到 `functional-round2.spec.ts` / `compare.spec.ts` 的既有選擇器 | database / a11y |
 
 ### E. `database-gaps.md` §4 的 6 項
 

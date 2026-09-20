@@ -493,3 +493,28 @@
     overscroll-behavior-x: contain;
   }
 }
+
+/* ────────────────────────────────────────────────────────────
+   第十二輪：把 BUG-53 的修正從「≤767px」改寫成「沒有滑鼠」
+
+   上面那個 `(max-width: 767px)` 的區塊修對了手機，但漏掉了
+   **有觸控、螢幕卻不窄**的裝置（iPad 橫置 1180、觸控筆電 1440）：
+   那些裝置一樣沒有 hover，一樣看不到「開啟」鈕與列勾選框。
+   判準應該是輸入方式，不是視窗寬度。
+
+   `.rowCheckbox` 要連同 `.titleCell` 的 20px 讓位一起改 ——
+   只放出勾選框的話它會壓在名稱文字上（第 382 行那條 padding
+   本來就是為了這件事寫的，兩條必須成對出現）。
+   ──────────────────────────────────────────────────────────── */
+@media (hover: none) {
+  .openButton {
+    display: inline-flex;
+    opacity: 0.75;
+  }
+  .rowCheckbox {
+    display: block;
+  }
+  .titleCell > :first-child {
+    padding-left: 20px;
+  }
+}

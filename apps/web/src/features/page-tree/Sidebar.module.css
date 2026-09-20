@@ -446,3 +446,28 @@
 .dropForbidden {
   cursor: not-allowed;
 }
+
+/* ────────────────────────────────────────────────────────────
+   第十二輪：側邊欄的 hover-only 入口（BUG-53 的一般化）
+
+   `.collapseButton` 上面已經有一份 `(hover: none)`（第 85 行），
+   但同一份檔案裡還有四個同樣形狀的：工作區切換的箭頭、分段的
+   「新增 / ⋯」、展開子頁的三角、以及每一列右側的 `+` / `⋯`。
+   觸控裝置上這四個**都不存在** —— 側邊欄在手機上等於唯讀。
+
+   `:focus-within` 救得了鍵盤，救不了手指：要先能聚焦才會顯形，
+   而顯形之前那顆按鈕的命中區是 0（`opacity: 0` 仍然佔位，但使用者
+   看不見就不會去點）。所以觸控上一律常駐。
+   ──────────────────────────────────────────────────────────── */
+@media (hover: none) {
+  .workspaceChevron,
+  .sectionActions,
+  .twisty,
+  .rowActions {
+    opacity: 1;
+  }
+  /* 三角在 hover 時本來會補一層底色蓋住頁面圖示，常駐時也要補 */
+  .twisty {
+    background: var(--kn-color-sidebar-bg);
+  }
+}

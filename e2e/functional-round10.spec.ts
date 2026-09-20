@@ -642,7 +642,9 @@ test('R10-8 手機寬度下列 peek 不得比視窗寬（應該是全螢幕）',
     await b.p2.waitForTimeout(4000);
 
     // 開啟列 peek（表格列上的「開啟」按鈕）
-    const opener = b.p2.getByRole('button', { name: /開啟|展開/ }).first();
+    // 第十二輪：原本的 /開啟|展開/ 會先抓到側邊欄的「開啟側邊欄」（DOM 第 0 個），
+    // 於是 isVisible() 永遠為真、skip 永遠不觸發，這條量的是錯的元素。
+    const opener = b.p2.getByRole('button', { name: '開啟', exact: true }).first();
     const opened = await opener.isVisible().catch(() => false);
     /*
      * ⚠️ 第一輪分診 §9 的教訓：**沒有被執行到的斷言不算綠。**

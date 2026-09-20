@@ -11,6 +11,7 @@ import { PageRoute } from './routes/PageRoute';
 import { ProtectedRoute } from './routes/ProtectedRoute';
 import { PublicPageRoute } from './routes/PublicPageRoute';
 import { RegisterRoute } from './routes/RegisterRoute';
+import { SettingsRoute } from './routes/SettingsRoute';
 
 // 讓頁面裡的 collectionView block 真的畫出資料庫（見 features/database/register.tsx）
 registerDatabaseModule();
@@ -31,6 +32,9 @@ export function App(): JSX.Element {
               <Route path="inbox" element={<InboxRoute />} />
               <Route path="page/:pageId" element={<PageRoute />} />
               <Route path="database/:pageId" element={<DatabaseRoute />} />
+              {/* 第十二輪 O-12：設定本來只是 store 裡的 overlay，`/settings` 會掉到 404 */}
+              <Route path="settings" element={<SettingsRoute />} />
+              <Route path="settings/:tab" element={<SettingsRoute />} />
               <Route path="*" element={<NotFoundRoute />} />
             </Route>
           </Route>
