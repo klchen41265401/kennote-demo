@@ -991,6 +991,45 @@
 .kn-page-link-title { text-decoration: underline; text-underline-offset: 2px; font-weight: var(--kn-font-weight-medium); }
 .kn-page-link--empty { color: var(--kn-color-text-tertiary); }
 
+/* B-4：頁面連結 hover 時右邊浮出「以側邊預覽打開」（右鍵選單也有一份） */
+.kn-page-link-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.kn-page-link-peek {
+  position: absolute;
+  right: 4px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: var(--kn-radius-sm);
+  background: var(--kn-color-bg);
+  color: var(--kn-color-text-tertiary);
+  cursor: pointer;
+}
+
+.kn-page-link-wrap:hover .kn-page-link-peek,
+.kn-page-link-peek:focus-visible {
+  display: inline-flex;
+}
+
+.kn-page-link-peek:hover { background: var(--kn-color-surface-hover); }
+
+/* 觸控裝置沒有 hover：一律顯示，命中區放大 */
+@media (hover: none) {
+  .kn-page-link-peek {
+    display: inline-flex;
+    width: 32px;
+    height: 32px;
+  }
+}
+
 /* ── 多欄版面 ───────────────────────────────────────────── */
 
 /**

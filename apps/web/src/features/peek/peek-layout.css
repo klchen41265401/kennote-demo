@@ -1,0 +1,37 @@
+/**
+ * side peek 的「推擠」版面（全域，不是 CSS module）。
+ *
+ * Notion 的 side peek **不是覆蓋**：量到的是 `.notion-frame` 由 1170 縮到 450，
+ * 主頁被推窄但仍然看得見、捲得動、點得到（`_SUMMARY.json` → `B_sidePeek.pushVsOverlay`）。
+ *
+ * 這裡靠的是 `<AppShell>` 根元素上那個穩定的全域 class `.kn-shell`
+ * （它是 `display:flex; width:100%`，補 padding-right 就等於把內容推窄）。
+ * `PeekHost` 在 `<html>` 上寫 `data-kn-peek="side"` 與 `--kn-peek-width`。
+ *
+ * ⚠️ 故意不碰 `features/shell/Shell.module.css` —— 那支檔案這一輪由別的代理在改。
+ */
+.kn-shell {
+  transition: padding-right var(--kn-motion-normal, 180ms) var(--kn-motion-ease, ease);
+}
+
+/* 拖曳把手時不要有 transition，否則面板與內容會不同步 */
+html.kn-dragging .kn-shell {
+  transition: none;
+}
+
+html[data-kn-peek='side'] .kn-shell {
+  padding-right: var(--kn-peek-width, 50vw);
+}
+
+/* 手機：peek 滿版，沒有推擠可言 */
+@media (max-width: 767px) {
+  html[data-kn-peek='side'] .kn-shell {
+    padding-right: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kn-shell {
+    transition: none;
+  }
+}

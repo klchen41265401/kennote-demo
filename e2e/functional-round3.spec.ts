@@ -170,7 +170,11 @@ test.describe('功能 QA 第三輪回歸', () => {
     expect(after!['start']).not.toBe('2026-09-05');
 
     // …而且沒有被 peek 蓋住
+    // ⚠️ gap-review §C-1：peek 已經不是 `[role="dialog"]` 的 modal 了 ——
+    // 只斷言 dialog 數量的話，peek 就算開了這一條也會靜靜地變綠。
     await expect(page.locator('[role="dialog"]')).toHaveCount(0);
+    await expect(page.locator('aside[aria-label="側邊預覽"]')).toHaveCount(0);
+    expect(page.url(), 'peek 是 URL 狀態：不該被拖曳順手開起來').not.toMatch(/[?&]p=/);
   });
 
   /**

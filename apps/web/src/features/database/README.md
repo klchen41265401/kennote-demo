@@ -10,7 +10,7 @@ features/database/
 ├─ InlineDatabase.tsx     ← 內嵌用的薄外框
 ├─ DatabaseHeader.tsx     ← 視圖 tabs + 工具列
 ├─ FilterBuilder / SortBuilder / GroupSettings / PropertyList / FieldConfigPopover
-├─ RowPeek.tsx            ← Row = Page 的側邊預覽（含編輯器掛載點）
+│                           （RowPeek.tsx 已移除 → features/peek/，見 §4）
 ├─ EditableCell.tsx       ← 顯示／編輯雙態的儲存格（Table / Board / RowPeek 共用）
 ├─ useDatabaseController.ts ← 狀態機：分頁累積、樂觀更新、debounce 存檔
 ├─ api.ts                 ← 所有 API 呼叫集中在這裡
@@ -157,24 +157,51 @@ const snapshot = await createDatabase({
 
 ---
 
-## 4. RowPeek 的編輯器 ⭐
+## 4. side peek（原 RowPeek）⭐
 
-「列 = 頁面」是這個模型最大的槓桿點（03 §4.6）。點一列會開 side peek，
-標題與屬性表（`<dl>`）由 database 模組自己管，底下**直接掛整頁用的那一支編輯器**：
+> **gap-review 之後 `RowPeek.tsx` 已經不存在。** side peek 搬到
+> **`features/peek/`**，全 App 只有一份（`<PeekHost/>` 掛在 `App.tsx`）。
+> 舊的走 `_fallback/Dialog` —— 那是 modal（focus trap + `inert` + 捲動鎖 +
+> `backdrop-filter: blur`），正是 gap-review §C-1 說的「不像 peek」的根因。
+
+「列 = 頁面」是這個模型最大的槓桿點（03 §4.6）。現在的鏈路是：
+
+```
+點一列 → context.openRow(rowId)
+       → view.format.openPageIn（'side' | 'center' | 'full'，預設 side）
+       → side/center：setSearchParams({ p: rowId, pm: 's'|'c' })   ← URL 狀態
+         full：       navigate(`/page/${rowId}`)
+       → <PeekHost> 讀 `?p=&pm=` 畫出 <SidePeek>
+```
+
+`DatabaseView` 只負責**把列資料註冊給 peek**（`features/peek/peek-store`）：
+
+```ts
+registerPeekRowSource({ token, context, rowIds, getRow, setCellValue, deleteRow, duplicateRow });
+```
+
+註冊到了，`PeekHost` 就多畫一張屬性表與「上一頁 / 下一頁」；沒註冊到
+（例如側邊欄或內文的一般頁面連結）就退化成純頁面預覽。
+
+內容一律是 `features/editor` 的 `<PageHeader>` + `<Editor pageId>`：
 
 ```tsx
-<div id="editor-host-row" data-page-id={row.id}>
-  <Editor key={row.id} pageId={row.id} workspaceId={workspaceId}
-          snapshot={usePageSnapshot(open ? row.id : null).data} … />
+<PageHeader page={page} workspaceId={workspaceId} />
+<dl>{/* 屬性表：列頁才有 */}</dl>
+<div id="editor-host-row" data-page-id={pageId}>
+  <Editor pageId={pageId} workspaceId={workspaceId} snapshot={…} />
 </div>
 ```
 
 - 初次資料 `GET /api/pages/:id/snapshot`、變更走同一條同步層 ——
   peek 與 `/page/:id` 改的是**同一份資料**。
-- `key={row.id}` 保證換一列就重建編輯器；peek 關閉時整棵子樹卸載，
-  `useEditorHost` 的 cleanup 會銷毀 editor-core。
-- 「以整頁開啟」導向 `/page/:rowId`（那裡是既有的 `#editor-host`）。
+- `key={pageId}` 在 `<PeekBody>` 上：換一列就整棵重建，`useEditorHost` 的
+  cleanup 會銷毀 editor-core。
 - `id="editor-host-row"` 仍然保留，外部還是可以靠它找到 peek 的內容區。
+- ⚠️ peek **不是 `[role="dialog"]`**，而是 `<aside aria-label="側邊預覽">`
+  （置中模式是 `aria-label="置中預覽"`）。寫 e2e 時不要再用 dialog 選它。
+- 表格列 hover 的按鈕文字是 Notion 原文「打開」，可及名稱隨
+  `openPageIn` 變成「以側邊預覽打開 / 以置中預覽打開 / 以完整頁面打開」。
 
 ## 5. 與後端的契約
 

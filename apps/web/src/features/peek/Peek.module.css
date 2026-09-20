@@ -1,0 +1,232 @@
+/**
+ * side peek 的樣式（gap-review §C-1 / §C-6）。
+ *
+ * 尺寸量自 Notion 桌面版 7.34 @1440×900
+ * （`reference/shots/gap-review/notion/_SUMMARY.json`）：
+ *   側邊預覽  x=720 w=720 h=900  → 寬 = 50% 視窗，從 y=0 起（蓋過頂欄的高度）
+ *             左緣 12px 的 col-resize 把手，**推擠**主框架（1170 → 450）
+ *             內容欄左內距 76
+ *   置中預覽  面板 x=233 y=72 w=975 h=756（67.7%），全螢幕遮罩、覆蓋式
+ *
+ * ⚠️ 這**不是** modal：沒有 focus trap、沒有 `inert`、沒有捲動鎖、遮罩不模糊。
+ */
+
+/* ── 側邊預覽（Resizable 的外框） ─────────────────────── */
+.side {
+  position: fixed;
+  top: 0;
+  right: 0;
+  height: 100%;
+  height: 100dvh;
+  /* 只要壓過 shell 的內容即可；比 dropdown(200) / popover(300) / dialog(500) 低，
+     peek 裡開的浮層才蓋得住它 */
+  z-index: var(--kn-z-sticky);
+  display: flex;
+  background: var(--kn-color-bg);
+  border-left: 1px solid var(--kn-color-divider);
+  box-shadow: var(--kn-shadow-lg);
+  /* §C-6：Notion 是「整個面板從右緣滑進來」，位移 = 面板寬，不是 24px */
+  animation: peekSlideIn var(--kn-motion-normal) var(--kn-motion-ease);
+}
+
+@keyframes peekSlideIn {
+  from {
+    transform: translateX(100%);
+  }
+}
+
+/* 拖曳中不要有動畫殘影 */
+:global(html.kn-dragging) .side {
+  animation: none;
+}
+
+/* ── 置中預覽 ─────────────────────────────────────────── */
+.centerBackdrop {
+  position: fixed;
+  inset: 0;
+  /* 比 popover 低一階：peek 裡的選單才蓋得住 */
+  z-index: calc(var(--kn-z-popover) - 10);
+  display: flex;
+  /* §C-1：主頁仍然可讀 —— 只壓一層很淡的遮罩，**不要** backdrop-filter */
+  background: var(--kn-color-overlay);
+}
+
+.center {
+  width: min(975px, calc(100vw - 48px));
+  height: min(756px, calc(100vh - 144px));
+  height: min(756px, calc(100dvh - 144px));
+  margin: auto;
+  display: flex;
+  overflow: hidden;
+  border-radius: var(--kn-radius-lg);
+  background: var(--kn-color-bg);
+  box-shadow: var(--kn-shadow-lg);
+  animation: peekZoomIn var(--kn-motion-fast, 120ms) var(--kn-motion-ease);
+}
+
+@keyframes peekZoomIn {
+  from {
+    transform: scale(0.98);
+    opacity: 0;
+  }
+}
+
+/* ── 面板本體 ─────────────────────────────────────────── */
+.panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: 0 0 auto;
+  height: 44px;
+  padding: 0 var(--kn-space-3);
+  border-bottom: 1px solid var(--kn-color-divider);
+}
+
+.spacer {
+  flex: 1 1 auto;
+}
+
+.iconButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: var(--kn-radius-sm);
+  background: transparent;
+  color: var(--kn-color-text-secondary);
+  cursor: pointer;
+}
+
+.iconButton:hover:not(:disabled) {
+  background: var(--kn-color-surface-hover);
+}
+
+.iconButton:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+/* 觸控裝置放大命中區（≥44px），視覺尺寸不變 */
+@media (hover: none) {
+  .iconButton {
+    width: 36px;
+    height: 36px;
+  }
+}
+
+.body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  /* 量到的內容欄左內距 76（1440 下 peek 寬 720、內容欄 x=796 w=568） */
+  padding: var(--kn-space-4) 76px var(--kn-space-8);
+}
+
+.placeholder {
+  margin: 0;
+  color: var(--kn-color-text-tertiary);
+  font-size: var(--kn-font-size-sm);
+}
+
+/* ── 列頁的屬性表（§C-5：名稱欄寬隨最長的名字伸縮，有上限） ── */
+.properties {
+  display: grid;
+  grid-template-columns: minmax(0, max-content) minmax(0, 1fr);
+  align-items: start;
+  gap: 2px var(--kn-space-3);
+  margin: 0 0 var(--kn-space-5);
+}
+
+.propertyName {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 240px;
+  min-height: 32px;
+  padding: 0 var(--kn-space-2);
+  overflow: hidden;
+  border: 0;
+  border-radius: var(--kn-radius-sm);
+  background: transparent;
+  color: var(--kn-color-text-secondary);
+  font: inherit;
+  font-size: var(--kn-font-size-sm);
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.propertyValue {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  min-height: 32px;
+  margin: 0;
+  border-radius: var(--kn-radius-sm);
+}
+
+.propertyValue:hover {
+  background: var(--kn-color-surface-hover);
+}
+
+.editorHost {
+  min-height: 160px;
+  padding-top: var(--kn-space-4);
+  border-top: 1px solid var(--kn-color-divider);
+}
+
+/* ── 模式選單 ─────────────────────────────────────────── */
+.modeItem {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.modeDesc {
+  color: var(--kn-color-text-tertiary);
+  font-size: var(--kn-font-size-xs);
+  line-height: 1.4;
+}
+
+/* ── 手機（≤767）：peek 直接滿版 ──────────────────────── */
+@media (max-width: 767px) {
+  .side {
+    /* Resizable 會寫 inline width，這裡一定要壓過去 */
+    width: 100% !important;
+    left: 0;
+    border-left: 0;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    z-index: var(--kn-z-dialog);
+  }
+
+  .side > [role='separator'] {
+    display: none;
+  }
+
+  .centerBackdrop {
+    z-index: var(--kn-z-dialog);
+  }
+
+  .center {
+    width: 100%;
+    height: 100%;
+    height: 100dvh;
+    margin: 0;
+    border-radius: 0;
+  }
+
+  .body {
+    padding: var(--kn-space-3) var(--kn-space-4) var(--kn-space-8);
+  }
+}

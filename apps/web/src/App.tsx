@@ -8,6 +8,7 @@ import { InboxRoute } from './routes/InboxRoute';
 import { LoginRoute } from './routes/LoginRoute';
 import { NotFoundRoute } from './routes/NotFoundRoute';
 import { PageRoute } from './routes/PageRoute';
+import { PeekHost } from './features/peek';
 import { ProtectedRoute } from './routes/ProtectedRoute';
 import { PublicPageRoute } from './routes/PublicPageRoute';
 import { RegisterRoute } from './routes/RegisterRoute';
@@ -40,6 +41,9 @@ export function App(): JSX.Element {
           </Route>
         </Routes>
       </RoutedBoundary>
+      {/* side peek（`?p=&pm=`）。全 App 只有這一份，掛在 Router 底下、Routes 外面，
+          所以換 route 也不會被卸載（gap-review §B-1）。 */}
+      <PeekHost />
     </BrowserRouter>
   );
 }

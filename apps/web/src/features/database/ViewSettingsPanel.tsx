@@ -26,6 +26,11 @@
 import type { ReactNode } from 'react';
 import { useState } from 'react';
 import type { CollectionSchema, CollectionView, ViewType } from '@kennote/shared-types';
+import {
+  OPEN_PAGE_IN_META,
+  OPEN_PAGE_IN_VALUES,
+  type OpenPageIn,
+} from '@kennote/shared-types';
 import { UiIcon } from './_fallback';
 import { getViewType } from './views/types';
 import styles from './ViewSettingsPanel.module.css';
@@ -74,6 +79,14 @@ export function ViewSettingsPanel(props: ViewSettingsPanelProps) {
 
       <div className={styles.section}>
         <Row icon="table" label="版面配置" value={viewDef.label} onSelect={() => props.onOpen('layout')} />
+        {/* B-3：Notion 把「頁面打開方式」放在版面配置面板裡；這裡再給一條捷徑，
+            面板上看得到目前值（側邊預覽 / 置中預覽 / 完整頁面）。 */}
+        <Row
+          icon="expand"
+          label="頁面打開方式"
+          value={OPEN_PAGE_IN_META[view.format?.openPageIn ?? 'side'].label}
+          onSelect={() => props.onOpen('layout')}
+        />
         <Row icon="eye" label="屬性能見度" value={String(visibleCount)} onSelect={() => props.onOpen('properties')} />
         <Row icon="filter" label="篩選" onSelect={() => props.onOpen('filter')} />
         <Row icon="sort" label="排序" onSelect={() => props.onOpen('sort')} />
@@ -141,5 +154,59 @@ function Row({
       {value ? <span className={styles.rowValue}>{value}</span> : null}
       {trailing ?? (chevron ? <UiIcon name="chevronRight" size={12} /> : null)}
     </button>
+  );
+}
+
+/**
+ * 「頁面打開方式」（gap-review §B-3）。
+ *
+ * 原文與順序照抄 Notion 7.34 zh-TW 的視圖設定 → 版面配置面板
+ * （`reference/shots/gap-review/notion/notion-view-openas.png`）：
+ *
+ *   頁面打開方式
+ *   ● 側邊預覽   在側邊開啟頁面。保持互動後方的瀏覽模式。   [表格的預設值]
+ *   ○ 置中預覽   以焦點、置中互動視窗開啟頁面。
+ *   ○ 完整頁面   以完整頁面開啟頁面。
+ *
+ * 值存在 `view.format.openPageIn`（jsonb，不用 migration）。
+ */
+export function OpenPageInSetting({
+  view,
+  viewLabel,
+  onChange,
+}: {
+  view: CollectionView;
+  /** 「<型別>的預設值」徽章用的字（表格 / 看板 / …） */
+  viewLabel: string;
+  onChange: (openPageIn: OpenPageIn) => void;
+}): JSX.Element {
+  const current: OpenPageIn = view.format?.openPageIn ?? 'side';
+  return (
+    <div className={styles.section}>
+      <p className={styles.sectionLabel}>頁面打開方式</p>
+      <div className={styles.openPageIn} role="radiogroup" aria-label="頁面打開方式">
+        {OPEN_PAGE_IN_VALUES.map((value) => (
+          <button
+            key={value}
+            type="button"
+            role="radio"
+            aria-checked={value === current}
+            className={styles.openPageInOption}
+            onClick={() => onChange(value)}
+          >
+            <span className={styles.openPageInText}>
+              <span className={styles.openPageInLabel}>
+                {OPEN_PAGE_IN_META[value].label}
+                {value === 'side' ? (
+                  <span className={styles.openPageInBadge}>{viewLabel}的預設值</span>
+                ) : null}
+              </span>
+              <span className={styles.openPageInDesc}>{OPEN_PAGE_IN_META[value].description}</span>
+            </span>
+            {value === current ? <UiIcon name="check" size={14} /> : null}
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }

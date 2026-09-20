@@ -211,13 +211,15 @@ test('R12-1 手機：「開啟」鈕點下去要開出全螢幕的列 peek（O-3
      *
      * **可及名稱只要是別人的前綴，模糊比對就會指錯人。**
      */
-    const opener = b.p2.getByRole('button', { name: '開啟', exact: true }).first();
-    await expect(opener, '手機上必須看得見列的「開啟」鈕（BUG-53）').toBeVisible();
+    /* gap-review：可及名稱改成 Notion 原文「以側邊預覽打開」（按鈕上寫「打開」）。 */
+    const opener = b.p2.getByRole('button', { name: '以側邊預覽打開' }).first();
+    await expect(opener, '手機上必須看得見列的「打開」鈕（BUG-53）').toBeVisible();
     await opener.click();
     await b.p2.waitForTimeout(2500);
 
+    /* ⚠️ gap-review §C-1：peek 不再是 modal，改成 `<aside aria-label="側邊預覽">`。 */
     const peek = await b.p2.evaluate(() => {
-      const r = [...document.querySelectorAll<HTMLElement>('[role="dialog"]')]
+      const r = [...document.querySelectorAll<HTMLElement>('aside[aria-label="側邊預覽"]')]
         .map((e) => e.getBoundingClientRect())
         .filter((x) => x.width > 0)
         .sort((a, c) => c.width - a.width)[0];
@@ -226,11 +228,11 @@ test('R12-1 手機：「開啟」鈕點下去要開出全螢幕的列 peek（O-3
     expect(peek, '列 peek 要真的掛上來').not.toBeNull();
     expect(Math.abs(peek!.w - peek!.vw), '手機上的列 peek 要滿版').toBeLessThanOrEqual(2);
     /*
-     * peek 裡面是真的那一列（不是別的對話框剛好也叫 dialog）。
-     * ⚠️ 標題是 `<input value>` 不是文字節點 —— `getByText` 對 input 的 value
-     * 永遠找不到東西，得用 `toHaveValue`。
+     * peek 裡面是真的那一列。
+     * ⚠️ gap-review：標題不再是 `<input>` —— peek 改用 `features/editor` 的
+     * `<PageHeader>`（contenteditable 的 h1），所以改成看文字。
      */
-    await expect(b.p2.getByRole('dialog').locator('input').first()).toHaveValue('peek 全螢幕');
+    await expect(b.p2.locator('aside[aria-label="側邊預覽"]')).toContainText('peek 全螢幕');
   } finally {
     await b.close();
   }

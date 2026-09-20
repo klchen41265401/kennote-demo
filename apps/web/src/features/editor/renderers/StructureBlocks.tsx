@@ -13,7 +13,9 @@ import type { BlockRendererProps } from '../context';
 import { latexToMathML } from '../lib/mathml';
 import { getInlineDatabaseComponent } from '../blocks/externalRegistry';
 import { Icon } from '../ui/icons';
+import { Menu, MenuItem, MenuSeparator, useContextMenu } from '@kennote/ui';
 import { useWorkspaceTree } from '../../../lib/queries';
+import { usePeekNavigation } from '../../peek/peek-url';
 
 /* ── 子頁面 ────────────────────────────────────────────── */
 
@@ -22,6 +24,10 @@ export function PageLinkBlock({ block, host }: BlockRendererProps) {
   const tree = useWorkspaceTree(host.workspaceId);
   const node = props.pageId ? tree.data?.find((n) => n.id === props.pageId) : undefined;
   const fallbackTitle = toPlainText(block.content) || '未命名';
+  /* B-4：頁面連結要能「以側邊預覽打開」（右鍵 / hover 的小按鈕都給一份）。
+     Alt+Click 是 Notion 的捷徑，選單裡也寫著。 */
+  const ctx = useContextMenu();
+  const peekNav = usePeekNavigation();
 
   if (!props.pageId) {
     return (
@@ -36,16 +42,49 @@ export function PageLinkBlock({ block, host }: BlockRendererProps) {
     );
   }
 
+  const pageId = props.pageId;
+
   return (
-    <button
-      type="button"
-      className="kn-page-link"
-      onClick={() => host.navigateToPage(props.pageId as string)}
-      onPointerDown={(e) => e.stopPropagation()}
-    >
-      <span className="kn-page-link-icon">{node?.icon ?? '📄'}</span>
-      <span className="kn-page-link-title">{node?.title || fallbackTitle}</span>
-    </button>
+    <span className="kn-page-link-wrap">
+      <button
+        type="button"
+        className="kn-page-link"
+        onClick={(e) => {
+          // Alt+Click = 以側邊預覽打開（Notion 的捷徑）
+          if (e.altKey) {
+            e.preventDefault();
+            peekNav.open(pageId, 'side');
+            return;
+          }
+          host.navigateToPage(pageId);
+        }}
+        onContextMenu={ctx.onContextMenu}
+        onPointerDown={(e) => e.stopPropagation()}
+      >
+        <span className="kn-page-link-icon">{node?.icon ?? '📄'}</span>
+        <span className="kn-page-link-title">{node?.title || fallbackTitle}</span>
+      </button>
+      <button
+        type="button"
+        className="kn-page-link-peek"
+        aria-label="以側邊預覽打開"
+        title="以側邊預覽打開"
+        onPointerDown={(e) => e.stopPropagation()}
+        onClick={() => peekNav.open(pageId, 'side')}
+      >
+        <Icon name="expand" />
+      </button>
+      {ctx.anchor && (
+        <Menu anchor={ctx.anchor} open={ctx.open} onOpenChange={ctx.setOpen} placement="bottom-start">
+          <MenuItem shortcut="alt+click" onSelect={() => peekNav.open(pageId, 'side')}>
+            以側邊預覽打開
+          </MenuItem>
+          <MenuItem onSelect={() => peekNav.open(pageId, 'center')}>以置中預覽打開</MenuItem>
+          <MenuSeparator />
+          <MenuItem onSelect={() => host.navigateToPage(pageId)}>以完整頁面開啟</MenuItem>
+        </Menu>
+      )}
+    </span>
   );
 }
 

@@ -532,9 +532,10 @@ test('R11-11 手機：列 peek 的「開啟」鈕看得見（BUG-53）', async (
      * 而**側邊欄的收合鈕 `aria-label="開啟側邊欄"` 排在 DOM 第 0 個**，
      * 手機上它一定看得見，於是這條斷言從頭到尾量的都是那顆按鈕。
      * 它是綠的，但它綠得**與 BUG-53 無關**。
-     * 名字用 exact 才指得到表格列上那一顆（它的可及名稱就是「開啟」）。
+     * 名字用 exact 才指得到表格列上那一顆。
+     * gap-review：可及名稱改成 Notion 原文「以側邊預覽打開」（按鈕上寫「打開」）。
      */
-    const opener = b.p2.getByRole('button', { name: '開啟', exact: true }).first();
+    const opener = b.p2.getByRole('button', { name: '以側邊預覽打開' }).first();
     await expect(opener, '手機上列 peek 的開啟鈕必須看得見（BUG-53）').toBeVisible();
   } finally {
     await b.close();
@@ -565,11 +566,13 @@ test('R11-13 手機：點開啟鈕之後列 peek 要滿版（第十二輪解開�
     });
     await b.p2.goto(`/page/${db.pageId}`, { waitUntil: 'domcontentloaded' });
     await b.p2.waitForTimeout(5000);
-    await b.p2.getByRole('button', { name: '開啟', exact: true }).first().click();
+    await b.p2.getByRole('button', { name: '以側邊預覽打開' }).first().click();
     await b.p2.waitForTimeout(3000);
 
+    /* ⚠️ gap-review §C-1：peek 不再是 `[role="dialog"]` 的 modal，
+       而是非 modal 的 `<aside aria-label="側邊預覽">`。 */
     const width = await b.p2.evaluate(() => {
-      const r = [...document.querySelectorAll<HTMLElement>('[role="dialog"]')]
+      const r = [...document.querySelectorAll<HTMLElement>('aside[aria-label="側邊預覽"]')]
         .map((e) => e.getBoundingClientRect())
         .filter((x) => x.width > 0)
         .sort((a, c) => c.width - a.width)[0];

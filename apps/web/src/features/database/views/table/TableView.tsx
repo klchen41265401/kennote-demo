@@ -13,7 +13,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { AggregationFunction, DatabaseRow, FieldType } from '@kennote/shared-types';
-import { AGGREGATION_LABELS, richTextToPlainText } from '@kennote/shared-types';
+import { AGGREGATION_LABELS, OPEN_PAGE_IN_META, richTextToPlainText } from '@kennote/shared-types';
 import { FieldIcon, Menu, MenuItem, MenuLabel, MenuSeparator, Popover, UiIcon, VirtualList } from '../../_fallback';
 import { EditableCell } from '../../EditableCell';
 import { FieldConfigPopover } from '../../FieldConfigPopover';
@@ -39,6 +39,8 @@ export function TableView(props: ViewProps) {
   const { readOnly, applySchemaOps, workspaceId } = useDatabaseContext();
   const columns = visibleProperties(schema, view.format);
   const freeze = view.format?.tableFreezeColumns ?? 1;
+  /** 「頁面打開方式」（B-3）：決定列 hover 那顆按鈕的可及名稱 */
+  const openPageIn = view.format?.openPageIn ?? 'side';
 
   const [active, setActive] = useState<ActiveCell | null>(null);
   const [editing, setEditing] = useState(false);
@@ -591,10 +593,14 @@ export function TableView(props: ViewProps) {
                     e.stopPropagation();
                     props.openRow(row.id);
                   }}
+                  /* 文字與可及名稱照抄 Notion 7.34：按鈕寫「打開」，
+                     aria-label 隨視圖的「頁面打開方式」變（以側邊預覽打開 / …）。
+                     採集：reference/shots/gap-review/notion/notion-sidepeek-row.png */
+                  aria-label={`以${OPEN_PAGE_IN_META[openPageIn].label}打開`}
                   title={richTextToPlainText(row.title) || '未命名'}
                 >
                   <UiIcon name="expand" size={12} />
-                  開啟
+                  打開
                 </button>
               ) : null}
             </div>

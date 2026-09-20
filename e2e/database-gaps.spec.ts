@@ -309,9 +309,11 @@ test.describe('資料庫功能缺口', () => {
     await page.goto(`/database/${c.pageId}`, { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(2500);
     await page.getByRole('row').filter({ hasText: 'peek 這一列' }).first().hover();
-    await page.getByRole('button', { name: '開啟' }).first().click();
+    /* gap-review §C-1：按鈕改成 Notion 原文「打開」（可及名稱「以側邊預覽打開」），
+       peek 也從 `[role="dialog"]` 的 modal 換成 `<aside aria-label="側邊預覽">`。 */
+    await page.getByRole('button', { name: '以側邊預覽打開' }).first().click();
 
-    const dialog = page.locator('[role="dialog"]');
+    const dialog = page.locator('aside[aria-label="側邊預覽"]');
     await expect(dialog).toBeVisible();
     // 佔位文字不能再出現
     await expect(dialog).not.toContainText('編輯器（editor-core）會掛在這個區塊');

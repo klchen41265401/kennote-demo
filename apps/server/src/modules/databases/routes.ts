@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { FIELD_TYPES, VIEW_TYPES } from '@kennote/shared-types';
+import { FIELD_TYPES, OPEN_PAGE_IN_VALUES, VIEW_TYPES } from '@kennote/shared-types';
 import { z } from 'zod';
 import { requireUser } from '../../plugins/auth.js';
 import * as service from './service.js';
@@ -207,6 +207,16 @@ export async function databaseRoutes(app: FastifyInstance): Promise<void> {
 
   /* ── views ──────────────────────────────────────────── */
 
+  /**
+   * `view.format` 是 jsonb（不需要 migration），歷來都是整包 passthrough。
+   * 這裡只把**會被程式讀的列舉欄位**明確驗起來：`openPageIn`（頁面打開方式，
+   * 側邊預覽 / 置中預覽 / 完整頁面）。其餘欄位維持原本的 passthrough 行為。
+   */
+  const viewFormatInput = z
+    .object({ openPageIn: z.enum(OPEN_PAGE_IN_VALUES).optional() })
+    .passthrough();
+
+
   app.post('/:id/views', writeLimit, async (req, reply) => {
     const user = requireUser(req);
     const { id } = idParams.parse(req.params);
@@ -215,7 +225,7 @@ export async function databaseRoutes(app: FastifyInstance): Promise<void> {
         type: z.enum(VIEW_TYPES),
         name: z.string().max(100).optional(),
         query: z.record(z.unknown()).optional(),
-        format: z.record(z.unknown()).optional(),
+        format: viewFormatInput.optional(),
       })
       .parse(req.body);
     return reply.status(201).send({ data: await service.createView(id, user.id, input as never) });
@@ -229,7 +239,7 @@ export async function databaseRoutes(app: FastifyInstance): Promise<void> {
         name: z.string().max(100).optional(),
         type: z.enum(VIEW_TYPES).optional(),
         query: z.record(z.unknown()).optional(),
-        format: z.record(z.unknown()).optional(),
+        format: viewFormatInput.optional(),
         manualOrder: z.array(z.string().uuid()).max(5000).optional(),
       })
       .parse(req.body ?? {});

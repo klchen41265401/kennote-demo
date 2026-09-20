@@ -7,14 +7,18 @@
  * 整頁（DatabaseRoute）與內嵌（InlineDatabase）用的是**同一支元件**，
  * 差別只有外框（01 §5.3 M4.3.10：同資料源、不同外框，狀態共用）。
  */
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { richTextToPlainText } from '@kennote/shared-types';
 import * as api from './api';
 import { DatabaseContext, type DatabaseContextValue } from './context';
 import { DatabaseHeader } from './DatabaseHeader';
-import { RowPeek } from './RowPeek';
 import { useDatabaseController } from './useDatabaseController';
+/* side peek 現在是 URL 狀態（`?p=&pm=`），面板本身掛在 App 上的 `<PeekHost>`。
+   這裡只負責「照視圖設定決定用哪一種方式開」＋「把列資料註冊給 peek」。
+   ⚠️ 只 import 這兩支葉節點檔案，不要 import `features/peek/index`（會循環）。 */
+import { registerPeekRowSource, releasePeekRowSource } from '../peek/peek-store';
+import { usePeekNavigation, usePeekState } from '../peek/peek-url';
 import { getViewType } from './views/index';
 import styles from './DatabaseView.module.css';
 
@@ -40,7 +44,19 @@ export function DatabaseView({
   const navigate = useNavigate();
   const workspaceId = controller.snapshot?.collection.workspaceId ?? '';
   const members = api.useWorkspaceMembers(workspaceId || null);
-  const [peekRowId, setPeekRowId] = useState<string | null>(null);
+  const peek = usePeekState();
+  const peekNav = usePeekNavigation();
+
+  /**
+   * B-3「開啟頁面方式」：存在 view 上（`format.openPageIn`），
+   * 沒設過就是 Notion 的預設「側邊預覽」。所有視圖（表格 / 看板 / 清單 /
+   * 圖庫 / 日曆 / 時程表）點列都走這一條。
+   */
+  const openPageIn = controller.view?.format?.openPageIn ?? 'side';
+  const openRow = useMemo(
+    () => (rowId: string) => peekNav.open(rowId, openPageIn),
+    [peekNav, openPageIn],
+  );
 
   const context: DatabaseContextValue = useMemo(
     () => ({
@@ -49,14 +65,57 @@ export function DatabaseView({
       schema: controller.schema,
       members: members.data ?? [],
       createOption: controller.createOption,
-      openRow: (rowId) => setPeekRowId(rowId),
+      openRow,
       openRowPage: (rowId) => navigate(`/page/${rowId}`),
       applySchemaOps: controller.applySchemaOps,
       readOnly,
     }),
     // 相依陣列刻意手寫：只有這幾個值變了才該重跑
-    [collectionId, workspaceId, controller.schema, members.data, readOnly],
+    [collectionId, workspaceId, controller.schema, members.data, readOnly, openRow],
   );
+
+  /**
+   * 把「列」註冊給 peek。
+   *
+   * peek 是 URL 狀態、面板只有一份（掛在 App 上的 `<PeekHost>`），
+   * 但「上一列 / 下一列」（§C-4）與屬性表（§C-5）需要 controller 手上的資料。
+   * 所以：網址上的 `p` 如果是**我這個視圖的某一列**，就把資料與寫入 callback
+   * 註冊進去；不是的話什麼都不做（inline database 有多個實例，靠 token 防互踢）。
+   */
+  const peekToken = useRef({}).current;
+  const peekRows = controller.rowsState.rows;
+  const ownsPeek = peek.pageId ? peekRows.some((r) => r.id === peek.pageId) : false;
+
+  useEffect(() => {
+    if (!ownsPeek) return undefined;
+    registerPeekRowSource({
+      token: peekToken,
+      context,
+      rowIds: peekRows.map((r) => r.id),
+      getRow: (rowId) => peekRows.find((r) => r.id === rowId),
+      setCellValue: (rowId, propertyId, value) =>
+        controller.setCellValue(rowId, propertyId, value),
+      deleteRow: (rowId) => void controller.deleteRow(rowId),
+      duplicateRow: (rowId) => void controller.duplicateRow(rowId),
+    });
+    return () => releasePeekRowSource(peekToken);
+    // 相依陣列刻意手寫：controller 的動作是穩定的，只有列 / context 變了才要重註冊
+  }, [ownsPeek, peekRows, context, peekToken]);
+
+  /**
+   * peek 裡的 `<PageHeader>` 改標題走的是 `PATCH /api/pages/:id`（跟整頁開啟同一條），
+   * 那條路不會動到 rows 的查詢快取。所以 peek 一關就重抓一次列，
+   * 表格 / 看板上的標題才不會停在舊值。
+   */
+  const peekWasOpen = useRef(false);
+  const ownsPeekRef = useRef(false);
+  ownsPeekRef.current = ownsPeek;
+  useEffect(() => {
+    const open = Boolean(peek.pageId);
+    if (peekWasOpen.current && !open && ownsPeekRef.current) controller.refresh();
+    peekWasOpen.current = open;
+    // 相依陣列刻意手寫：只看 peek 開 / 關這一件事
+  }, [peek.pageId]);
 
   if (controller.isLoading) {
     return <div className={styles.placeholder}>載入資料庫中…</div>;
@@ -69,7 +128,6 @@ export function DatabaseView({
   const viewDef = getViewType(view.type);
   const ViewComponent = viewDef.Component;
   const { rowsState } = controller;
-  const peekRow = rowsState.rows.find((r) => r.id === peekRowId);
 
   return (
     <DatabaseContext.Provider value={context}>
@@ -154,7 +212,7 @@ export function DatabaseView({
             duplicateRow={(rowId) => void controller.duplicateRow(rowId)}
             deleteRows={(rowIds) => void controller.deleteRows(rowIds)}
             reorderRow={(rowId, afterId) => void controller.reorderRow(rowId, afterId)}
-            openRow={(rowId) => setPeekRowId(rowId)}
+            openRow={openRow}
           />
         </div>
 
@@ -163,19 +221,6 @@ export function DatabaseView({
         ) : null}
       </section>
 
-      {peekRow ? (
-        <RowPeek
-          row={peekRow}
-          open
-          onClose={() => setPeekRowId(null)}
-          onSetCellValue={(propertyId, value) =>
-            controller.setCellValue(peekRow.id, propertyId, value)
-          }
-          onSetTitle={(title) => controller.setRowTitle(peekRow.id, title)}
-          onDelete={() => void controller.deleteRow(peekRow.id)}
-          onDuplicate={() => void controller.duplicateRow(peekRow.id)}
-        />
-      ) : null}
     </DatabaseContext.Provider>
   );
 }

@@ -4,6 +4,7 @@
  */
 import React, { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { Icon, Menu, MenuItem, MenuSeparator, Tooltip, useContextMenu, useDraggable } from '@kennote/ui';
+import { usePeekNavigation } from '../peek/peek-url';
 import type { TreeNode } from './tree';
 import { displayTitle } from './tree';
 import styles from './Sidebar.module.css';
@@ -61,6 +62,7 @@ export function TreeRow({
   const [menuOpen, setMenuOpen] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const ctx = useContextMenu();
+  const peekNav = usePeekNavigation();
   const title = displayTitle(node.title);
 
   const { setNodeRef, handleProps, isDragging } = useDraggable({
@@ -231,6 +233,15 @@ export function TreeRow({
       <MenuSeparator />
       <MenuItem icon={<Icon name="external-link" size={16} />} onSelect={() => actions.openInNewTab(node.id)}>
         在新分頁中開啟
+      </MenuItem>
+      {/* B-4：Notion 的側邊欄頁面右鍵選單原文就是「以側邊預覽打開 Alt+Click」
+          （採集：reference/shots/gap-review/notion/notion-page-more-menu.png） */}
+      <MenuItem
+        icon={<Icon name="sidebar-toggle" size={16} />}
+        shortcut="alt+click"
+        onSelect={() => peekNav.open(node.id, 'side')}
+      >
+        以側邊預覽打開
       </MenuItem>
     </>
   );

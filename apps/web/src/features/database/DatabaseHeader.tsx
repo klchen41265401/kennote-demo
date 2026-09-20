@@ -21,7 +21,7 @@ import { FilterBuilder } from './FilterBuilder';
 import { GroupSettings } from './GroupSettings';
 import { PropertyList } from './PropertyList';
 import { SortBuilder } from './SortBuilder';
-import { ViewSettingsPanel } from './ViewSettingsPanel';
+import { OpenPageInSetting, ViewSettingsPanel } from './ViewSettingsPanel';
 import { getViewType, listViewTypes, viewTypeAvailable } from './views/types';
 import styles from './DatabaseHeader.module.css';
 
@@ -462,15 +462,27 @@ export function DatabaseHeader(props: DatabaseHeaderProps) {
         /* 第十一輪：手機上改成 bottom sheet（桌機不變） */
         sheetOnMobile
       >
-        {viewDef.SettingsPanel ? (
-          <viewDef.SettingsPanel
+        <>
+          {viewDef.SettingsPanel ? (
+            <viewDef.SettingsPanel
+              view={view}
+              schema={schema}
+              onChange={(patch) => props.onUpdateView(patch)}
+            />
+          ) : (
+            <p className={styles.panelHint}>這個視圖沒有額外的版面設定。</p>
+          )}
+          {/* B-3：「頁面打開方式」在 Notion 就是掛在版面配置面板底下，
+              而且**所有視圖型別都有**（不是表格專屬），所以放在這裡而不是各自的
+              SettingsPanel 裡。 */}
+          <OpenPageInSetting
             view={view}
-            schema={schema}
-            onChange={(patch) => props.onUpdateView(patch)}
+            viewLabel={viewDef.label}
+            onChange={(openPageIn) =>
+              props.onUpdateView({ format: { ...(view.format ?? {}), openPageIn } })
+            }
           />
-        ) : (
-          <p className={styles.panelHint}>這個視圖沒有額外的版面設定。</p>
-        )}
+        </>
       </Popover>
 
       {/* ⋯ 選單 */}

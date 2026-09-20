@@ -13,8 +13,10 @@ export { DatabaseView } from './DatabaseView';
 export type { DatabaseViewProps } from './DatabaseView';
 export { InlineDatabase } from './InlineDatabase';
 export type { InlineDatabaseProps } from './InlineDatabase';
-export { RowPeek } from './RowPeek';
+/* `RowPeek` 已移除：side peek 改由 `features/peek` 的 `<PeekHost>` 統一畫
+   （gap-review §C-1 —— 舊的走 `_fallback/Dialog`，是 modal，不是 peek）。 */
 export { EditableCell } from './EditableCell';
+export { FieldIcon } from './_fallback';
 export type { EditableCellProps } from './EditableCell';
 
 export { createDatabase, useDatabase, fetchRows, downloadCsv } from './api';

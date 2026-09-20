@@ -172,3 +172,66 @@
   text-overflow: ellipsis;
   color: var(--kn-color-text-tertiary);
 }
+
+/* ── 「頁面打開方式」（B-3）──
+   Notion 7.34 的視圖設定 → 版面配置面板底部，區塊標題就叫「頁面打開方式」，
+   三個選項各有一行說明，目前值那一項右邊有「表格的預設值」徽章。
+   （採集：reference/shots/gap-review/notion/notion-view-openas.png） */
+.openPageIn {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--kn-space-2) 0 0;
+}
+
+.openPageInOption {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--kn-space-2);
+  width: 100%;
+  padding: var(--kn-space-2) var(--kn-space-2);
+  border: 0;
+  border-radius: var(--kn-radius-sm);
+  background: transparent;
+  color: var(--kn-color-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.openPageInOption:hover {
+  background: var(--kn-color-surface-hover);
+}
+
+.openPageInOption[aria-checked='true'] {
+  background: var(--kn-color-surface-selected, var(--kn-color-surface-hover));
+}
+
+.openPageInText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.openPageInLabel {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--kn-font-size-sm);
+}
+
+.openPageInBadge {
+  padding: 0 4px;
+  border-radius: var(--kn-radius-sm);
+  background: var(--kn-color-bg-sunken);
+  color: var(--kn-color-text-tertiary);
+  font-size: var(--kn-font-size-xs);
+}
+
+.openPageInDesc {
+  color: var(--kn-color-text-tertiary);
+  font-size: var(--kn-font-size-xs);
+  line-height: 1.4;
+}
