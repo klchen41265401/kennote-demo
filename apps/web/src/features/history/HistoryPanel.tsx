@@ -8,10 +8,9 @@ import { useState } from 'react';
 import type {
   HistoryListResponse,
   HistorySnapshotResponse,
-  RestoreVersionResponse,
-} from '@kennote/shared-types';
+  } from '@kennote/shared-types';
 import { COLLAB_API_ROUTES, richTextToPlainText } from '@kennote/shared-types';
-import { invalidateQueries, useQuery } from '@kennote/ui';
+import { useQuery } from '@kennote/ui';
 import { api } from '../../lib/api-client';
 import {
   enterHistoryPreview,
