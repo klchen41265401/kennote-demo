@@ -226,7 +226,6 @@ export function SearchableMenu({
         {searchable ? (
           <div className={styles['searchBox']}>
             <Icon name="search" size={16} />
-            {/* eslint-disable-next-line jsx-a11y/no-autofocus */}
             <input
               autoFocus
               className={styles['searchInput']}

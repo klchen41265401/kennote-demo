@@ -397,7 +397,6 @@ export function useEditorHost(options: UseEditorHostOptions): EditorHostResult {
     };
     // initialDoc 的 identity 以 (pageId, reloadToken) 為 key 穩定，所以一頁只跑一次
     // （snapshot / reload 是刻意不進依賴陣列的：它們只在建立編輯器的那一刻被讀一次）
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- docKeyAtSetup 與 initialDoc 是同一組 key，刻意只讓後者進陣列
   }, [pageId, initialDoc, readOnly, initialSeq, applyRemote, applyRemoteDelta, otEnabled]);
 
   // 分頁被隱藏 / 關閉 → 立刻沖出去

@@ -269,7 +269,7 @@ function OverlaysSection(): JSX.Element {
             autoSelect
           />
           <p style={{ color: 'var(--kn-color-text-tertiary)', fontSize: 12 }}>
-            ↑↓ 移動　⏎ 開啟　esc 關閉
+            ↑↓ 移動 ⏎ 開啟 esc 關閉
           </p>
         </div>
       </Dialog>
