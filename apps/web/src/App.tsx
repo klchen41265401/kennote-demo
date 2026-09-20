@@ -18,7 +18,7 @@ registerDatabaseModule();
 
 export function App(): JSX.Element {
   return (
-    <BrowserRouter>
+    <BrowserRouter basename={import.meta.env.BASE_URL.replace(/\/$/, '')}>
       <RoutedBoundary>
         <Routes>
           <Route path="/login" element={<LoginRoute />} />
