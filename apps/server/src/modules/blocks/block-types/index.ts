@@ -226,6 +226,8 @@ defineBlockType({
     .object({
       color,
       url: z.string().max(2000).default(''),
+      /** 斜線選單的嵌入服務（figma / google-drive / html …），前端 lib/embed-services 的 id */
+      service: z.string().max(64).optional(),
       caption: richTextSchema.optional(),
       height: z.number().positive().max(4000).optional(),
     })
