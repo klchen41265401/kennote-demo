@@ -38,6 +38,7 @@
 | [functional-round12.md](functional-round12.md) | O-31 / O-32 反轉 / hover-only 全站掃描 / `/settings` | **第十一輪交出的兩個「產品缺陷」都不是缺陷**——一個死在測試 locator、一個死在 grep 字串；另外抓到兩盞假綠燈 |
 | [functional-round13.md](functional-round13.md) | `permission_changed` 查證 / O-17 鍵盤排序 / O-33 / O-20 / O-22 | 「仍然開著」的第一項**從第十輪起就不成立**（連抄四輪）；查證途中撞到真的洞：被降級 / 被踢出工作區**一則通知都不發** |
 | [database-gaps.md](database-gaps.md) | 資料庫功能缺口補完（relation 反向欄位、RowPeek、垃圾桶、CSV、欄寬、列選取） | 7 項全部做完；§4 另列 6 項未做 |
+| [gap-review.md](gap-review.md) | **整體差距盤點**（不是 bug QA）：右側面板 / side peek / RWD 75→90 | 右側面板在 **<1280 根本不掛載**（按鈕按得下去、畫面零反應）—— 已修 3 項 + `e2e/gap-review.spec.ts`；另列 B 9 項、C 8 項、D 12 項與三個代理的分工 |
 | [regression-triage-1.md](regression-triage-1.md) | 第一次全量 e2e（78 條）之後的紅燈分診 | 4 條紅燈 = 2 條產品缺陷（前端時序競態，只在 0 block 的列頁看得見）+ 3 條測試過時 |
 
 ---
@@ -155,6 +156,23 @@
 | O-19 | `createDual` 關掉開關時**不會刪對方的欄位**（刻意），UI 也沒有「順便刪掉」選項 |
 | O-20 | ~~批次操作沒有「加到收藏」~~ **第十三輪部分結案**（批次列加了「加到收藏」，走側邊欄同一支 `setFavorite()`，R13-6）。**仍缺**「移動到」（`moveTo` overlay 一次只吃一個 id）與批次改屬性值 |
 | O-21 | 既有資料裡**已經寫出去的孤兒屬性沒有清理腳本**（新的寫入已擋住） |
+
+### E-2. 整體差距盤點（`gap-review.md`，第十四輪）
+
+> §A 的 3 項**已修並有 e2e**（`e2e/gap-review.spec.ts`，5 條全綠，**尚未 commit、尚未部署**）：
+> 右側面板在 <1280 不掛載、手機沒有留言入口、整頁資料庫拿不到 `pageId`。
+> 下面是同一份報告裡**還開著**的，完整版（含 Notion 行為 / 工時 / 修法）在 `gap-review.md`。
+
+| # | 一句話 | 元件 |
+|---|---|---|
+| O-34 | **side peek 沒有 URL**：`peekRowId` 是元件內 `useState`，重整 / 上一頁 / 分享全都失效（Notion 是 `?p=&pm=s`） | database |
+| O-35 | peek 沒有「側邊 / 置中 / 整頁」三選一；`RowPeek` 的 `variant` prop 存在但**沒有呼叫端傳過** | database |
+| O-36 | 視圖設定面板**沒有「開啟頁面方式」**（實測 dump 過 16 個項目） | database |
+| O-37 | `RowPeek` 是 modal（focus trap + `inert` + 捲動鎖 + blur 遮罩）撐成側欄，寬度固定 560 不可拖；Notion 是非 modal、約 50%、可拖 | database / ui |
+| O-38 | 側邊欄的「更新」按鈕打開的是**版本歷史**；Notion 的「更新」是活動 feed，兩者是不同的東西 | shell / history |
+| O-39 | `RightPanelTab` 宣告了 `'inbox'` 但 `RightPanel` 只有兩個 tab（dead type） | shell |
+| O-40 | **768–1279 沒有任何 CSS**（`@media` 全站只有 767 / 720 / 640），1024 被當手機用；Notion 網頁版 ≥768 就是佔位側邊欄 | shell / RWD |
+| O-41 | shell 本體仍是 `100vh` 沒換 `100dvh`（`ProtectedRoute` / `WorkspaceRoute` / `AuthForm`） | shell / RWD |
 
 ### F. 缺口 / 觀察（不算 bug）
 

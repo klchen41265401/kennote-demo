@@ -296,6 +296,15 @@ export function TopBar({
             匯出
           </MenuItem>
           <MenuSeparator />
+          {/*
+            「留言」在頂欄有自己的按鈕，但那顆按鈕掛了 `.compactHide`
+            —— <768 整個不顯示，而 ⋯ 選單裡原本又只有「版本歷史」，
+            於是手機上**留言完全沒有入口**。這一項就是補那個洞
+            （桌機上重複一份無妨，Notion 的 ⋯ 選單也有「留言」）。
+          */}
+          <MenuItem icon={<Icon name="comment" size={16} />} onSelect={() => toggleRightPanel('comments')}>
+            留言
+          </MenuItem>
           <MenuItem icon={<Icon name="history" size={16} />} onSelect={() => toggleRightPanel('history')}>
             版本歷史
           </MenuItem>

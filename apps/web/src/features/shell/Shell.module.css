@@ -204,6 +204,45 @@
   gap: 16px;
 }
 
+/* ── 平板 / 手機：右側面板改成覆蓋式抽屜（桌機才是佔位的 .rightSlot） ── */
+.rightBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 55;
+  background: var(--kn-color-overlay, rgba(15, 15, 15, 0.4));
+}
+
+.rightDrawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 56;
+  width: min(380px, 100vw);
+  background: var(--kn-color-bg);
+  border-left: 1px solid var(--kn-color-divider);
+  box-shadow: var(--kn-shadow-lg);
+  overflow: hidden;
+  animation: rightDrawerIn var(--kn-motion-normal) var(--kn-motion-ease);
+}
+
+@keyframes rightDrawerIn {
+  from {
+    opacity: 0;
+    transform: translateX(16px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rightDrawer {
+    animation: none;
+  }
+}
+
 @media (max-width: 767px) {
   .skeletonPage {
     padding: 32px 16px 0;
@@ -214,5 +253,9 @@
   }
   .rightSlot {
     display: none;
+  }
+  /* 手機：右側面板幾乎滿版（Notion 網頁版的做法） */
+  .rightDrawer {
+    width: min(420px, 100vw);
   }
 }

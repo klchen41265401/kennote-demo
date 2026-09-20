@@ -50,9 +50,16 @@ export function AppShell(): JSX.Element {
   const location = useLocation();
   const peekTimer = useRef<number | null>(null);
 
-  const pageId = location.pathname.startsWith('/page/')
-    ? location.pathname.slice('/page/'.length)
-    : null;
+  /**
+   * 目前這條路由對應的頁面 id。
+   *
+   * ⚠️ 原本只認 `/page/`，於是**整頁資料庫**（`/database/:pageId`，決策 6）
+   * 一律拿到 `null` —— 頂欄的「留言 / 版本歷史」按得下去，右側面板卻只會寫
+   * 「選一個頁面才能看留言與版本歷史」。資料庫本身也是一個頁面（row = page 的
+   * 那個 collection 掛在它上面），Notion 在整頁資料庫上一樣有留言與更新。
+   */
+  const pageId =
+    /^\/(?:page|database)\/([^/?#]+)/.exec(location.pathname)?.[1] ?? null;
 
   useEffect(() => {
     if (pageId) {
@@ -176,6 +183,15 @@ export function AppShell(): JSX.Element {
         <Outlet />
       </div>
 
+      {/*
+        右側面板。
+        ⚠️ 這裡原本寫的是 `ui.rightPanelOpen && !narrow` —— 也就是**視窗寬度只要
+        小於 1280，整個面板就不掛載**。而頂欄 / 側邊欄的「留言」「更新」按鈕在
+        768–1279 是看得見也按得下去的，按下去只會靜靜地翻一個 store flag，
+        使用者看到的就是「右側欄打不開」。
+        Notion 網頁版在窄螢幕不是拿掉面板，而是改成**覆蓋式抽屜**（內容不被推擠）。
+        所以：桌機維持可拖曳的佔位欄，平板 / 手機改成覆蓋抽屜 + 遮罩。
+      */}
       {ui.rightPanelOpen && !narrow && (
         <Resizable
           className={styles.rightSlot}
@@ -190,6 +206,15 @@ export function AppShell(): JSX.Element {
         >
           <RightPanel pageId={pageId} userId={user?.id ?? null} />
         </Resizable>
+      )}
+
+      {ui.rightPanelOpen && narrow && (
+        <>
+          <div className={styles.rightBackdrop} onClick={() => setRightPanel(false)} />
+          <div className={styles.rightDrawer}>
+            <RightPanel pageId={pageId} userId={user?.id ?? null} />
+          </div>
+        </>
       )}
 
       {/* ── 全域浮層 ── */}
