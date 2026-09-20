@@ -120,3 +120,19 @@
   color: var(--kn-color-text-tertiary);
   font-size: var(--kn-font-size-xs);
 }
+
+.backButton {
+  width: 24px;
+  height: 24px;
+  border: 0;
+  background: none;
+  border-radius: 4px;
+  color: var(--kn-color-text-secondary);
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.backButton:hover {
+  background: var(--kn-color-bg-hover);
+}

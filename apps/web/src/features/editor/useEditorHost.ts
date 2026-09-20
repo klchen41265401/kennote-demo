@@ -125,6 +125,14 @@ export interface UseEditorHostOptions {
   workspaceId: string | null;
   snapshot: PageSnapshot | undefined;
   readOnly?: boolean;
+  /**
+   * 完全不連同步層（gap-review B-7 的版本預覽）。
+   *
+   * `readOnly` 只是「不能編輯」，WS 仍然掛著 —— 預覽舊版本時遠端 ops
+   * 會打進這份**歷史文件**，畫面會變成「一半舊、一半新」。
+   * 預覽期間把整條同步關掉：不送 tx、不收 ops、不開 OT 通道。
+   */
+  syncDisabled?: boolean;
   navigateToPage(pageId: string): void;
 }
 
@@ -135,7 +143,14 @@ export interface EditorHostResult {
 }
 
 export function useEditorHost(options: UseEditorHostOptions): EditorHostResult {
-  const { pageId, workspaceId, snapshot, readOnly = false, navigateToPage } = options;
+  const {
+    pageId,
+    workspaceId,
+    snapshot,
+    readOnly = false,
+    syncDisabled = false,
+    navigateToPage,
+  } = options;
 
   const otEnabled = useOtEnabled();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -188,7 +203,7 @@ export function useEditorHost(options: UseEditorHostOptions): EditorHostResult {
   );
 
   /* ── 同步層（預設走 WS，沒有時 usePageSync(null) 完全惰性）─ */
-  const sync = usePageSync(HTTP_FALLBACK ? null : pageId, {
+  const sync = usePageSync(HTTP_FALLBACK || syncDisabled ? null : pageId, {
     getLocalSeq: () => seqRef.current,
     onRemoteOps: (ops) => applyRemote(ops),
     onRollback: () => {
@@ -260,7 +275,7 @@ export function useEditorHost(options: UseEditorHostOptions): EditorHostResult {
       liveDocRef.current?.key === docKeyAtSetup ? liveDocRef.current.doc : initialDoc;
 
     let transport: Transport | null = null;
-    if (HTTP_FALLBACK) {
+    if (HTTP_FALLBACK && !syncDisabled) {
       transport = createTransport({
         pageId,
         sessionId: sessionIdRef.current,
@@ -280,7 +295,7 @@ export function useEditorHost(options: UseEditorHostOptions): EditorHostResult {
      */
     let otChannel: OtPageChannel | null = null;
     let detachDelta: (() => void) | null = null;
-    if (otEnabled && !HTTP_FALLBACK) {
+    if (otEnabled && !HTTP_FALLBACK && !syncDisabled) {
       otChannel = new OtPageChannel({
         submitDelta: (blockId, delta, baseRev) =>
           getSyncClient().submitDelta(pageId, blockId, delta, baseRev),
@@ -311,6 +326,8 @@ export function useEditorHost(options: UseEditorHostOptions): EditorHostResult {
     editorRef.current = instance;
 
     const offOps = instance.on('localOps', (ops, tx) => {
+      // 版本預覽：一律不送出（readOnly 理論上不會產生 localOps，這是第二道保險）
+      if (syncDisabled) return;
       if (transport) {
         transport.push(ops as unknown as Operation[], tx.inverseOps as unknown as Operation[]);
         return;
@@ -385,7 +402,12 @@ export function useEditorHost(options: UseEditorHostOptions): EditorHostResult {
       otChannel?.reset();
       otChannelRef.current = null;
       // 離開頁面前把排隊中的變更送出去
-      void (transport ? transport.flush() : syncRef.current.flush()).finally(() => {
+      void (transport
+        ? transport.flush()
+        : syncDisabled
+          ? Promise.resolve()
+          : syncRef.current.flush()
+      ).finally(() => {
         transport?.destroy();
         invalidateQueries(queryKeys.snapshot(pageId));
       });
@@ -397,7 +419,16 @@ export function useEditorHost(options: UseEditorHostOptions): EditorHostResult {
     };
     // initialDoc 的 identity 以 (pageId, reloadToken) 為 key 穩定，所以一頁只跑一次
     // （snapshot / reload 是刻意不進依賴陣列的：它們只在建立編輯器的那一刻被讀一次）
-  }, [pageId, initialDoc, readOnly, initialSeq, applyRemote, applyRemoteDelta, otEnabled]);
+  }, [
+    pageId,
+    initialDoc,
+    readOnly,
+    syncDisabled,
+    initialSeq,
+    applyRemote,
+    applyRemoteDelta,
+    otEnabled,
+  ]);
 
   // 分頁被隱藏 / 關閉 → 立刻沖出去
   useEffect(() => {

@@ -5,7 +5,7 @@
  * - hover 討論串 → 高亮對應的 block（由宿主提供 onHighlightBlock）
  * - 有留言權限（含 guest）就能回覆與解決；唯讀的人只能看
  */
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Comment, Discussion, PublicUser } from '@kennote/shared-types';
 import { richTextToPlainText } from '@kennote/shared-types';
 import {
@@ -18,6 +18,17 @@ import {
 } from './api';
 import { useWorkspaceMembers } from '../../lib/queries';
 import { useWorkspace } from '../../stores/workspace';
+import { CommentInput } from './CommentInput';
+import {
+  clearPendingDiscussion,
+  discussionAtEvent,
+  paintHighlights,
+  resolvePending,
+  scrollToBlock,
+  setActiveDiscussion,
+  setHoverDiscussion,
+  useHighlight,
+} from './highlight';
 import styles from './CommentsPanel.module.css';
 
 export interface CommentsPanelProps {
@@ -81,6 +92,7 @@ function Thread({
   canComment,
   currentUserId,
   members,
+  active,
   onHighlightBlock,
 }: {
   pageId: string;
@@ -90,11 +102,19 @@ function Thread({
   currentUserId: string | null;
   /** BUG-30：`@某人` 要變成 mention atom 才會產生通知 */
   members: readonly MentionCandidate[];
+  /** 這張卡片是不是「目前這一張」（從編輯器的標註跳過來，或被點過） */
+  active: boolean;
   onHighlightBlock?(blockId: string | null): void;
 }): JSX.Element {
   const [draft, setDraft] = useState('');
   const [busy, setBusy] = useState(false);
+  const ref = useRef<HTMLLIElement>(null);
   const quote = discussion.anchor.kind === 'inline' ? discussion.anchor.quote : '';
+
+  // 編輯器點標註 → 面板捲到這張卡片（B-8 的反向那一半）
+  useEffect(() => {
+    if (active) ref.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }, [active]);
 
   const reply = async (): Promise<void> => {
     const body = plainToBody(draft, members);
@@ -110,9 +130,23 @@ function Thread({
 
   return (
     <li
-      className={`${styles.thread} ${discussion.resolvedAt ? styles.resolved : ''}`}
-      onMouseEnter={() => onHighlightBlock?.(discussion.blockId)}
-      onMouseLeave={() => onHighlightBlock?.(null)}
+      ref={ref}
+      data-discussion-id={discussion.id}
+      className={`${styles.thread} ${discussion.resolvedAt ? styles.resolved : ''} ${
+        active ? styles.threadActive : ''
+      }`}
+      onMouseEnter={() => {
+        setHoverDiscussion(discussion.id);
+        onHighlightBlock?.(discussion.blockId);
+      }}
+      onMouseLeave={() => {
+        setHoverDiscussion(null);
+        onHighlightBlock?.(null);
+      }}
+      onClick={() => {
+        setActiveDiscussion(discussion.id);
+        scrollToBlock(discussion.blockId);
+      }}
     >
       {quote ? <blockquote className={styles.quote}>{quote}</blockquote> : null}
       {discussion.blockId === null ? <span className={styles.pageTag}>頁面討論</span> : null}
@@ -131,15 +165,13 @@ function Thread({
 
       {canComment ? (
         <div className={styles.replyRow}>
-          <input
-            className={styles.input}
+          <CommentInput
             value={draft}
-            placeholder="回覆…"
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.nativeEvent.isComposing) void reply();
-            }}
-            aria-label="回覆留言"
+            placeholder="回覆…（輸入 @ 提及成員）"
+            ariaLabel="回覆留言"
+            members={members}
+            onChange={setDraft}
+            onSubmit={() => void reply()}
           />
           <button
             type="button"
@@ -170,7 +202,12 @@ export function CommentsPanel({
   currentUserId = null,
   onHighlightBlock,
 }: CommentsPanelProps): JSX.Element {
-  const [showResolved, setShowResolved] = useState(false);
+  /**
+   * gap-review C-3：Notion 的留言側欄頂端是「未解決 ⌄ / 全部」下拉，
+   * 以前 kennote 只有一個「顯示已解決」勾選框，看不出現在在看什麼。
+   */
+  const [filter, setFilter] = useState<'open' | 'all'>('open');
+  const showResolved = filter === 'all';
   const { data, isLoading, isError } = usePageDiscussions(pageId);
   // BUG-30：留言框的 `@某人` 要比對得到人，才生得出 mention atom → 通知
   const workspace = useWorkspace();
@@ -193,6 +230,48 @@ export function CommentsPanel({
   }, [data, showResolved]);
 
   const openCount = (data?.discussions ?? []).filter((d) => !d.resolvedAt).length;
+  const allDiscussions = useMemo(() => data?.discussions ?? [], [data]);
+  const highlight = useHighlight();
+
+  /*
+   * B-8 的兩個方向都在這裡接上：
+   *   1. discussions / hover / active 一變 → 重畫頁面上的標註狀態
+   *   2. 編輯器裡點 `.kn-comment` → 設 activeId（卡片那一側在 <Thread> 裡捲過去）
+   * 監聽掛在 document 的**捕獲階段**：`.kn-comment` 在 contenteditable 裡面，
+   * 冒泡途中可能被編輯器的 handler 攔下來。
+   */
+  useEffect(() => {
+    paintHighlights(allDiscussions, highlight);
+  }, [allDiscussions, highlight]);
+
+  useEffect(() => {
+    const onClick = (e: MouseEvent): void => {
+      const id = discussionAtEvent(e.target, allDiscussions);
+      if (id) setActiveDiscussion(id);
+    };
+    document.addEventListener('click', onClick, true);
+    return () => document.removeEventListener('click', onClick, true);
+  }, [allDiscussions]);
+
+  /*
+   * 面板本來是關著的時候，編輯器只留下了 `pending`（blockId + 被點的文字）。
+   * 討論串載好之後在這裡解析成 discussionId。
+   */
+  useEffect(() => {
+    if (!highlight.pending || allDiscussions.length === 0) return;
+    const id = resolvePending(highlight.pending, allDiscussions);
+    clearPendingDiscussion();
+    if (id) setActiveDiscussion(id);
+  }, [highlight.pending, allDiscussions]);
+
+  // 卸載時把標註狀態清掉，不要留在頁面上
+  useEffect(
+    () => () => {
+      paintHighlights([], { activeId: null, hoverId: null, pending: null });
+      setActiveDiscussion(null);
+    },
+    [],
+  );
 
   const startThread = async (): Promise<void> => {
     const body = plainToBody(draft, members);
@@ -211,14 +290,24 @@ export function CommentsPanel({
     <aside className={styles.panel} aria-label="留言">
       <header className={styles.header}>
         <h2 className={styles.title}>留言{openCount > 0 ? `（${openCount}）` : ''}</h2>
-        <label className={styles.toggle}>
-          <input
-            type="checkbox"
-            checked={showResolved}
-            onChange={(e) => setShowResolved(e.target.checked)}
-          />
-          顯示已解決
-        </label>
+        <div className={styles.filter} role="group" aria-label="留言篩選">
+          <button
+            type="button"
+            className={`${styles.filterButton} ${filter === 'open' ? styles.filterActive : ''}`}
+            aria-pressed={filter === 'open'}
+            onClick={() => setFilter('open')}
+          >
+            未解決
+          </button>
+          <button
+            type="button"
+            className={`${styles.filterButton} ${filter === 'all' ? styles.filterActive : ''}`}
+            aria-pressed={filter === 'all'}
+            onClick={() => setFilter('all')}
+          >
+            全部
+          </button>
+        </div>
       </header>
 
       {isLoading ? <p className={styles.hint}>載入留言中…</p> : null}
@@ -234,26 +323,29 @@ export function CommentsPanel({
             canComment={canComment}
             currentUserId={currentUserId}
             members={members}
+            active={highlight.activeId === discussion.id}
             {...(onHighlightBlock ? { onHighlightBlock } : {})}
           />
         ))}
       </ul>
 
       {discussions.length === 0 && !isLoading ? (
-        <p className={styles.hint}>還沒有留言。選取文字按「留言」可以針對段落討論。</p>
+        <p className={styles.hint}>
+          {filter === 'open' && (data?.discussions.length ?? 0) > 0
+            ? '沒有未解決的留言。切到「全部」看已解決的討論串。'
+            : '還沒有留言。選取文字按「留言」可以針對段落討論。'}
+        </p>
       ) : null}
 
       {canComment ? (
         <footer className={styles.footer}>
-          <input
-            className={styles.input}
+          <CommentInput
             value={draft}
-            placeholder="對整頁留言…"
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.nativeEvent.isComposing) void startThread();
-            }}
-            aria-label="新增頁面留言"
+            placeholder="對整頁留言…（輸入 @ 提及成員）"
+            ariaLabel="新增頁面留言"
+            members={members}
+            onChange={setDraft}
+            onSubmit={() => void startThread()}
           />
           <button
             type="button"

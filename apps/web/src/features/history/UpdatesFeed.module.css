@@ -1,0 +1,150 @@
+.feed {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 4px 16px;
+}
+
+.hint {
+  margin: 0;
+  padding: 12px 12px;
+  color: var(--kn-color-text-secondary);
+  font-size: 13px;
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.entry {
+  display: grid;
+  grid-template-columns: 22px 1fr auto;
+  gap: 8px;
+  align-items: start;
+  padding: 8px 8px 8px 6px;
+  border-radius: 4px;
+}
+
+.entry:hover {
+  background: var(--kn-color-bg-hover);
+}
+
+.icon {
+  font-size: 13px;
+  line-height: 20px;
+  text-align: center;
+  color: var(--kn-color-text-secondary);
+}
+
+.entryBody {
+  min-width: 0;
+}
+
+.entryHead {
+  margin: 0;
+  font-size: 13px;
+  line-height: 20px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: baseline;
+}
+
+.actor {
+  font-weight: 600;
+}
+
+.summary {
+  color: var(--kn-color-text-secondary);
+}
+
+.time {
+  color: var(--kn-color-text-tertiary, var(--kn-color-text-secondary));
+  font-size: 12px;
+}
+
+.snippet {
+  margin: 2px 0 0;
+  font-size: 13px;
+  color: var(--kn-color-text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.linkButton {
+  border: 0;
+  background: none;
+  padding: 2px 0;
+  color: var(--kn-color-accent, #2383e2);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+/* Notion：每則更新右側 24×24 的「查看本次更新後的版本」 */
+.seqButton {
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--kn-color-text-secondary);
+  cursor: pointer;
+  opacity: 0;
+  font-size: 13px;
+}
+
+.entry:hover .seqButton,
+.seqButton:focus-visible {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .seqButton {
+    opacity: 1;
+  }
+}
+
+.moreButton {
+  align-self: center;
+  margin-top: 8px;
+  border: 1px solid var(--kn-color-border);
+  background: var(--kn-color-bg);
+  border-radius: 4px;
+  padding: 4px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  min-height: 28px;
+}
+
+/* ── 分析分頁 ───────────────────────────────────────── */
+.stats {
+  margin: 0;
+  padding: 4px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.stat {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--kn-color-border);
+}
+
+.statLabel {
+  margin: 0;
+  font-size: 13px;
+  color: var(--kn-color-text-secondary);
+}
+
+.statValue {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}

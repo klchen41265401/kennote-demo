@@ -52,6 +52,7 @@ import { overlayDepth, Popover } from './ui/overlay';
 import { ToastHost, toast } from './ui/toast';
 import { EmojiPicker } from '../../components/EmojiPicker';
 import { CommentPopover } from '../comments/CommentPopover';
+import { commentMarkAt, requestDiscussionForBlock } from '../comments/highlight';
 import { setRightPanel } from '../../stores/ui';
 import { isImageFile, isVideoFile } from '../../lib/upload';
 import { useWorkspaceTree } from '../../lib/queries';
@@ -64,6 +65,8 @@ export interface EditorProps {
   workspaceId: string | null;
   snapshot: PageSnapshot | undefined;
   readOnly?: boolean;
+  /** 版本預覽：完全不連同步層（不送 tx、不收遠端 ops）。見 features/history/preview.ts */
+  syncDisabled?: boolean;
   onNavigateToPage(pageId: string): void;
   /** App shell 用來顯示「儲存中 / 已儲存」 */
   onTransportState?(state: TransportState): void;
@@ -79,6 +82,7 @@ export function Editor({
   workspaceId,
   snapshot,
   readOnly = false,
+  syncDisabled = false,
   onNavigateToPage,
   onTransportState,
 }: EditorProps) {
@@ -88,6 +92,7 @@ export function Editor({
     workspaceId,
     snapshot,
     readOnly,
+    syncDisabled,
     navigateToPage: onNavigateToPage,
   });
   const editor = host?.editor ?? null;
@@ -711,6 +716,21 @@ export function Editor({
   /* ── callout icon 點擊 → emoji picker ───────────────── */
   const onWrapperClick = useCallback(
     (event: ReactMouseEvent) => {
+      /*
+       * gap-review B-8（反向那一半）：點行內留言標註 → 打開右側面板的留言檢視
+       * 並定位到那張卡片。
+       *
+       * 這裡**只記座標**（blockId + 被點到的文字）不解析 discussionId ——
+       * 討論串清單只有 `CommentsPanel` 手上有，而面板關著的時候它根本沒掛載。
+       * 解析由面板掛載後自己做（`resolvePending()`）。
+       * 唯讀（鎖定頁面 / 版本預覽）時仍然要能點開留言，所以這一段在 readOnly 檢查之前。
+       */
+      const mark = commentMarkAt(event.target);
+      if (mark) {
+        requestDiscussionForBlock(mark.blockId, mark.text);
+        setRightPanel(true, 'comments');
+      }
+
       if (!host || readOnly) return;
       const target = event.target;
       if (!(target instanceof Element)) return;

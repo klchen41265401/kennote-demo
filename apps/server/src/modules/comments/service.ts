@@ -19,6 +19,8 @@ import type {
   DiscussionListResponse,
   PublicUser,
   RichText,
+  WorkspaceDiscussionItem,
+  WorkspaceDiscussionsResponse,
 } from '@kennote/shared-types';
 import { extractMentionedUserIds, richTextToPlainText } from '@kennote/shared-types';
 import { db, withTransaction } from '../../db/client.js';
@@ -91,6 +93,84 @@ export async function listPageDiscussions(
   ].filter((v): v is string => typeof v === 'string');
 
   return { pageId, discussions, users: await usersMap(userIds) };
+}
+
+/**
+ * 跨頁的最近討論串（gap-review C-8）。
+ *
+ * ⚠️ 權限**一定要逐頁再問一次**（README §一-1 的主線：
+ * 「你是不是這個工作區的人」不等於「你能不能看這一頁」）。
+ * 這裡先撈工作區裡最近有動靜的討論串，再用 `resolvePagePermission()` 濾掉看不到的。
+ */
+export async function listWorkspaceDiscussions(
+  workspaceId: string,
+  userId: string,
+  limit = 50,
+): Promise<WorkspaceDiscussionsResponse> {
+  const rows = await db.query<{
+    id: string;
+    page_id: string;
+    page_title: RichText | null;
+    page_icon: string | null;
+    last_activity_at: Date;
+  }>(sql`
+    SELECT d.id,
+           d.page_id,
+           p.title AS page_title,
+           p.icon  AS page_icon,
+           GREATEST(d.created_at, COALESCE(MAX(c.created_at), d.created_at)) AS last_activity_at
+      FROM discussions d
+      JOIN pages p ON p.id = d.page_id
+      LEFT JOIN comments c ON c.discussion_id = d.id AND c.deleted_at IS NULL
+     WHERE d.workspace_id = ${workspaceId}
+       AND d.deleted_at IS NULL
+       AND p.deleted_at IS NULL
+     GROUP BY d.id, d.created_at, d.page_id, p.title, p.icon
+     ORDER BY last_activity_at DESC
+     LIMIT ${limit * 3}
+  `);
+
+  const allowed = new Map<string, boolean>();
+  const kept: typeof rows = [];
+  for (const row of rows) {
+    if (kept.length >= limit) break;
+    let ok = allowed.get(row.page_id);
+    if (ok === undefined) {
+      ok = (await resolvePagePermission(userId, row.page_id)) !== 'none';
+      allowed.set(row.page_id, ok);
+    }
+    if (ok) kept.push(row);
+  }
+
+  const discussionRows = await Promise.all(kept.map((r) => repo.findDiscussion(r.id)));
+  const comments = await repo.listCommentsByDiscussions(kept.map((r) => r.id));
+  const byDiscussion = new Map<string, Comment[]>();
+  for (const row of comments) {
+    const list = byDiscussion.get(row.discussion_id) ?? [];
+    list.push(repo.toComment(row));
+    byDiscussion.set(row.discussion_id, list);
+  }
+
+  const items: WorkspaceDiscussionItem[] = [];
+  kept.forEach((row, i) => {
+    const dRow = discussionRows[i];
+    if (!dRow) return;
+    items.push({
+      discussion: repo.toDiscussion(dRow, byDiscussion.get(row.id) ?? []),
+      pageId: row.page_id,
+      pageTitle: richTextToPlainText(row.page_title ?? []) || '無標題',
+      pageIcon: row.page_icon,
+      lastActivityAt: row.last_activity_at.toISOString(),
+    });
+  });
+
+  const userIds = items.flatMap((i) => [
+    i.discussion.createdBy,
+    i.discussion.resolvedBy,
+    ...i.discussion.comments.map((c) => c.authorId),
+  ]).filter((v): v is string => typeof v === 'string');
+
+  return { workspaceId, items, users: await usersMap(userIds) };
 }
 
 async function loadDiscussionWithComments(discussionId: string): Promise<Discussion> {

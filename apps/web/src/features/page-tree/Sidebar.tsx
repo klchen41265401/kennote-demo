@@ -327,7 +327,12 @@ export function Sidebar({ workspace }: SidebarProps): JSX.Element {
             type="button"
             className={styles.topIcon}
             aria-label="更新"
-            onClick={() => toggleRightPanel('history')}
+            /*
+             * gap-review B-5：這顆按鈕叫「更新」，以前卻打開版本歷史。
+             * Notion 的「更新」是活動 feed（誰改了什麼 / 誰留了言），
+             * 版本紀錄是另一個獨立檢視。
+             */
+            onClick={() => toggleRightPanel('updates')}
           >
             <Icon name="history" size={20} />
           </button>

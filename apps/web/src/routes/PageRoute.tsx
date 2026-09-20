@@ -23,6 +23,12 @@ import {
 import { useWorkspace } from '../stores/workspace';
 import { usePageLayout } from '../stores/pages';
 import { expandAncestors, useBreakpoint, useUi } from '../stores/ui';
+import {
+  exitHistoryPreview,
+  formatVersionTime,
+  restorePreviewedVersion,
+  useHistoryPreview,
+} from '../features/history/preview';
 import shell from '../features/shell/Shell.module.css';
 import styles from './PageRoute.module.css';
 
@@ -49,6 +55,14 @@ export function PageRoute(): JSX.Element {
   const [transport, setTransport] = useState<TransportState | null>(null);
   const layout = usePageLayout(effectivePageId);
   const permission = usePagePermission(effectivePageId);
+  /**
+   * gap-review B-7：版本預覽必須**真的顯示那個版本**。
+   * 以前這裡只看 `ui.historyPreviewSeq`（純數字），編輯器吃的仍然是現況 snapshot，
+   * 橫幅卻寫「編輯已停用」—— 會誤導。現在 snapshot 跟著 store 一起過來。
+   */
+  const preview = useHistoryPreview();
+  const previewing =
+    preview.snapshot !== null && preview.pageId === effectivePageId && preview.seq !== null;
 
   const page = effectivePageId ? snapshot.data?.recordMap.page[effectivePageId]?.value : undefined;
 
@@ -142,26 +156,49 @@ export function PageRoute(): JSX.Element {
           data-small-text={layout.smallText ? 'true' : 'false'}
           data-font={layout.font}
         >
-          {ui.historyPreviewSeq !== null && (
+          {previewing && (
             <div className={styles.previewBanner} role="status">
-              正在檢視歷史版本（seq {ui.historyPreviewSeq}）—— 編輯已停用。
+              <span>正在預覽 {formatVersionTime(preview.at, preview.seq)} 的版本</span>
+              <span className={styles.previewActions}>
+                <button
+                  type="button"
+                  className={styles.previewAction}
+                  onClick={() => void restorePreviewedVersion()}
+                >
+                  還原此版本
+                </button>
+                <button
+                  type="button"
+                  className={styles.previewAction}
+                  onClick={() => exitHistoryPreview()}
+                >
+                  離開預覽
+                </button>
+              </span>
             </div>
           )}
 
           <PageHeader
-            page={page}
+            page={previewing ? (preview.snapshot?.recordMap.page[page.id]?.value ?? page) : page}
             workspaceId={workspace?.id ?? null}
             readOnly={readOnly}
             onLeaveTitle={focusFirstBlock}
           />
 
           {/* ⭐ editor-core 的掛載點就在 <Editor> 裡面（features/editor/Editor.tsx） */}
+          {/*
+            ⭐ key 帶上預覽的 seq：切進 / 切出預覽時整個編輯器重建，
+            吃的是那個版本的 snapshot（`useEditorHost` 的 doc 以 pageId 為 key 只建一次，
+            不換 key 的話預覽 snapshot 根本不會被讀）。
+            `syncDisabled` 讓預覽期間不送 tx、也不收遠端 ops。
+          */}
           <Editor
-            key={page.id}
+            key={previewing ? `${page.id}:v${preview.seq}` : page.id}
             pageId={page.id}
             workspaceId={workspace?.id ?? null}
-            snapshot={snapshot.data}
+            snapshot={previewing ? (preview.snapshot ?? undefined) : snapshot.data}
             readOnly={readOnly}
+            syncDisabled={previewing}
             onNavigateToPage={goToPage}
             onTransportState={setTransport}
           />

@@ -150,3 +150,123 @@
   color: var(--kn-color-text-tertiary);
   font-size: var(--kn-font-size-xs);
 }
+
+/* ── 未解決 / 全部 篩選（gap-review C-3）───────────────── */
+.filter {
+  display: inline-flex;
+  gap: 2px;
+  background: var(--kn-color-bg-hover);
+  border-radius: 6px;
+  padding: 2px;
+}
+
+.filterButton {
+  border: 0;
+  background: none;
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 12px;
+  color: var(--kn-color-text-secondary);
+  cursor: pointer;
+  min-height: 24px;
+}
+
+.filterActive {
+  background: var(--kn-color-bg);
+  color: var(--kn-color-text);
+  font-weight: 600;
+}
+
+/* ── 目前這一張卡片（從編輯器的標註跳過來）───────────── */
+.threadActive {
+  box-shadow: inset 2px 0 0 var(--kn-color-accent, #2383e2);
+  background: var(--kn-color-bg-hover);
+}
+
+/* ── `@` 提及選單 ───────────────────────────────────── */
+.inputWrap {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.inputWrap .input {
+  width: 100%;
+}
+
+.mentionMenu {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 2;
+  list-style: none;
+  margin: 0;
+  padding: 4px;
+  max-height: 180px;
+  overflow-y: auto;
+  background: var(--kn-color-bg);
+  border: 1px solid var(--kn-color-border);
+  border-radius: 6px;
+  box-shadow: var(--kn-shadow-menu, 0 8px 24px rgba(15, 15, 15, 0.16));
+}
+
+.mentionItem {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: none;
+  border-radius: 4px;
+  padding: 6px 8px;
+  font-size: 13px;
+  color: inherit;
+  cursor: pointer;
+  min-height: 28px;
+}
+
+.mentionItemActive,
+.mentionItem:hover {
+  background: var(--kn-color-bg-hover);
+}
+
+/* ── 行內標註的雙向連動（gap-review B-8）───────────────
+ * editor-core 只給標註 `.kn-comment`，沒有 discussionId，
+ * 所以狀態掛在 block 上再往下選（見 features/comments/highlight.ts）。
+ * :global 是必要的：`.kn-comment` 由 editor-core 產生，不是這支 CSS module 的 class。
+ */
+:global([data-kn-comment-state='active'] .kn-comment) {
+  background: rgba(255, 212, 0, 0.45);
+  border-bottom-color: rgba(212, 160, 0, 0.9);
+  box-shadow: 0 0 0 2px rgba(255, 212, 0, 0.35);
+  border-radius: 2px;
+}
+
+:global([data-kn-comment-state='resolved'] .kn-comment) {
+  background: rgba(255, 212, 0, 0.08);
+  border-bottom-color: transparent;
+}
+
+/* ── 跨頁「所有留言」（gap-review C-8）───────────────── */
+.crossPageItem {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: none;
+  padding: 2px 0;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+}
+
+.crossPageTitle {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--kn-color-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

@@ -99,3 +99,24 @@ export function extractCommentIds(body: RichText | null | undefined): string[] {
   }
   return [...ids];
 }
+
+/**
+ * 跨頁的最近討論串（gap-review C-8）。
+ *
+ * 側邊欄的「留言」在首頁（沒有 pageId）以前只會打開一個空面板寫
+ * 「選一個頁面才能看留言」。改成列出工作區裡我看得到的最近討論串。
+ */
+export interface WorkspaceDiscussionItem {
+  discussion: Discussion;
+  pageId: string;
+  pageTitle: string;
+  pageIcon: string | null;
+  /** 這個討論串最後一則留言的時間（排序用） */
+  lastActivityAt: string;
+}
+
+export interface WorkspaceDiscussionsResponse {
+  workspaceId: string;
+  items: WorkspaceDiscussionItem[];
+  users: Record<string, PublicUser>;
+}

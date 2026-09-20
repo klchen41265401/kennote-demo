@@ -35,6 +35,16 @@ export async function commentRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ data: await service.listPageDiscussions(id, user.id) });
   });
 
+  /**
+   * 跨頁的最近討論串（gap-review C-8）：首頁按側邊欄「留言」時用。
+   * 權限在 service 層逐頁再問一次。
+   */
+  app.get('/api/workspaces/:id/discussions', async (req, reply) => {
+    const user = requireUser(req);
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    return reply.send({ data: await service.listWorkspaceDiscussions(id, user.id) });
+  });
+
   /** 新討論串（頁面層級或 block 行內）。行內留言由前端先給 discussionId，與 comment mark 對齊 */
   app.post('/api/pages/:id/discussions', writeLimit, async (req, reply) => {
     const user = requireUser(req);

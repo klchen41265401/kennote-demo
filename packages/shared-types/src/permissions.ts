@@ -138,4 +138,11 @@ export const COLLAB_API_ROUTES = {
   pageHistoryAt: (pageId: string, seq: number) => `/api/pages/${pageId}/history/${seq}`,
   pageHistoryRestore: (pageId: string, seq: number) =>
     `/api/pages/${pageId}/history/${seq}/restore`,
+
+  /** 「更新」feed（活動摘要），與 pageHistory（快照清單）是兩個不同的東西 */
+  pageUpdates: (pageId: string, cursor?: string | null) =>
+    `/api/pages/${pageId}/updates${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''}`,
+  /** 首頁側邊欄「留言」：跨頁最近留言（gap-review C-8） */
+  workspaceDiscussions: (workspaceId: string) =>
+    `/api/workspaces/${workspaceId}/discussions`,
 } as const;

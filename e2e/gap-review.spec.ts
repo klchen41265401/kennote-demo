@@ -190,7 +190,8 @@ test.describe('gap-review A：右側面板', () => {
     await page.waitForTimeout(1500);
 
     // 頂欄的留言鈕在 <768 是被 .compactHide 藏起來的 —— 這是刻意的（UI-SPEC §10）
-    await expect(page.getByRole('button', { name: '留言', exact: true })).toBeHidden();
+    // RWD D-4 之後手機底部工具列也有一顆可見的「留言」，所以只斷言「頂欄那一顆」被藏起來
+    await expect(page.locator('header').getByRole('button', { name: '留言', exact: true })).toBeHidden();
 
     await page.getByRole('button', { name: '動作' }).first().click();
     await expect(page.getByRole('menuitem', { name: '留言' })).toHaveCount(1);
@@ -239,8 +240,18 @@ test.describe('gap-review A：右側面板', () => {
     const box = (await panel.boundingBox())!;
     expect(box.width, '預設 380（Resizable 300–520）').toBeGreaterThan(300);
 
-    // 兩個 tab 都在
+    /*
+     * ⚠️ 第十五輪（協作面板補完）改了面板結構，這幾條跟著改 —— **那是預期的**：
+     * 真實 Notion 7.34 的右側面板是 role=tab 的「更新 / 分析」，
+     * 版本紀錄是 ⋯ 選單裡另一個獨立項目，不是同一個面板的 tab
+     * （`reference/shots/gap-review/notion/_A3-updates.json`）。
+     * kennote 多一個「留言」tab（Notion 這一版把頁面留言做成標題下方的 inline 討論串，
+     * 但 kennote 的頂欄 / 側邊欄一直有留言入口）。細節見 `e2e/collab-panel.spec.ts` CP-4。
+     */
+    await expect(panel.getByRole('tab', { name: '更新' })).toHaveCount(1);
+    await expect(panel.getByRole('tab', { name: '分析' })).toHaveCount(1);
     await expect(panel.getByRole('tab', { name: '留言' })).toHaveCount(1);
-    await expect(panel.getByRole('tab', { name: '版本歷史' })).toHaveCount(1);
+    await expect(panel.getByRole('tab', { name: '版本歷史' })).toHaveCount(0);
+    await expect(panel.getByRole('button', { name: '版本紀錄' })).toHaveCount(1);
   });
 });

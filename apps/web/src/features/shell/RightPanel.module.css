@@ -1,0 +1,109 @@
+/*
+ * 右側協作面板（gap-review C-2 / C-3）。
+ *
+ * 量到的 Notion 7.34：面板寬 385（26.7% 視窗）、從 y=0 起（蓋住頂欄那一段）、
+ * **推擠**主框架而不是覆蓋、左緣 12px col-resize 把手、左上角 24×24 關閉鈕。
+ * 佔位 / 抽屜與拖曳把手由 `AppShell` 的 Resizable 負責（RWD 代理的範圍），
+ * 這支只管面板內部。
+ */
+.panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-width: 0;
+  background: var(--kn-color-bg);
+  border-left: 1px solid var(--kn-color-border);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 44px;
+  padding: 0 8px;
+  border-bottom: 1px solid var(--kn-color-border);
+  flex: 0 0 auto;
+}
+
+.headerTitle {
+  font-size: 13px;
+  font-weight: 600;
+  flex: 1 1 auto;
+  padding-left: 4px;
+}
+
+.tabs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.tab {
+  border: 0;
+  background: none;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 13px;
+  color: var(--kn-color-text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+  min-height: 28px;
+}
+
+.tab:hover {
+  background: var(--kn-color-bg-hover);
+}
+
+.tabActive {
+  color: var(--kn-color-text);
+  font-weight: 600;
+  box-shadow: inset 0 -2px 0 var(--kn-color-text);
+  border-radius: 4px 4px 0 0;
+}
+
+/* Notion：24×24 的圖示鈕（觸控裝置放大命中區） */
+.iconButton {
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--kn-color-text-secondary);
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+.iconButton:hover {
+  background: var(--kn-color-bg-hover);
+}
+
+@media (hover: none) {
+  .iconButton {
+    width: 44px;
+    height: 44px;
+  }
+}
+
+.body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.stateHint {
+  margin: 0;
+  padding: 16px 12px;
+  color: var(--kn-color-text-secondary);
+  font-size: 13px;
+}

@@ -485,6 +485,18 @@ export interface ViewFormat {
   calendarShowWeekend?: boolean;
   listShowProperties?: boolean;
 
+  /**
+   * 「頁面打開方式」（Notion 7.34 視圖設定 → 版面配置區塊，原文照抄）。
+   *
+   * 點資料庫的一列時要用哪一種方式開啟那一頁：
+   *   · `'side'`   側邊預覽 —— 在側邊開啟頁面。保持互動後方的瀏覽模式。（Notion 預設）
+   *   · `'center'` 置中預覽 —— 以焦點、置中互動視窗開啟頁面。
+   *   · `'full'`   完整頁面 —— 以完整頁面開啟頁面。
+   *
+   * 存在 view 上（jsonb 的 `format`，不需要 migration）。
+   */
+  openPageIn?: OpenPageIn;
+
   /* ── 時程表（Timeline）──
      Notion 的時程表用「開始 / 結束」兩個日期欄位畫長條；只給開始時視為單日。
      結束欄位留空 = 用同一個日期欄位的 `end`（date range）。 */
@@ -497,6 +509,19 @@ export interface ViewFormat {
   /** 左側表格欄寬（px） */
   timelineTableWidth?: number;
 }
+
+/**
+ * 「頁面打開方式」的三個選項（`reference/notion-capture/peek/` 採集，Notion 7.34 zh-TW）。
+ * 標籤與說明是**原文照抄**，改字之前請先回去量。
+ */
+export const OPEN_PAGE_IN_VALUES = ['side', 'center', 'full'] as const;
+export type OpenPageIn = (typeof OPEN_PAGE_IN_VALUES)[number];
+
+export const OPEN_PAGE_IN_META: Record<OpenPageIn, { label: string; description: string }> = {
+  side: { label: '側邊預覽', description: '在側邊開啟頁面。保持互動後方的瀏覽模式。' },
+  center: { label: '置中預覽', description: '以焦點、置中互動視窗開啟頁面。' },
+  full: { label: '完整頁面', description: '以完整頁面開啟頁面。' },
+};
 
 /** 時程表橫軸刻度（`07i-db-timeline-light.png` 的「月 ⌄」下拉） */
 export const TIMELINE_SCALES = ['day', 'week', 'month'] as const;
