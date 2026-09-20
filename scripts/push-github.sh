@@ -2,7 +2,7 @@
 # 推到 GitHub 公開 repo：在暫存 clone 裡把私人截圖／採集工具從整段歷史過濾掉再推。
 # 用法：bash scripts/push-github.sh [remote-url]
 set -euo pipefail
-URL="${1:-https://github.com/ken158ken/kennote-demo.git}"
+URL="${1:-https://github.com/klchen41265401/kennote-demo.git}"
 SRC="$(cd "$(dirname "$0")/.." && pwd)"
 WORK="${TMPDIR:-/tmp}/kennote-github-push"
 rm -rf "$WORK"
