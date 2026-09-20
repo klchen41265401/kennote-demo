@@ -102,10 +102,21 @@ export function uploadFile(
   return { promise, abort: () => xhr.abort() };
 }
 
+/**
+ * Demo 模式（`VITE_DEMO=1`）的掛勾：`<img src>` 不走 fetch，所以攔截 fetch 的
+ * demo 後端救不了 `/api/files/:id`。`src/demo/index.ts` 會把這個全域函式裝上去，
+ * 直接把 fileId 換成 IndexedDB blob 的 `blob:` URL。沒裝就是 undefined，行為不變。
+ */
+function demoFileUrl(fileId: string): string | null {
+  const hook = (globalThis as { __KENNOTE_DEMO_FILE_URL__?: (id: string) => string | null })
+    .__KENNOTE_DEMO_FILE_URL__;
+  return hook ? hook(fileId) : null;
+}
+
 /** 給 <img src> 用：優先用後端回的 url，退回 /api/files/:id */
 export function fileUrl(meta: { id: string; url?: string | null }): string {
   if (meta.url) return meta.url;
-  return `${BASE_URL}${API_ROUTES.file(meta.id)}`;
+  return demoFileUrl(meta.id) ?? `${BASE_URL}${API_ROUTES.file(meta.id)}`;
 }
 
 /** block.props 存的是 fileId 或 externalUrl，這裡統一解析成可顯示的 URL */
@@ -114,7 +125,7 @@ export function resolveMediaUrl(props: {
   externalUrl?: string | null;
 }): string | null {
   if (props.externalUrl) return props.externalUrl;
-  if (props.fileId) return `${BASE_URL}${API_ROUTES.file(props.fileId)}`;
+  if (props.fileId) return demoFileUrl(props.fileId) ?? `${BASE_URL}${API_ROUTES.file(props.fileId)}`;
   return null;
 }
 

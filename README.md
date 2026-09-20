@@ -16,7 +16,7 @@
 | QA 報告 | [`docs/qa/README.md`](docs/qa/README.md)（9 輪功能 QA + 資料庫缺口 + 回歸分診） |
 | 視覺比對 | [`reference/shots/compare/`](reference/shots/compare/)（kennote ↔ Notion 逐像素） |
 
-正式站：<http://100.74.148.92:8090>
+正式站：<http://100.74.148.92:8090>　｜　線上 Demo（不需要伺服器）：<https://ken158ken.github.io/kennote-demo/>
 
 ---
 
@@ -33,6 +33,44 @@ pnpm dev:local                # server(4000) + web(5173)
 
 開 <http://localhost:5173>，用 `demo@kennote.local` / `demo1234` 登入
 （或直接按登入——`FEATURE_OPEN_LOGIN` 預設開著）。
+
+---
+
+## 1.5 Demo 模式 / GitHub Pages
+
+<https://ken158ken.github.io/kennote-demo/> 是**沒有伺服器**的完整 kennote：
+登入、寫、`/` 選單、資料庫六視圖、篩選排序、搜尋、版本歷史、匯出匯入、上傳圖片
+都能用，資料存在**你自己的瀏覽器** IndexedDB 裡，重新整理不會消失，
+也不會離開這台裝置（側邊欄底部的徽章可以一鍵重設）。
+
+做法是在 `VITE_DEMO=1` 時，於 `main.tsx` 最早期安裝一個**純瀏覽器後端**：
+
+- 攔 `globalThis.fetch` 與 `XMLHttpRequest` 對 `/api/**` 的請求
+- 用假的 `globalThis.WebSocket` 接 `/ws`（`authOk` / `synced` / `presence` / `txApplied`）
+- 第一次載入時種一份示範資料（內容對照 `e2e/fixtures/reference-page.ts`：
+  21 種 block + 一個 6 筆 / 6 視圖的 inline database + 子頁與範本頁）
+
+`lib/api-client.ts`、`lib/sync-client.ts` 與所有 feature **一行都沒有改**，
+所以 demo 走的是跟正式站完全同一條程式路徑（`/api/health` 回 `features.ot=false`，
+等同 `FEATURE_OT=false` 的正式站）。
+
+```bash
+# 本機重現一次 GitHub Pages 的建置
+cd apps/web
+VITE_DEMO=1 VITE_BASE=/kennote-demo/ npx vite build
+cp dist/index.html dist/404.html          # SPA fallback
+npx vite preview --base /kennote-demo/ --port 4183
+```
+
+| | |
+|---|---|
+| 架構 / 覆蓋的端點表 / 未覆蓋清單 / 怎麼加 handler | [`apps/web/src/demo/README.md`](apps/web/src/demo/README.md) |
+| 部署工作流程 | [`.github/workflows/pages.yml`](.github/workflows/pages.yml) |
+| 實走截圖 | [`reference/shots/demo/`](reference/shots/demo/) |
+
+> Demo 模式**不包含**：多人協作與 presence（只有你自己）、OT、公開分享連結、
+> 邀請成員與權限矩陣、Notion `.zip` 匯入、含子頁的 zip 匯出、中文 bigram 全文搜尋
+> （改用子字串比對）。完整清單在上面那份 README 的 §4。
 
 ---
 
@@ -116,6 +154,7 @@ kennote/
 │  │  ├─ src/plugins/  error-handler / auth / rate-limit / metrics
 │  │  └─ migrations/   15 支 .sql（0001–0070），自製 runner，冪等
 │  └─ web/             React 18 + Vite（runtime 依賴只有 6 個）
+│     ├─ src/demo/     ⭐ Demo 模式的純瀏覽器後端（VITE_DEMO=1 才載入）
 │     ├─ src/features/ 17 個 feature 資料夾
 │     ├─ src/lib/      api-client / sync-client / ot-client / offline-queue / shortcuts
 │     └─ src/stores/   自研 store（useSyncExternalStore），不裝狀態管理套件

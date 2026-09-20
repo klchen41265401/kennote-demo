@@ -14,6 +14,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import type { PageTreeNode, WorkspaceSummary } from '@kennote/shared-types';
 import { plainTextToRichText } from '@kennote/shared-types';
 import { Icon, Tooltip, toast, useDroppable } from '@kennote/ui';
+import { DemoBadge } from '../../demo/DemoBadge';
 import { InboxBadge } from '../notifications/InboxPanel';
 import { useReorderAnnouncer } from '../../lib/keyboard-reorder';
 import {
@@ -468,6 +469,8 @@ export function Sidebar({ workspace }: SidebarProps): JSX.Element {
       </div>
 
       <div className={styles.footer}>
+        {/* Demo 模式（VITE_DEMO=1）才會出現；正式站回 null */}
+        <DemoBadge />
         <TemplatesMenu
           workspaceId={workspace.id}
           onCreated={async (id) => {
