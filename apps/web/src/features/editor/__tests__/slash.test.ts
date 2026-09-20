@@ -17,12 +17,12 @@ import { missingPinyinChars, pinyinInitials } from '../lib/pinyin';
 const ALL = allSlashCommands();
 
 /* ──────────────────────────────────────────────────────────
-   真值：reference/notion-capture/_slash-menu-full.json
+   真值：./fixtures/slash-menu-full.json（複製自 reference/notion-capture/_slash-menu-full.json，該目錄不進公開 repo）
    （實機把 Notion 7.34 的整個 `/` 選單捲完抓下來的 164 項）
    ────────────────────────────────────────────────────────── */
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const CAPTURE = path.resolve(HERE, '../../../../../../reference/notion-capture/_slash-menu-full.json');
+const CAPTURE = path.resolve(HERE, './fixtures/slash-menu-full.json');
 
 interface CapturedItem {
   label: string;
