@@ -18,7 +18,7 @@ import type {
 } from '@kennote/shared-types';
 import { API_ROUTES, isGuestEmail, type OpenLoginResponse } from '@kennote/shared-types';
 import { clearQueryCache, createStore, useStore } from '@kennote/ui';
-import { api, setAccessToken, setUnauthorizedHandler } from '../lib/api-client';
+import { api, refreshSession, setAccessToken, setUnauthorizedHandler } from '../lib/api-client';
 import { applyTheme, type Theme } from '../lib/theme';
 
 export type AuthStatus = 'loading' | 'authenticated' | 'anonymous';
@@ -88,12 +88,16 @@ setUnauthorizedHandler(() => {
  * 打一次 /refresh 就能無痛續命（「關瀏覽器再開仍保持登入」的驗收條件）。
  */
 export async function bootstrapAuth(): Promise<void> {
-  try {
-    const session = await api.post<AuthSessionResponse>(API_ROUTES.refresh);
-    applySession(session);
-  } catch {
+  // ⚠️ 一定要走 api-client 的 `refreshSession()`（全 App 共用同一個 in-flight promise），
+  // 不要自己 `api.post('/auth/refresh')` —— 開機時可能有請求在 token 還沒回來就送出去，
+  // 它 401 之後也會去 refresh；兩次併發的 refresh 會被後端當成 token reuse 而
+  // **撤銷整個 session 家族**（使用者直接被登出 → 冷啟動 `?p=` 的 side peek 會掉回登入頁）。
+  const session = (await refreshSession()) as AuthSessionResponse | null;
+  if (!session) {
     clearSession();
+    return;
   }
+  applySession(session);
 }
 
 export async function login(email: string, password: string): Promise<void> {

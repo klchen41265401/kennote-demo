@@ -20,6 +20,7 @@ import { DatabaseContext } from '../database/context';
 import { FieldIcon } from '../database/_fallback';
 import { getFieldType } from '../database/fields/types';
 import { usePage, usePageSnapshot } from '../../lib/queries';
+import { useAuth } from '../../stores/auth';
 import { SidePeek, type PeekAction } from './SidePeek';
 import { usePeekNavigation, usePeekState } from './peek-url';
 import { usePeekRowSource } from './peek-store';
@@ -30,6 +31,15 @@ export function PeekHost(): JSX.Element | null {
   const { pageId, mode } = usePeekState();
   const nav = usePeekNavigation();
   const source = usePeekRowSource(pageId);
+  /*
+   * `PeekHost` 掛在 `ProtectedRoute` **外面**（換 route 不卸載），
+   * 所以冷啟動（重整 / 直接貼網址帶 `?p=`）時它會比 auth bootstrap 還早跑。
+   * 這時候去打 `GET /api/pages/:id` 必然 401，而且 401 會觸發第二次 /refresh ——
+   * 後端的 refresh token 有重用偵測，併發兩次會撤銷整個 session（使用者被登出）。
+   * api-client 已經把 refresh 收斂成單一 in-flight，這裡再補一層：
+   * bootstrap 還沒結束就先畫外框、**不要發請求**。
+   */
+  const { status } = useAuth();
 
   /* Escape 關閉。用 capture=false，讓 peek 裡開著的 Popover / Menu 先吃掉它。 */
   useEffect(() => {
@@ -63,6 +73,8 @@ export function PeekHost(): JSX.Element | null {
   }, [source, pageId, nav]);
 
   if (!pageId) return null;
+  // 沒登入（會被 `ProtectedRoute` 導去 /login）就不要在登入頁上疊一個空的 peek
+  if (status === 'anonymous') return null;
 
   return (
     <SidePeek
@@ -78,7 +90,11 @@ export function PeekHost(): JSX.Element | null {
       onNext={nextId ? () => nav.open(nextId, mode) : null}
       actions={actions}
     >
-      <PeekBody key={pageId} pageId={pageId} />
+      {status === 'authenticated' ? (
+        <PeekBody key={pageId} pageId={pageId} />
+      ) : (
+        <p className={styles.placeholder}>載入中…</p>
+      )}
     </SidePeek>
   );
 }

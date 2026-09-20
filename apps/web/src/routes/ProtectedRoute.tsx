@@ -16,7 +16,11 @@ export function ProtectedRoute() {
   }
 
   if (status === 'anonymous') {
-    return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+    // ⚠️ 要連 query 一起帶走：side peek 是 URL 狀態（`?p=&pm=`），
+    // 只存 pathname 的話「session 過期 → 登入 → 回來」會把 peek 弄丟。
+    return (
+      <Navigate to="/login" replace state={{ from: `${location.pathname}${location.search}` }} />
+    );
   }
 
   return <Outlet />;
