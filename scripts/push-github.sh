@@ -14,5 +14,6 @@ FILTER_BRANCH_SQUELCH_WARNING=1 git filter-branch -f --index-filter \
 if git ls-files | grep -qE '^reference/(notion-capture|tools)/'; then echo "過濾失敗"; exit 1; fi
 if git ls-files | grep -qE '^\.env$'; then echo ".env 被追蹤了，中止"; exit 1; fi
 git remote add github "$URL"
-git push -f github main:main
+# 非互動：憑證管理員若要彈 GUI 就直接失敗，不要卡住整個腳本
+GIT_TERMINAL_PROMPT=0 GCM_INTERACTIVE=never timeout 300 git push -f github main:main
 echo "已推送到 $URL"
