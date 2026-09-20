@@ -18,6 +18,9 @@ import { FieldIcon, Menu, MenuItem, MenuLabel, MenuSeparator, Popover, UiIcon, V
 import { EditableCell } from '../../EditableCell';
 import { FieldConfigPopover } from '../../FieldConfigPopover';
 import { useDatabaseContext } from '../../context';
+// O-20：批次「加到收藏」走側邊欄同一支 API（列 = 頁）
+import { setFavorite } from '../../../../lib/queries';
+import { toast } from '@kennote/ui';
 import { fieldTypeGroups, getFieldType } from '../../fields/types';
 import { relatedTitle } from '../../fields/relation/titles';
 import type { ViewProps } from '../types';
@@ -33,7 +36,7 @@ interface ActiveCell {
 
 export function TableView(props: ViewProps) {
   const { view, schema, rows, aggregations, hasMore, isFetching, loadMore, updateView } = props;
-  const { readOnly, applySchemaOps } = useDatabaseContext();
+  const { readOnly, applySchemaOps, workspaceId } = useDatabaseContext();
   const columns = visibleProperties(schema, view.format);
   const freeze = view.format?.tableFreezeColumns ?? 1;
 
@@ -62,6 +65,16 @@ export function TableView(props: ViewProps) {
   const anchorRef = useRef<string | null>(null);
 
   /* ── 拖曳排序 ── */
+  /**
+   * O-17（第十三輪）：**視圖有排序條件時不能手動拖曳。**
+   *
+   * 手動順序寫的是 `pages.sort_key`，而畫面的順序來自 `view.query.sort` ——
+   * 兩者同時存在時，拖完放手、下一次重查就彈回去了。
+   * 這不是「不會壞」，是**寫進去的東西看不見**：使用者只會覺得拖曳偶爾失效。
+   * Notion 在這個情況下直接把把手停用，並說明原因。
+   */
+  const sortedByQuery = (view.query?.sort ?? []).length > 0;
+  const canReorderRows = !readOnly && props.reorderRow !== undefined && !sortedByQuery;
   const [dragRowId, setDragRowId] = useState<string | null>(null);
   /** 放開時要插在哪一列之後（null = 最前面、undefined = 沒有落點） */
   const [dropAfter, setDropAfter] = useState<string | null | undefined>(undefined);
@@ -139,6 +152,23 @@ export function TableView(props: ViewProps) {
     URL.revokeObjectURL(href);
   }
 
+  /** O-20：把選取的列加進收藏（列 = 頁，走側邊欄同一支 API） */
+  async function favoriteSelected(): Promise<void> {
+    const ids = [...selected];
+    setSelected(new Set());
+    let ok = 0;
+    for (const id of ids) {
+      try {
+        await setFavorite(id, workspaceId, true);
+        ok += 1;
+      } catch {
+        /* 個別失敗不要打斷整批 */
+      }
+    }
+    if (ok > 0) toast.success(`已加入收藏（${ok} 頁）`);
+    else toast.error('加入收藏失敗');
+  }
+
   /*
    * 第六輪 BUG-34：列的拖曳排序走的是 **HTML5 DnD**（`draggable` + `dragstart`），
    * 而行動瀏覽器**不會**從觸控觸發 `dragstart` —— 加上把手只在 `mousemove`
@@ -165,7 +195,7 @@ export function TableView(props: ViewProps) {
 
   function onRowPointerDown(event: React.PointerEvent<HTMLDivElement>, rowId: string): void {
     if (event.pointerType !== 'touch') return;
-    if (readOnly || props.reorderRow === undefined) return;
+    if (!canReorderRows) return;
     cancelTouchHold();
     const startX = event.clientX;
     const startY = event.clientY;
@@ -591,9 +621,11 @@ export function TableView(props: ViewProps) {
           data-row-handle=""
           data-testid="row-handle"
           style={{ top: handleTop }}
-          title="拖曳排序"
+          title={sortedByQuery ? '這個視圖有排序條件，請先移除排序才能手動調整順序' : '拖曳排序'}
+          data-reorder-disabled={sortedByQuery ? '' : undefined}
+          aria-disabled={sortedByQuery || undefined}
           /* 拖曳排序：HTML5 DnD（與側邊欄 / 看板同一套，不加套件） */
-          draggable={!readOnly && props.reorderRow !== undefined}
+          draggable={canReorderRows}
           onDragStart={(e) => {
             if (!handleRowId) return;
             setDragRowId(handleRowId);
@@ -624,6 +656,19 @@ export function TableView(props: ViewProps) {
           <span className={styles.batchSpacer} />
           <button type="button" className={styles.batchButton} onClick={() => exportSelected()}>
             匯出選取
+          </button>
+          {/*
+           * O-20（第十三輪，部分）：批次列原本只有「匯出 / 複製 / 刪除」。
+           * 資料庫的每一列**就是一頁**，所以「加到收藏」用的是側邊欄同一支
+           * `setFavorite()` —— 不是資料庫自己的第二套收藏。
+           * （「移動到」仍未做：`moveTo` overlay 一次只吃一個 moveTargetId。）
+           */}
+          <button
+            type="button"
+            className={styles.batchButton}
+            onClick={() => void favoriteSelected()}
+          >
+            加到收藏
           </button>
           <button
             type="button"

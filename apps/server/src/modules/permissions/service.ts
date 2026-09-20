@@ -28,6 +28,7 @@ import {
   notifyPageShared,
   notifyPermissionChanged,
   notifyWorkspaceInvite,
+  notifyWorkspaceRoleChanged,
 } from '../notifications/fanout.js';
 import * as repo from './repo.js';
 import { resolvePermission, resolvePublicPermission } from './resolve.js';
@@ -501,6 +502,17 @@ export async function changeMemberRole(
   if (!ok) throw new AppError('NOT_FOUND', '這個人不是工作區成員');
   // 工作區角色是每一頁權限的 baseline / ceiling → 這個人**所有**訂閱中的頁面都要重算
   emitPermissionChange({ userId: targetUserId, pageId: null });
+  /*
+   * 第十三輪：`emitPermissionChange()` 只救「現在正連著的分頁」。
+   * 沒開著的人得有一則收得到的通知，否則降級是**無聲**的（fire-and-forget，失敗不影響授權）。
+   */
+  void notifyWorkspaceRoleChanged({
+    workspaceId,
+    actorId,
+    recipientId: targetUserId,
+    permission: role,
+    previousPermission: targetRole,
+  }).catch(() => {});
   return { userId: targetUserId, role };
 }
 
@@ -518,5 +530,13 @@ export async function removeMember(
   if (!ok) throw new AppError('NOT_FOUND', '這個人不是工作區成員');
   // 被踢出工作區 = 對這個工作區的每一頁都變成 none（除非另有直接授權）
   emitPermissionChange({ userId: targetUserId, pageId: null });
+  // 第十三輪：撤銷也要通知（與頁面層 `permission === 'none'` 同一條規則）
+  void notifyWorkspaceRoleChanged({
+    workspaceId,
+    actorId,
+    recipientId: targetUserId,
+    permission: 'none',
+    ...(targetRole ? { previousPermission: targetRole } : {}),
+  }).catch(() => {});
   return { removed: targetUserId };
 }

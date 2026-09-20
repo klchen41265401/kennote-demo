@@ -44,13 +44,13 @@ async function newInlineDatabase(page: Page, title: string): Promise<void> {
   await page.keyboard.type('/資料庫 - 內嵌');
   await page.waitForTimeout(900);
   await page.keyboard.press('Enter');
-  await expect(page.locator('button[aria-label="設定"]').first()).toBeVisible({ timeout: 25_000 });
+  await expect(page.locator('button[aria-label="資料庫設定"]').first()).toBeVisible({ timeout: 25_000 });
   await page.waitForTimeout(1200);
 }
 
 /** 設定 → 編輯屬性 → 新增屬性 → 型別選單 */
 async function openPropertyTypeMenu(page: Page): Promise<void> {
-  await page.locator('button[aria-label="設定"]').first().click();
+  await page.locator('button[aria-label="資料庫設定"]').first().click();
   await page.waitForTimeout(500);
   await page.locator('text="編輯屬性"').last().click();
   await page.waitForTimeout(500);

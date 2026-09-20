@@ -473,7 +473,7 @@ for (const theme of ['light', 'dark'] as Theme[]) {
         for (const [code, label, padX, padY] of [
           ['07k-db-filter', '篩選', 13, 17],
           ['07l-db-sort', '排序', 13, 17],
-          ['07m-db-settings', '設定', 13, 13],
+          ['07m-db-settings', '資料庫設定', 13, 13],
         ] as [string, string, number, number][]) {
           const button = db.getByRole('button', { name: label }).first();
           if (!(await button.count())) continue;

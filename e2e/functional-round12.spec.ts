@@ -242,12 +242,11 @@ test('R12-1 手機：「開啟」鈕點下去要開出全螢幕的列 peek（O-3
 
 async function openDbMore(page: Page): Promise<void> {
   /*
-   * ⚠️ 不能用 `getByRole('button', { name: '設定' })` ——
-   * 側邊欄底下也有一顆「設定」（開帳號設定的那個 overlay），
-   * `.first()` 抓到誰要看 DOM 順序。這是 R12-1 那個陷阱的同一個形狀，
-   * 所以這裡用 DatabaseHeader 自己的 class 限定範圍。
+   * 本輪之前這顆的 `aria-label` 是「設定」，跟側邊欄底下那顆同名，
+   * 只好用 DatabaseHeader 自己的 class 限定範圍（R12-1 陷阱的同一個形狀）。
+   * 第十三輪 O-33 把它改名為「資料庫設定」，名稱本身就唯一了。
    */
-  await page.locator('[class*="toolButton"][aria-label="設定"]').first().click();
+  await page.locator('[aria-label="資料庫設定"]').first().click();
   await page.waitForTimeout(800);
 }
 

@@ -15,6 +15,7 @@ import type { PageTreeNode, WorkspaceSummary } from '@kennote/shared-types';
 import { plainTextToRichText } from '@kennote/shared-types';
 import { Icon, Tooltip, toast, useDroppable } from '@kennote/ui';
 import { InboxBadge } from '../notifications/InboxPanel';
+import { useReorderAnnouncer } from '../../lib/keyboard-reorder';
 import {
   createPage,
   deletePage,
@@ -46,6 +47,7 @@ import { TreeRow, type TreeRowActions } from './TreeRow';
 import {
   buildTree,
   descendantIds,
+  displayTitle,
   flattenVisible,
   isDescendant,
   limitWithMore,
@@ -93,6 +95,48 @@ export function Sidebar({ workspace }: SidebarProps): JSX.Element {
     await tree.refetch();
   }, [tree]);
 
+  /**
+   * O-17（第十三輪）：側邊欄「上移 / 下移」的實作。
+   *
+   * 走的是拖放的同一個出口（`movePage({ parentId, afterId })`），
+   * 只是 `afterId` 由**目前的兄弟順序**算出來而不是由落點算出來。
+   * 播報放在這一層：搬完之後那一列會被重新排序，訊息若掛在列上會跟著卸載。
+   */
+  const announcer = useReorderAnnouncer();
+  const reorderSibling = useCallback(
+    async (id: string, direction: -1 | 1) => {
+      const self = nodes.find((n) => n.id === id);
+      if (!self) return;
+      const siblings = nodes
+        .filter((n) => n.parentId === self.parentId)
+        .sort((a, b) => (a.sortKey < b.sortKey ? -1 : a.sortKey > b.sortKey ? 1 : a.id < b.id ? -1 : 1));
+      const index = siblings.findIndex((n) => n.id === id);
+      const to = index + direction;
+      const title = displayTitle(self.title);
+      if (index < 0) return;
+      if (to < 0 || to >= siblings.length) {
+        // 撞到頭 / 尾也要出聲，否則使用者分不出「按鍵沒收到」與「已經到底了」
+        announcer.announce(`「${title}」已經在${direction < 0 ? '第一個' : '最後一個'}`);
+        return;
+      }
+      /*
+       * `afterId` 是「排在誰的後面」：往下搬要接在目標的後面（目標會往上補一格），
+       * 往上搬則要接在目標的**前一個**後面（往上第 2 格）。
+       * 這個 ±1 就是拖放 `before` / `after` 那段算的同一件事。
+       */
+      const afterId =
+        direction > 0 ? (siblings[to]?.id ?? null) : (siblings[to - 1]?.id ?? null);
+      try {
+        await movePage(id, workspace.id, { parentId: self.parentId, afterId });
+        await refresh();
+        announcer.announce(`「${title}」已移到第 ${to + 1} 項，共 ${siblings.length} 項`);
+      } catch {
+        toast.error('搬移失敗');
+      }
+    },
+    [nodes, workspace.id, refresh, announcer],
+  );
+
   const actions = useMemo<TreeRowActions>(
     () => ({
       navigate: (id) => {
@@ -132,9 +176,10 @@ export function Sidebar({ workspace }: SidebarProps): JSX.Element {
         await favorites.refetch();
       },
       moveTo: (id) => openOverlay('moveTo', { moveTargetId: id }),
+      reorder: (id, direction) => void reorderSibling(id, direction),
       openInNewTab: (id) => window.open(`/page/${id}`, '_blank', 'noopener'),
     }),
-    [navigate, workspace.id, refresh, activeId, favorites],
+    [navigate, workspace.id, refresh, activeId, favorites, reorderSibling],
   );
 
   /* ── 拖曳落點 ───────────────────────────────────────── */
@@ -244,6 +289,8 @@ export function Sidebar({ workspace }: SidebarProps): JSX.Element {
 
   return (
     <nav className={styles.sidebar} aria-label="側邊欄">
+      {/* O-17：上移 / 下移的播報（整個側邊欄共用一個，見 reorderSibling） */}
+      {announcer.live}
       <div className={styles.topRow}>
         <button
           type="button"

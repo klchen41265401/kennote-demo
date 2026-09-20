@@ -6,6 +6,7 @@ import { useState } from 'react';
 import type { CollectionSchema, FieldType, ViewFormat } from '@kennote/shared-types';
 import { FieldIcon, Menu, MenuItem, MenuLabel, Popover, UiIcon } from './_fallback';
 import { reorder, useSortableItem, useSortableList } from './dnd';
+import { useKeyboardReorder, useReorderAnnouncer } from '../../lib/keyboard-reorder';
 import { useDatabaseContext } from './context';
 import { FieldConfigPopover } from './FieldConfigPopover';
 import { fieldTypeGroups, getFieldType } from './fields/types';
@@ -79,6 +80,10 @@ export function PropertyList({ schema, format, onChangeFormat }: Props) {
     onReorder: (from, to) => commit(reorder(entries, from, to)),
   });
 
+  // O-17：拖曳以外的第二條路（Alt + ↑/↓），移動後由 aria-live 報出新位置
+  const announcer = useReorderAnnouncer();
+  const move = (from: number, to: number) => commit(reorder(entries, from, to));
+
   return (
     <div className={styles.panel}>
       <MenuLabel>此視圖顯示的屬性</MenuLabel>
@@ -88,13 +93,17 @@ export function PropertyList({ schema, format, onChangeFormat }: Props) {
             key={entry.property}
             entry={entry}
             index={index}
+            count={entries.length}
             schema={schema}
+            announce={announcer.announce}
+            onMove={(to) => move(index, to)}
             onToggle={() =>
               commit(entries.map((e, i) => (i === index ? { ...e, visible: !e.visible } : e)))
             }
             onConfig={(anchor) => setConfigFor({ property: entry.property, anchor })}
           />
         ))}
+        {announcer.live}
       </div>
 
       <button
@@ -140,12 +149,15 @@ export function PropertyList({ schema, format, onChangeFormat }: Props) {
 interface RowProps {
   entry: Entry;
   index: number;
+  count: number;
   schema: CollectionSchema;
+  announce: (message: string) => void;
+  onMove: (to: number) => void;
   onToggle: () => void;
   onConfig: (anchor: HTMLElement) => void;
 }
 
-function PropertyRow({ entry, index, schema, onToggle, onConfig }: RowProps) {
+function PropertyRow({ entry, index, count, schema, announce, onMove, onToggle, onConfig }: RowProps) {
   const def = schema[entry.property];
   // 第十一輪：整份清單一個 zone，這一列只負責「我是第幾項」（data-kn-dnd-item）
   const { isDragging, dragRef, itemProps, handleProps } = useSortableItem(
@@ -153,6 +165,13 @@ function PropertyRow({ entry, index, schema, onToggle, onConfig }: RowProps) {
     entry.property,
     index,
   );
+  const keyboardProps = useKeyboardReorder({
+    label: def?.name ?? entry.property,
+    index,
+    count,
+    onMove,
+    announce,
+  });
   if (!def) return null;
 
   return (
@@ -161,9 +180,16 @@ function PropertyRow({ entry, index, schema, onToggle, onConfig }: RowProps) {
       {...itemProps}
       className={`${styles.propertyRow} ${isDragging ? styles.rowDragging : ''}`}
     >
-      <span className={styles.dragHandle} {...handleProps} aria-hidden="true">
+      {/* O-17：把手從 aria-hidden 的 <span> 變成真正的 <button> ——
+          原本對鍵盤與螢幕閱讀器完全不存在，現在是清單裡唯一的排序入口 */}
+      <button
+        type="button"
+        className={styles.dragHandle}
+        {...handleProps}
+        {...keyboardProps}
+      >
         <UiIcon name="drag" size={12} />
-      </span>
+      </button>
       <FieldIcon type={def.type} />
       <button
         type="button"

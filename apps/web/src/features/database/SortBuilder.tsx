@@ -5,6 +5,7 @@
 import type { CollectionSchema, SortSpec, ViewQuery } from '@kennote/shared-types';
 import { FieldIcon, UiIcon } from './_fallback';
 import { reorder, useSortableItem, useSortableList } from './dnd';
+import { useKeyboardReorder, useReorderAnnouncer } from '../../lib/keyboard-reorder';
 import { PropertyPicker } from './PropertyPicker';
 import { getFieldType } from './fields/types';
 import styles from './Builders.module.css';
@@ -35,6 +36,9 @@ export function SortBuilder({ schema, query, onChange }: Props) {
     onReorder: (from, to) => update(reorder(sorts, from, to)),
   });
 
+  // O-17：排序條件的優先順序也要有鍵盤路徑（Alt + ↑/↓）
+  const announcer = useReorderAnnouncer();
+
   /** 還沒有排序條件時先給屬性清單（07l-db-sort-*），跟篩選同一個版型、沒有底部動作列 */
   if (sorts.length === 0) {
     return (
@@ -55,12 +59,16 @@ export function SortBuilder({ schema, query, onChange }: Props) {
           key={sort.property}
           sort={sort}
           index={index}
+          count={sorts.length}
           schema={schema}
+          announce={announcer.announce}
+          onMove={(to) => update(reorder(sorts, index, to))}
           sortable={sortable.map(([id]) => id)}
           onChange={(next) => update(sorts.map((s, i) => (i === index ? next : s)))}
           onRemove={() => update(sorts.filter((_, i) => i !== index))}
         />
       ))}
+      {announcer.live}
 
       {sorts.length === 0 ? <p className={styles.hint}>還沒有排序條件。</p> : null}
 
@@ -89,15 +97,35 @@ export function SortBuilder({ schema, query, onChange }: Props) {
 interface SortRowProps {
   sort: SortSpec;
   index: number;
+  count: number;
   schema: CollectionSchema;
   sortable: string[];
+  announce: (message: string) => void;
+  onMove: (to: number) => void;
   onChange: (next: SortSpec) => void;
   onRemove: () => void;
 }
 
-function SortRow({ sort, index, schema, sortable, onChange, onRemove }: SortRowProps) {
+function SortRow({
+  sort,
+  index,
+  count,
+  schema,
+  sortable,
+  announce,
+  onMove,
+  onChange,
+  onRemove,
+}: SortRowProps) {
   const def = schema[sort.property];
   const { isDragging, dragRef, itemProps, handleProps } = useSortableItem('sort', sort.property, index);
+  const keyboardProps = useKeyboardReorder({
+    label: def?.name ?? sort.property,
+    index,
+    count,
+    onMove,
+    announce,
+  });
 
   if (!def) return null;
 
@@ -107,9 +135,10 @@ function SortRow({ sort, index, schema, sortable, onChange, onRemove }: SortRowP
       {...itemProps}
       className={`${styles.sortRow} ${isDragging ? styles.rowDragging : ''}`}
     >
-      <span className={styles.dragHandle} {...handleProps} aria-hidden="true">
+      {/* O-17：見 PropertyList 的同一段 —— 把手要是 button，鍵盤才摸得到 */}
+      <button type="button" className={styles.dragHandle} {...handleProps} {...keyboardProps}>
         <UiIcon name="drag" size={12} />
-      </span>
+      </button>
       <span className={styles.fieldIcon}>
         <FieldIcon type={def.type} />
       </span>

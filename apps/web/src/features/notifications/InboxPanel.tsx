@@ -23,6 +23,18 @@ const TYPE_LABEL: Record<Notification['type'], string> = {
   page_updated: '更新了你追蹤的頁面',
 };
 
+/**
+ * 第十三輪：`permission_changed` 現在有兩個來源 —— 單一頁面的授權變更（帶 `pageId`）
+ * 與**工作區角色**變更 / 被移出工作區（`payload.scope === 'workspace'`，沒有 `pageId`）。
+ * 兩者共用一個型別，所以標籤要靠 payload 分。
+ */
+function typeLabel(n: Notification): string {
+  if (n.type === 'permission_changed' && n.payload.scope === 'workspace') {
+    return n.payload.permission === 'none' ? '把你移出了工作區' : '調整了你在工作區的角色';
+  }
+  return TYPE_LABEL[n.type];
+}
+
 export interface InboxPanelProps {
   /** 點通知 → 開啟對應頁面（宿主決定用 router 還是開新分頁） */
   onOpenPage?(pageId: string, discussionId: string | null): void;
@@ -62,7 +74,7 @@ export function InboxPanel({ onOpenPage }: InboxPanelProps): JSX.Element {
                 }}
               >
                 <span className={styles.line}>
-                  <strong>{actor?.name ?? '有人'}</strong> {TYPE_LABEL[n.type]}
+                  <strong>{actor?.name ?? '有人'}</strong> {typeLabel(n)}
                   {n.payload.pageTitle ? `《${n.payload.pageTitle}》` : ''}
                 </span>
                 {n.payload.snippet ? (

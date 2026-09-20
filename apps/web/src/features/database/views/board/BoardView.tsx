@@ -9,6 +9,7 @@ import type { DatabaseRow, RowGroup } from '@kennote/shared-types';
 import { richTextToPlainText } from '@kennote/shared-types';
 import { UiIcon } from '../../_fallback';
 import { useCardDrag, useCardZone } from '../../dnd';
+import { useKeyboardReorder, useReorderAnnouncer } from '../../../../lib/keyboard-reorder';
 import { EditableCell } from '../../EditableCell';
 import { useDatabaseContext } from '../../context';
 import { getFieldType } from '../../fields/types';
@@ -45,20 +46,57 @@ export function BoardView(props: ViewProps) {
     (view.query?.groupBy?.groups ?? []).filter((g) => g.visible === false).map((g) => g.key),
   );
 
+  const visibleLanes = lanes.filter((lane) => !hiddenKeys.has(lane.key));
+
+  return (
+    <BoardBody
+      lanes={visibleLanes}
+      width={columnWidth}
+      groupProperty={groupProperty}
+      readOnly={readOnly}
+      {...props}
+    />
+  );
+}
+
+/**
+ * O-17（第十三輪）：換欄的鍵盤替代路徑。
+ *
+ * 看板換欄原本**只有**「長按卡片拖到另一欄」一條路 —— 鍵盤使用者
+ * 連改一張卡片的狀態都做不到（卡片上的分組欄位本身不在卡面上，
+ * 它就是欄位名稱）。Alt + ←/→ 把卡片移到前 / 後一欄，
+ * 走的是跟拖放完全相同的出口（`setCellValue`），不是第二套邏輯。
+ *
+ * `announcer` 提到這一層，是因為**整個看板共用一個 live region**：
+ * 每一欄各放一個的話，卡片換欄的瞬間發出訊息的那個節點會跟著被卸載，
+ * 訊息就不會被念出來。
+ */
+interface BoardBodyProps extends ViewProps {
+  lanes: RowGroup[];
+  width: number;
+  groupProperty: string;
+  readOnly: boolean;
+}
+
+function BoardBody({ lanes, width, groupProperty, readOnly, ...props }: BoardBodyProps) {
+  const announcer = useReorderAnnouncer();
+
   return (
     <div className={styles.board}>
-      {lanes
-        .filter((lane) => !hiddenKeys.has(lane.key))
-        .map((lane) => (
-          <BoardColumn
-            key={lane.key ?? '__empty__'}
-            lane={lane}
-            width={columnWidth}
-            groupProperty={groupProperty}
-            readOnly={readOnly}
-            {...props}
-          />
-        ))}
+      {lanes.map((lane, laneIndex) => (
+        <BoardColumn
+          key={lane.key ?? '__empty__'}
+          lane={lane}
+          lanes={lanes}
+          laneIndex={laneIndex}
+          announce={announcer.announce}
+          width={width}
+          groupProperty={groupProperty}
+          readOnly={readOnly}
+          {...props}
+        />
+      ))}
+      {announcer.live}
     </div>
   );
 }
@@ -94,12 +132,24 @@ function localGroups(
 
 interface ColumnProps extends ViewProps {
   lane: RowGroup;
+  lanes: RowGroup[];
+  laneIndex: number;
+  announce: (message: string) => void;
   width: number;
   groupProperty: string;
   readOnly: boolean;
 }
 
-function BoardColumn({ lane, width, groupProperty, readOnly, ...props }: ColumnProps) {
+function BoardColumn({
+  lane,
+  lanes,
+  laneIndex,
+  announce,
+  width,
+  groupProperty,
+  readOnly,
+  ...props
+}: ColumnProps) {
   const { schema, view } = props;
   const [collapsed, setCollapsed] = useState(false);
 
@@ -107,14 +157,18 @@ function BoardColumn({ lane, width, groupProperty, readOnly, ...props }: ColumnP
     accept: 'row',
     onDrop: (payload) => {
       if (payload.from === lane.key) return;
-      const def = schema[groupProperty];
-      if (!def) return;
-      // 拖到哪一欄就把該列的分組欄位設成那一欄的值
-      const value =
-        lane.key === null ? null : def.type === 'multiSelect' ? [lane.key] : lane.key;
-      props.setCellValue(payload.id, groupProperty, value);
+      moveRowToLane(payload.id, lane.key);
     },
   });
+
+  /** 拖放與鍵盤共用的唯一出口（兩套實作就會有一套是錯的，第十一輪 §的教訓） */
+  function moveRowToLane(rowId: string, targetKey: string | null): void {
+    const def = schema[groupProperty];
+    if (!def) return;
+    // 丟到哪一欄就把該列的分組欄位設成那一欄的值
+    const value = targetKey === null ? null : def.type === 'multiSelect' ? [targetKey] : targetKey;
+    props.setCellValue(rowId, groupProperty, value);
+  }
 
   const cardProperties = visibleProperties(schema, view.format).filter(
     (c) => c.property !== 'title',
@@ -153,6 +207,14 @@ function BoardColumn({ lane, width, groupProperty, readOnly, ...props }: ColumnP
                 key={row.id}
                 row={row}
                 laneKey={lane.key}
+                laneIndex={laneIndex}
+                laneCount={lanes.length}
+                readOnly={readOnly}
+                announce={announce}
+                onMoveToLane={(to) => {
+                  const target = lanes[to];
+                  if (target) moveRowToLane(row.id, target.key);
+                }}
                 properties={cardProperties}
                 {...props}
               />
@@ -182,22 +244,51 @@ function BoardColumn({ lane, width, groupProperty, readOnly, ...props }: ColumnP
 interface CardProps extends ViewProps {
   row: DatabaseRow;
   laneKey: string | null;
+  laneIndex: number;
+  laneCount: number;
+  readOnly: boolean;
+  announce: (message: string) => void;
+  onMoveToLane: (to: number) => void;
   properties: Array<{ property: string }>;
 }
 
-function BoardCard({ row, laneKey, properties, ...props }: CardProps) {
+function BoardCard({
+  row,
+  laneKey,
+  laneIndex,
+  laneCount,
+  readOnly,
+  announce,
+  onMoveToLane,
+  properties,
+  ...props
+}: CardProps) {
   const { schema } = props;
   // 第十一輪：長按 400ms 才進入拖曳（Pointer Events），所以卡片的 onClick 仍然正常
   const { isDragging, dragRef, handleProps } = useCardDrag('row', row.id, { from: laneKey });
+  const title = richTextToPlainText(row.title) || '未命名';
+  // O-17：整張卡就是把手，所以鍵盤入口也掛在卡片本身（Alt + ←/→）
+  const keyboardProps = useKeyboardReorder({
+    label: title,
+    index: laneIndex,
+    count: laneCount,
+    axis: 'horizontal',
+    onMove: onMoveToLane,
+    announce,
+    disabled: readOnly,
+    disabledReason: '這個資料庫是唯讀的，不能換欄',
+  });
 
   return (
     <article
       ref={dragRef}
       className={`${styles.card} ${isDragging ? styles.cardDragging : ''}`}
       {...handleProps}
+      {...keyboardProps}
+      aria-label={`${title}（${keyboardProps['aria-label']}）`}
       onClick={() => props.openRow(row.id)}
     >
-      <h4 className={styles.cardTitle}>{richTextToPlainText(row.title) || '未命名'}</h4>
+      <h4 className={styles.cardTitle}>{title}</h4>
       {properties.map(({ property }) => {
         const def = schema[property];
         if (!def) return null;

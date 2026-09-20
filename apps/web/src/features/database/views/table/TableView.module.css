@@ -193,6 +193,12 @@
   color: var(--kn-color-text-secondary);
 }
 
+/* O-17：視圖有排序條件時手動順序寫了也看不見 → 把手停用（title 說明原因） */
+.rowHandle[data-reorder-disabled] {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
 .cellWrap {
   position: relative;
   display: flex;

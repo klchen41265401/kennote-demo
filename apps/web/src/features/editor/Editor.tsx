@@ -858,6 +858,32 @@ export function Editor({
     return !!only && only.type === 'paragraph' && rtLength(only.content) === 0;
   }, [host]);
 
+  /**
+   * O-22（第十三輪）：**文件尾端點空白處補一段。**
+   *
+   * 最後一個 block 是 table / divider / image / 內嵌資料庫這種「整塊就是一個物件」
+   * 的東西時，游標**沒有地方可以去**：Notion 那一下在文件下方點空白就多一段，
+   * kennote 之前只剩 gutter 的 `+`（hover-only，觸控上還看不到 —— 第十二輪剛修完
+   * 的那一類入口）。這條是「最後一哩」的落點，不是新功能。
+   *
+   * 兩個刻意的行為：
+   *   1. 最後一段**已經是空段落**時不再補，直接把游標放過去
+   *      （否則每點一下就長一個空段落，重整後看得到一串）
+   *   2. 唯讀時整塊不渲染（不要給一個點了沒反應的區域）
+   */
+  const appendTrailingParagraph = useCallback(() => {
+    if (!host || readOnly) return;
+    const ids = host.doc.rootIds;
+    const lastId = ids[ids.length - 1] ?? null;
+    const last = lastId ? host.doc.blocks[lastId] : undefined;
+    if (last && last.type === 'paragraph' && rtLength(last.content) === 0) {
+      host.focus(lastId as string, 0);
+      return;
+    }
+    const created = host.insertAfter(lastId, { type: 'paragraph' });
+    if (created) host.focus(created, 0);
+  }, [host, readOnly]);
+
   return (
     <div
       className="kn-editor-shell"
@@ -868,6 +894,17 @@ export function Editor({
     >
       {/* ⭐ 永遠是同一個空 div：React 的 diff 進不去 editor-core 的子樹 */}
       <div className="kn-editor-host" ref={containerRef} />
+
+      {/* O-22：文件尾端的落點。`button` 而不是 `div`，鍵盤才走得到（Tab → Enter）。 */}
+      {host && !readOnly ? (
+        <button
+          type="button"
+          className="kn-editor-trailing"
+          data-testid="editor-trailing"
+          aria-label="在文件最後新增一個段落"
+          onClick={appendTrailingParagraph}
+        />
+      ) : null}
 
       {host ? (
         <EditorHostContext.Provider value={host}>

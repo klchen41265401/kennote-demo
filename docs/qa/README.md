@@ -10,6 +10,12 @@
 > ——「每一條對應報告裡的一個已修 bug」。目前 19 支 spec、約 112 條 e2e，
 > **`test.fixme` 已經全部解開**（最後一條 R11-13 在第十二輪解開並跑綠）。
 >
+> ⚠️ 第十三輪的教訓：**這張「仍然開著」的清單本身也要被查證。**
+> `permission_changed` 沒有發送端連寫四輪，而它從**第九輪**起就有
+> （`permissions/service.ts:304`）——沒有人再 grep 一次，待辦是照抄的。
+> 引用本節任何一項之前，先重新量一次；更好的是**讓它變成一條會紅的測試**
+> （`apps/server/test/notify-permission-changed.test.ts` 就是這樣寫的）。
+>
 > ⚠️ 第十二輪的教訓：**綠燈不等於量對了東西。**
 > R11-11 / R10-8 都是綠的，而兩條量的都是側邊欄的收合鈕而不是資料庫列的「開啟」鈕
 > （`name: /開啟/` 的模糊比對吃掉了 `aria-label="開啟側邊欄"`）。
@@ -30,6 +36,7 @@
 | [functional-round10.md](functional-round10.md) | 搜尋 guest 正例 / 協作即時性 / 觸控 | 連三輪的「未驗證」其實從頭就可驗；抓到 `pointercancel` 被當成 `pointerup`（手機上捲動 = 搬頁） |
 | [functional-round11.md](functional-round11.md) | 殘餘佔位入口 / 跨頁搬移 / 觸控拖曳 / 手機版資料庫 | `_fallback/dnd.ts` 刪掉了；抓到「hover-only 的入口在觸控上等於不存在」（BUG-53） |
 | [functional-round12.md](functional-round12.md) | O-31 / O-32 反轉 / hover-only 全站掃描 / `/settings` | **第十一輪交出的兩個「產品缺陷」都不是缺陷**——一個死在測試 locator、一個死在 grep 字串；另外抓到兩盞假綠燈 |
+| [functional-round13.md](functional-round13.md) | `permission_changed` 查證 / O-17 鍵盤排序 / O-33 / O-20 / O-22 | 「仍然開著」的第一項**從第十輪起就不成立**（連抄四輪）；查證途中撞到真的洞：被降級 / 被踢出工作區**一則通知都不發** |
 | [database-gaps.md](database-gaps.md) | 資料庫功能缺口補完（relation 反向欄位、RowPeek、垃圾桶、CSV、欄寬、列選取） | 7 項全部做完；§4 另列 6 項未做 |
 | [regression-triage-1.md](regression-triage-1.md) | 第一次全量 e2e（78 條）之後的紅燈分診 | 4 條紅燈 = 2 條產品缺陷（前端時序競態，只在 0 block 的列頁看得見）+ 3 條測試過時 |
 
@@ -62,12 +69,16 @@
 下面是跨所有輪次**明確標為未修 / 延後 / 已知限制**的清單。
 各 feature README 的「已知限制」段落指向這裡。
 
-> ✅ **第十 / 十一輪已經 commit**（`ac3b70a`），線上站也是這個版本。
-> 第十二輪的修正（`routes/SettingsRoute.tsx`、四支 CSS 的 `(hover: none)`、
-> 三支 e2e 的 locator）**尚未 commit**，動手前先 `git status` 看一眼。
-> 第十二輪**沒有後端改動，不需要部署**。
+> ✅ **第十～十二輪已經 commit**（線上站是 `b1fdc8e`）。
+> **第十三輪的修正尚未 commit**，動手前先 `git status` 看一眼。
 >
-> 第十二輪結案的是 **O-12**、**O-31**、**O-32**，並新增 **O-33**。
+> 🚀 **第十三輪有後端改動，需要部署**：
+> `modules/notifications/fanout.ts`（新增 `notifyWorkspaceRoleChanged()`）與
+> `modules/permissions/service.ts`（`changeMemberRole` / `removeMember` 接上發送端）。
+> 部署前，「被降級 / 被踢出工作區」**不會產生任何通知**（BUG-61）。
+>
+> 第十三輪結案的是 **O-17**、**O-33**、**O-22**，**O-20** 部分結案，
+> 並作廢了「`permission_changed` 沒有發送端」這條連抄四輪的待辦。
 >
 > <details><summary>（歷史）第十輪寫下的 commit 提醒</summary>
 >
@@ -106,6 +117,12 @@
 | O-5 | 附件的 `page_id` **不會跟著 block 搬家**（圖片剪貼到別頁，權限仍綁原頁）——刻意取捨 | round9 §6-5 |
 | O-6 | 匯入 1000 列的耗時要在部署後量一次（`createRow()` 每列多一次 `applyTransaction`） | round9 §6-7 |
 
+> ⚠️ **已作廢的待辦**：「`permission_changed` 沒有發送端」（第七～十二輪各記一次）。
+> 發送端**第九輪就接上了**（`permissions/service.ts` 的 `setPagePermission`）；
+> 第十～十二輪是照抄。第十三輪改由
+> `apps/server/test/notify-permission-changed.test.ts` 守住三個出口。
+> 真正缺的那一格是**工作區角色**（BUG-61，第十三輪修，**需部署**）。
+
 ### C. 協作鏈路（第七輪 §4-5～8，之後每輪原樣延後）
 
 | # | 一句話 | 元件 |
@@ -126,24 +143,24 @@
 | O-15 | 觸控的**拖曳排序**只做到「長按開選單」與表格列（最小版），一般 block 的拖曳搬移仍無替代路徑 | editor / ui |
 | ~~O-31~~ | ~~手機上點「開啟」鈕不會開列 peek~~ **第十二輪：誤判，產品沒壞**。R11-13 的 `name` 用模糊比對 + `.first()` 指到側邊欄的 `aria-label="開啟側邊欄"`；改 `exact` 之後 peek 量到 390×844 滿版（R12-1） | database |
 | ~~O-32~~ | ~~`properties` 面板沒有任何觸發點~~ **第十二輪：誤判，入口一直都在**。⋯ →「屬性能見度」／「編輯屬性」走 `ViewSettingsPanel` 的 `onOpen('properties')` → `setPanel({ kind, … })`，grep `open('properties'` 當然找不到（R12-2～4） | database |
-| O-33 | `DatabaseHeader` 的 ⋯ 按鈕 `aria-label="設定"` 與側邊欄底部的「設定」**同名**，一頁兩顆同名不同功能的按鈕（螢幕閱讀器與 `getByRole` 都分不出來）。改名會動到 `functional-round2.spec.ts` / `compare.spec.ts` 的既有選擇器 | database / a11y |
+| ~~O-33~~ | ~~`DatabaseHeader` 的 ⋯ 按鈕與側邊欄底部的「設定」同名~~ **第十三輪結案**：改名為「資料庫設定」，`functional-round2.spec.ts` / `compare.spec.ts` / `functional-round12.spec.ts` 的選擇器同步更新（R13-1 另驗「設定」的 count ≤ 1） | database / a11y |
 
 ### E. `database-gaps.md` §4 的 6 項
 
 | # | 一句話 |
 |---|---|
 | O-16 | **看板 / 圖庫 / 清單沒有列選取**（勾選框與批次列只有表格有） |
-| O-17 | 拖曳排序只在表格、**沒有鍵盤替代路徑**；且視圖有 `sort` 時仍可拖曳（Notion 是停用） |
+| ~~O-17~~ | ~~拖曳排序沒有鍵盤替代路徑；視圖有 `sort` 時仍可拖曳~~ **第十三輪結案**：`lib/keyboard-reorder.tsx`（Alt+↑/↓、看板 Alt+←/→、`aria-live` 播報）接到 `PropertyList` / `SortBuilder` / 看板卡片 / 側邊欄樹（另加 ⋯ →「上移 / 下移」）；有 `sort` 時把手停用（R13-2～R13-4）。⚠️ e2e 只釘了 `PropertyList`，看板 / 側邊欄的鍵盤路徑是**手動走查**，尚未自動化 |
 | O-18 | **`view.format.manualOrder` 這條既有路徑仍未接**，目前走 `pages.sort_key` |
 | O-19 | `createDual` 關掉開關時**不會刪對方的欄位**（刻意），UI 也沒有「順便刪掉」選項 |
-| O-20 | 批次操作沒有「移動到」「加到收藏」，也沒有批次改屬性值 |
+| O-20 | ~~批次操作沒有「加到收藏」~~ **第十三輪部分結案**（批次列加了「加到收藏」，走側邊欄同一支 `setFavorite()`，R13-6）。**仍缺**「移動到」（`moveTo` overlay 一次只吃一個 id）與批次改屬性值 |
 | O-21 | 既有資料裡**已經寫出去的孤兒屬性沒有清理腳本**（新的寫入已擋住） |
 
 ### F. 缺口 / 觀察（不算 bug）
 
 | # | 一句話 | 元件 |
 |---|---|---|
-| O-22 | **文件尾端沒有「點空白處補一段」的落點**：最後一個 block 是 table / divider / image 時只剩 gutter 的 `+` | editor |
+| ~~O-22~~ | ~~文件尾端沒有「點空白處補一段」的落點~~ **第十三輪結案**：`Editor.tsx` 的 `.kn-editor-trailing`（`<button>`，鍵盤也走得到）；最後一段已經是空段落時只聚焦、不重複補（R13-5） | editor |
 | O-23 | 貼上純 URL 只實作「貼上為連結」，沒有 Notion 的「連結／書籤／嵌入」三選一選單 | editor |
 | O-24 | **資料庫的列刪掉後該進哪個垃圾桶**規格面未定案（目前進工作區垃圾桶） | database |
 | O-25 | `/` 選單各分組「各挑 3 個實際插入」只完成 16 項；嵌入（52 個第三方）、匯入分組未實際插入 | editor |

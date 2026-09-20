@@ -241,6 +241,17 @@
   flex: 0 0 auto;
   color: var(--kn-color-text-tertiary);
   cursor: grab;
+  /* O-17：把手改成 <button>（鍵盤 Alt+↑/↓ 的入口），要把按鈕的預設外觀清掉 */
+  padding: 0;
+  border: 0;
+  background: none;
+  appearance: none;
+}
+
+.dragHandle:focus-visible {
+  outline: 2px solid var(--kn-color-accent);
+  outline-offset: 1px;
+  border-radius: 3px;
 }
 
 .rowDragging {

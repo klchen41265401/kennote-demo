@@ -278,7 +278,10 @@ export function DatabaseHeader(props: DatabaseHeaderProps) {
           <button
             type="button"
             className={styles.toolButton}
-            aria-label="設定"
+            /* O-33（第十三輪）：原本是 `aria-label="設定"`，與側邊欄底部的「設定」同名。
+               一頁兩顆可及名稱相同、功能完全不同的按鈕 —— 螢幕閱讀器與
+               `getByRole('button', { name: '設定' })` 都分不出來。 */
+            aria-label="資料庫設定"
             onClick={(e) => open('more', e)}
           >
             <UiIcon name="settings" size={16} />

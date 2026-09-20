@@ -18,6 +18,8 @@ export interface TreeRowActions {
   copyLink(id: string): void;
   toggleFavorite(id: string, next: boolean): void;
   moveTo(id: string): void;
+  /** O-17：在同一層的兄弟之間上 / 下移一格（拖曳的鍵盤替代路徑） */
+  reorder(id: string, direction: -1 | 1): void;
   openInNewTab(id: string): void;
 }
 
@@ -167,6 +169,26 @@ export function TreeRow({
     }
   }
 
+  /**
+   * O-17（第十三輪）：側邊欄排序的鍵盤替代路徑。
+   *
+   * 樹狀的搬移有兩個自由度（換父層、換順序）。「移動到」選單早就涵蓋了
+   * **換父層**，缺的一直是**同一層之內的順序** —— 那件事只有拖曳做得到。
+   * Alt + ↑/↓ 補的就是這一格；`aria-live` 的播報由 Sidebar 統一發
+   *（搬完這一列會被重新排序，訊息掛在列上會跟著消失）。
+   *
+   * ⚠️ 不帶 Alt 的 ↑/↓ 留給樹的巡覽，跟 `onKeyDown` 那幾條同一個理由。
+   */
+  function onReorderKeyDown(e: KeyboardEvent<HTMLDivElement>): void {
+    if (!isInsideRow(e.target)) return;
+    if (!e.altKey || e.ctrlKey || e.metaKey) return;
+    if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (!draggable) return;
+    actions.reorder(node.id, e.key === 'ArrowUp' ? -1 : 1);
+  }
+
   const menuContent = (
     <>
       <MenuItem
@@ -186,6 +208,21 @@ export function TreeRow({
       </MenuItem>
       <MenuItem icon={<Icon name="arrow-right" size={16} />} onSelect={() => actions.moveTo(node.id)}>
         移動到
+      </MenuItem>
+      {/* O-17：選單也給一份 —— Alt 組合鍵沒有人會自己猜到，選單是可發現的那一條 */}
+      <MenuItem
+        icon={<Icon name="chevron-up" size={16} />}
+        shortcut="alt+↑"
+        onSelect={() => actions.reorder(node.id, -1)}
+      >
+        上移
+      </MenuItem>
+      <MenuItem
+        icon={<Icon name="chevron-down" size={16} />}
+        shortcut="alt+↓"
+        onSelect={() => actions.reorder(node.id, 1)}
+      >
+        下移
       </MenuItem>
       <MenuSeparator />
       <MenuItem icon={<Icon name="trash" size={16} />} danger onSelect={() => actions.trash(node.id)}>
@@ -227,7 +264,13 @@ export function TreeRow({
           if (Date.now() - navigatedAt.current < 400) return;
           go();
         }}
-        onKeyDown={onKeyDown}
+        onKeyDown={(e) => {
+          if (e.altKey) {
+            onReorderKeyDown(e);
+            return;
+          }
+          onKeyDown(e);
+        }}
         onContextMenu={(e) => {
           if (!isInsideRow(e.target)) return;
           ctx.onContextMenu(e);

@@ -2118,3 +2118,27 @@ body.kn-dragging { cursor: grabbing; user-select: none; }
   }
   .kn-synced-tools { opacity: 1; }
 }
+
+/* ── O-22（第十三輪）：文件尾端的落點 ──────────────────
+ * 最後一個 block 是 table / divider / image 時，游標沒有地方可以去。
+ * 這一塊是 Notion 那片「在文件下方點一下就多一段」的空白，
+ * 高度取一個段落的行高左右：太小點不到，太大會讓短文件看起來有一大片空白。
+ * 視覺上完全透明（沒有 hover 效果，Notion 也沒有），但**鍵盤走得到**
+ * —— 它是 <button>，聚焦時給一條細線當作可見焦點。 */
+.kn-editor-trailing {
+  display: block;
+  width: 100%;
+  max-width: var(--kn-editor-content-width);
+  margin: 0 auto;
+  min-height: 96px;
+  padding: 0;
+  border: 0;
+  background: none;
+  appearance: none;
+  cursor: text;
+}
+
+.kn-editor-trailing:focus-visible {
+  outline: none;
+  box-shadow: inset 0 1px 0 var(--kn-color-accent);
+}

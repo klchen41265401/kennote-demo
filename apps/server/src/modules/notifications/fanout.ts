@@ -177,6 +177,45 @@ export async function notifyPermissionChanged(input: {
   });
 }
 
+/**
+ * **工作區角色**被變更或被移出工作區 → `permission_changed`（第十三輪）。
+ *
+ * 第九輪接上的是**單一頁面**的授權變更（`setPagePermission`）。
+ * 工作區角色卻是每一頁權限的 baseline / ceiling ——
+ * 被從 admin 降成 guest、或整個被踢出工作區，影響範圍比任何一頁的撤權都大，
+ * 而 `changeMemberRole()` / `removeMember()` 只呼叫了 `emitPermissionChange()`
+ * （重算 WS 房間），**沒有留下任何使用者看得到的紀錄**：
+ * 沒開著分頁的人，下次進來只會發現東西不見了，不知道是誰在什麼時候動的。
+ *
+ * 與頁面層共用 `permission_changed` 型別，差別在 `pageId` 是 `null`
+ * （收件匣的 `onOpenPage` 本來就會檢查 `pageId`，`invite` 也是這個形狀）。
+ */
+export async function notifyWorkspaceRoleChanged(input: {
+  workspaceId: string;
+  actorId: string;
+  recipientId: string;
+  /** 新角色；被移出工作區時是 `'none'` */
+  permission: string;
+  previousPermission?: string;
+  workspaceName?: string;
+}): Promise<void> {
+  if (input.recipientId === input.actorId) return;
+  await notify({
+    workspaceId: input.workspaceId,
+    recipientId: input.recipientId,
+    actorId: input.actorId,
+    type: 'permission_changed',
+    payload: {
+      scope: 'workspace',
+      permission: input.permission,
+      ...(input.previousPermission ? { previousPermission: input.previousPermission } : {}),
+      ...(input.workspaceName ? { workspaceName: input.workspaceName } : {}),
+    },
+    // 連改好幾次（member → admin → member）5 分鐘內只留第一則
+    groupKey: notificationGroupKey('permission_changed', `ws:${input.workspaceId}`),
+  });
+}
+
 /** 被加進工作區 → `invite`（已經有帳號的人才收得到；純 email 邀請走信件） */
 export async function notifyWorkspaceInvite(input: {
   workspaceId: string;
