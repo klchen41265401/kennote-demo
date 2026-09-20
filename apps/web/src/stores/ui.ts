@@ -11,6 +11,7 @@ import { createStore, useStore } from '@kennote/ui';
 const LS = {
   sidebarWidth: 'kennote:sidebar-width',
   sidebarCollapsed: 'kennote:sidebar-collapsed',
+  sidebarPinnedTablet: 'kennote:sidebar-pinned-tablet',
   expanded: 'kennote:tree-expanded',
   sections: 'kennote:sidebar-sections',
   rightPanel: 'kennote:right-panel',
@@ -18,7 +19,17 @@ const LS = {
   lastPage: 'kennote:last-page',
 } as const;
 
-export type RightPanelTab = 'comments' | 'history' | 'inbox';
+/**
+ * 右側面板目前顯示的東西。
+ *
+ * gap-review B-6：`'inbox'` 是 dead type（`RightPanel` 從來沒有第三個 tab，
+ * 傳進去會兩個 tab 都不 active、body 全空），這一輪拿掉。
+ * 真實 Notion 7.34 的右側面板是「更新 / 分析」兩個 role=tab
+ * （`reference/shots/gap-review/notion/_A3-updates.json`），
+ * **版本紀錄是 ⋯ 選單裡另一個獨立項目**，不是同一個面板的 tab ——
+ * 所以 `'history'` 在這裡代表「面板切成版本紀錄那個檢視」，不是一個 tab。
+ */
+export type RightPanelTab = 'comments' | 'updates' | 'analytics' | 'history';
 export type OverlayName =
   | 'search'
   | 'quickSwitch'
@@ -31,6 +42,11 @@ export type OverlayName =
 export interface UiState {
   sidebarWidth: number;
   sidebarCollapsed: boolean;
+  /**
+   * 平板（768–1279）把側邊欄「釘住」成佔位欄（D-10）。
+   * 未釘住時 768–1279 的側邊欄不佔位，但仍可用 hover 左緣浮出抽屜（與桌機收合態一樣）。
+   */
+  sidebarPinnedTablet: boolean;
   /** 收合後滑到左緣時浮出的抽屜 */
   sidebarPeek: boolean;
   /** 平板 / 手機的覆蓋式抽屜 */
@@ -76,6 +92,7 @@ function write(key: string, value: string): void {
 export const uiStore = createStore<UiState>({
   sidebarWidth: readNumber(LS.sidebarWidth, 270),
   sidebarCollapsed: readBool(LS.sidebarCollapsed, false),
+  sidebarPinnedTablet: readBool(LS.sidebarPinnedTablet, false),
   sidebarPeek: false,
   mobileSidebarOpen: false,
   rightPanelOpen: false,
@@ -102,10 +119,22 @@ export function setSidebarCollapsed(collapsed: boolean): void {
   write(LS.sidebarCollapsed, collapsed ? '1' : '0');
 }
 
+export function setSidebarPinnedTablet(pinned: boolean): void {
+  uiStore.setState((s) => ({ ...s, sidebarPinnedTablet: pinned, sidebarPeek: false }));
+  write(LS.sidebarPinnedTablet, pinned ? '1' : '0');
+}
+
 export function toggleSidebar(): void {
-  const { sidebarCollapsed, mobileSidebarOpen } = uiStore.getState();
-  if (isNarrow()) {
+  const { sidebarCollapsed, mobileSidebarOpen, sidebarPinnedTablet } = uiStore.getState();
+  const bp = currentBreakpoint();
+  // 手機（<768）：覆蓋抽屜
+  if (bp === 'mobile') {
     uiStore.setState((s) => ({ ...s, mobileSidebarOpen: !mobileSidebarOpen }));
+    return;
+  }
+  // 平板（768–1279）：Ctrl+\ 切換「釘住成佔位欄」；沒釘住時一樣可以 hover 左緣浮出（D-10）
+  if (bp === 'tablet') {
+    setSidebarPinnedTablet(!sidebarPinnedTablet);
     return;
   }
   setSidebarCollapsed(!sidebarCollapsed);
@@ -239,6 +268,18 @@ export function getLastPage(): string | null {
 
 export type Breakpoint = 'desktop' | 'tablet' | 'mobile';
 
+/**
+ * D-1：「側邊欄要不要佔位」的門檻從 1280 降到 **768**。
+ *
+ * | 寬度 | 側邊欄 | 右側面板 | 內容欄 gutter |
+ * |---|---|---|---|
+ * | `< 768` `mobile` | 覆蓋抽屜 + 遮罩、底部固定工具列 | 覆蓋抽屜（幾乎滿版） | 16 |
+ * | `768–1279` `tablet` | **佔位欄**（預設不釘住；`Ctrl+\` 釘住、hover 左緣浮出） | 覆蓋抽屜 | 48（768–1023）／72（1024–1279） |
+ * | `≥ 1280` `desktop` | 佔位欄、預設展開 | **佔位欄**（推擠內容、可拖曳） | 96 |
+ *
+ * 原本 `tablet` 被當成「跟手機一樣的窄版」，1024 等於拿手機版面在用（gap-review D-1）。
+ * 現在只有 `mobile` 才是窄版：`isNarrow()` ⇒ `<768`。
+ */
 export function currentBreakpoint(): Breakpoint {
   if (typeof window === 'undefined') return 'desktop';
   const w = window.innerWidth;
@@ -247,8 +288,21 @@ export function currentBreakpoint(): Breakpoint {
   return 'desktop';
 }
 
+/** 側邊欄是覆蓋抽屜（而不是佔位欄）嗎 —— 只有 `<768` 才是。 */
 export function isNarrow(): boolean {
-  return currentBreakpoint() !== 'desktop';
+  return currentBreakpoint() === 'mobile';
+}
+
+/** 右側面板是否有「佔位欄」（`≥1280`）；否則是覆蓋抽屜。 */
+export function hasRightPanelSlot(): boolean {
+  return currentBreakpoint() === 'desktop';
+}
+
+/** 側邊欄目前是否佔位（桌機看 collapsed、平板看 pinned、手機一律不佔位）。 */
+export function sidebarIsDocked(state: UiState = uiStore.getState(), bp = currentBreakpoint()): boolean {
+  if (bp === 'mobile') return false;
+  if (bp === 'tablet') return state.sidebarPinnedTablet;
+  return !state.sidebarCollapsed;
 }
 
 /** 訂閱斷點（RWD：≥1280 桌機 / 768–1279 平板 / <768 手機） */
@@ -257,7 +311,47 @@ export function useBreakpoint(): Breakpoint {
   useEffect(() => {
     const onResize = (): void => setBp(currentBreakpoint());
     window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
+    window.addEventListener('orientationchange', onResize);
+    return () => {
+      window.removeEventListener('resize', onResize);
+      window.removeEventListener('orientationchange', onResize);
+    };
   }, []);
   return bp;
+}
+
+/**
+ * D-7：把 `visualViewport`（軟鍵盤開合、行動瀏覽器網址列收合）的可視高度
+ * 寫成 CSS 變數，shell 的抽屜 / 底部工具列 / bottom sheet 都吃這兩個值。
+ *  - `--kn-vv-height`：可視高度
+ *  - `--kn-vv-offset-bottom`：視窗底緣到可視區底緣的距離（= 鍵盤高度）
+ *  - `--kn-keyboard-open`：1 / 0
+ */
+export function useVisualViewportVars(): boolean {
+  const [keyboard, setKeyboard] = useState(false);
+  useEffect(() => {
+    const vv = typeof window === 'undefined' ? undefined : window.visualViewport;
+    const root = document.documentElement;
+    const apply = (): void => {
+      const h = vv?.height ?? window.innerHeight;
+      const bottom = Math.max(0, Math.round(window.innerHeight - h - (vv?.offsetTop ?? 0)));
+      root.style.setProperty('--kn-vv-height', `${Math.round(h)}px`);
+      root.style.setProperty('--kn-vv-offset-bottom', `${bottom}px`);
+      const open = bottom > 120;
+      root.style.setProperty('--kn-keyboard-open', open ? '1' : '0');
+      setKeyboard(open);
+    };
+    apply();
+    if (!vv) {
+      window.addEventListener('resize', apply);
+      return () => window.removeEventListener('resize', apply);
+    }
+    vv.addEventListener('resize', apply);
+    vv.addEventListener('scroll', apply);
+    return () => {
+      vv.removeEventListener('resize', apply);
+      vv.removeEventListener('scroll', apply);
+    };
+  }, []);
+  return keyboard;
 }

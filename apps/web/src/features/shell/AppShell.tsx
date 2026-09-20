@@ -9,10 +9,9 @@
  */
 import { useEffect, useRef } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { Resizable, Tooltip, Icon } from '@kennote/ui';
+import { Resizable } from '@kennote/ui';
 import { Sidebar } from '../page-tree/Sidebar';
-import { CommentsPanel } from '../comments/CommentsPanel';
-import { HistoryPanel } from '../history/HistoryPanel';
+import { RightPanel } from './RightPanel';
 import { SearchDialog } from '../search/SearchDialog';
 import { SettingsDialog } from '../settings/SettingsDialog';
 import { ShortcutsDialog } from './ShortcutsDialog';
@@ -23,6 +22,7 @@ import {
   closeOverlay,
   isNarrow,
   openOverlay,
+  sidebarIsDocked,
   rememberLastPage,
   setHistoryPreview,
   setMobileSidebarOpen,
@@ -34,9 +34,11 @@ import {
   toggleSidebar,
   useBreakpoint,
   useUi,
+  useVisualViewportVars,
 } from '../../stores/ui';
+import { BottomBar } from './BottomBar';
 import { recordVisit } from '../../stores/pages';
-import { createPage, usePagePermission } from '../../lib/queries';
+import { createPage } from '../../lib/queries';
 import { useGlobalShortcuts } from '../../lib/shortcuts';
 import { applyTheme, getTheme } from '../../lib/theme';
 import styles from './Shell.module.css';
@@ -49,6 +51,8 @@ export function AppShell(): JSX.Element {
   const navigate = useNavigate();
   const location = useLocation();
   const peekTimer = useRef<number | null>(null);
+  /* D-7：shell 的浮層（抽屜 / 底部工具列）跟著 visualViewport 走 */
+  const keyboardOpen = useVisualViewportVars();
 
   /**
    * 目前這條路由對應的頁面 id。
@@ -79,7 +83,8 @@ export function AppShell(): JSX.Element {
    * 而剛掛載的元素又會立刻收到一個 mouseout → 抽屜會當場自己關掉。
    */
   useEffect(() => {
-    if (!ui.sidebarCollapsed || isNarrow()) return;
+    // 桌機收合態、平板未釘住態都吃這個 hover 抽屜；手機用覆蓋抽屜，不走這裡。
+    if (sidebarIsDocked() || isNarrow()) return;
     const onMove = (e: MouseEvent): void => {
       const clearPending = (): void => {
         if (peekTimer.current) {
@@ -103,7 +108,7 @@ export function AppShell(): JSX.Element {
       if (peekTimer.current) window.clearTimeout(peekTimer.current);
       peekTimer.current = null;
     };
-  }, [ui.sidebarCollapsed]);
+  }, [ui.sidebarCollapsed, ui.sidebarPinnedTablet, bp]);
 
   useGlobalShortcuts({
     newPage: async () => {
@@ -134,17 +139,31 @@ export function AppShell(): JSX.Element {
     );
   }
 
-  const narrow = bp !== 'desktop';
-  const collapsed = ui.sidebarCollapsed || narrow;
+  /**
+   * D-1：窄版（側邊欄＝覆蓋抽屜）只剩 `<768`。
+   * 768–1279 改成「佔位欄」，預設沒釘住（等同桌機的收合態：hover 左緣浮出），
+   * `Ctrl+\` / 頂欄的漢堡把它釘住（D-10）。右側面板到 1279 都是覆蓋抽屜，≥1280 才佔位。
+   */
+  const narrow = bp === 'mobile';
+  const wide = bp === 'desktop';
+  const docked = wide ? !ui.sidebarCollapsed : bp === 'tablet' ? ui.sidebarPinnedTablet : false;
+  const collapsed = !docked;
+  /* 768–1023 的佔位側邊欄預設 240（規格 02 §2.4），再寬才用使用者調整過的寬度 */
+  const sidebarWidth = bp === 'tablet' ? Math.min(ui.sidebarWidth, 240) : ui.sidebarWidth;
 
   const sidebar = <Sidebar workspace={workspace} />;
 
   return (
-    <div className={`${styles.shell} kn-shell`}>
+    <div
+      className={`${styles.shell} kn-shell`}
+      data-bp={bp}
+      data-sidebar={docked ? 'docked' : narrow ? 'drawer' : 'floating'}
+      data-keyboard={keyboardOpen ? 'open' : 'closed'}
+    >
       {!collapsed && (
         <Resizable
           className={styles.sidebarSlot}
-          size={ui.sidebarWidth}
+          size={sidebarWidth}
           min={200}
           max={420}
           side="right"
@@ -181,6 +200,8 @@ export function AppShell(): JSX.Element {
 
       <div className={styles.main}>
         <Outlet />
+        {/* D-4：手機固定底部工具列（鍵盤打開時讓位給編輯器的格式工具列） */}
+        {narrow && <BottomBar pageId={pageId} keyboardOpen={keyboardOpen} />}
       </div>
 
       {/*
@@ -192,7 +213,7 @@ export function AppShell(): JSX.Element {
         Notion 網頁版在窄螢幕不是拿掉面板，而是改成**覆蓋式抽屜**（內容不被推擠）。
         所以：桌機維持可拖曳的佔位欄，平板 / 手機改成覆蓋抽屜 + 遮罩。
       */}
-      {ui.rightPanelOpen && !narrow && (
+      {ui.rightPanelOpen && wide && (
         <Resizable
           className={styles.rightSlot}
           size={ui.rightPanelWidth}
@@ -208,7 +229,7 @@ export function AppShell(): JSX.Element {
         </Resizable>
       )}
 
-      {ui.rightPanelOpen && narrow && (
+      {ui.rightPanelOpen && !wide && (
         <>
           <div className={styles.rightBackdrop} onClick={() => setRightPanel(false)} />
           <div className={styles.rightDrawer}>
@@ -237,76 +258,5 @@ export function AppShell(): JSX.Element {
         onClose={closeOverlay}
       />
     </div>
-  );
-}
-
-function RightPanel({ pageId, userId }: { pageId: string | null; userId: string | null }): JSX.Element {
-  const ui = useUi();
-  // 第六輪 BUG-32：留言框與「還原這個版本」都要看權限（見下面兩處用法）
-  const commentPermission = usePagePermission(pageId);
-  return (
-    <aside className={styles.rightPanel} aria-label="側邊面板">
-      <div className={styles.rightHeader}>
-        <div className={styles.rightTabs} role="tablist">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={ui.rightPanelTab === 'comments'}
-            className={`${styles.rightTab} ${ui.rightPanelTab === 'comments' ? styles.rightTabActive : ''}`}
-            onClick={() => setRightPanel(true, 'comments')}
-          >
-            留言
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={ui.rightPanelTab === 'history'}
-            className={`${styles.rightTab} ${ui.rightPanelTab === 'history' ? styles.rightTabActive : ''}`}
-            onClick={() => setRightPanel(true, 'history')}
-          >
-            版本歷史
-          </button>
-        </div>
-        <Tooltip content="關閉面板">
-          <button
-            type="button"
-            className={styles.rightTab}
-            aria-label="關閉面板"
-            onClick={() => setRightPanel(false)}
-          >
-            <Icon name="close" size={16} />
-          </button>
-        </Tooltip>
-      </div>
-      <div className={styles.rightBody}>
-        {!pageId && <p className={styles.stateHint}>選一個頁面才能看留言與版本歷史。</p>}
-        {pageId && ui.rightPanelTab === 'comments' && (
-          <CommentsPanel
-            pageId={pageId}
-            currentUserId={userId}
-            /*
-             * 第六輪 BUG-32：`canComment` 預設 `true`，所以只有 `read` 權限的人
-             * 也看得到留言輸入框（送出才 403）。`comment` 以上才給。
-             */
-            canComment={commentPermission.permission !== 'read'}
-            onHighlightBlock={(blockId) => {
-              if (!blockId) return;
-              document.querySelector(`[data-block-id="${blockId}"]`)?.scrollIntoView({
-                behavior: 'smooth',
-                block: 'center',
-              });
-            }}
-          />
-        )}
-        {pageId && ui.rightPanelTab === 'history' && (
-          <HistoryPanel
-            pageId={pageId}
-            onPreview={(seq) => setHistoryPreview(seq)}
-            /* 還原是寫入：只有 edit / full 能按 */
-            canRestore={commentPermission.canEdit !== false}
-          />
-        )}
-      </div>
-    </aside>
   );
 }

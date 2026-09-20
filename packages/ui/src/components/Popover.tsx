@@ -71,7 +71,33 @@ export interface PopoverProps {
   style?: CSSProperties;
   /** 內距（選單自己控制內距時設 false）。 */
   padded?: boolean;
+  /**
+   * 行動版（`(hover: none) and (max-width: 767px)`）改成由下滑入的 bottom sheet
+   * （規格 02 §2.5 / gap-review D-5）。預設 `true` —— Notion 網頁版在手機上
+   * **所有**選單都是 sheet，貼著 trigger 的小浮層在 390 根本放不下。
+   * 明確傳 `false` 可以留住 anchored 行為（例如 inline 格式工具列）。
+   */
+  sheetOnMobile?: boolean;
   children?: ReactNode;
+}
+
+/** `(hover: none) and (max-width: 767px)`：觸控 + 窄螢幕才是 bottom sheet。 */
+const SHEET_QUERY = '(hover: none) and (max-width: 767px)';
+
+export function useSheetViewport(enabled: boolean): boolean {
+  const [match, setMatch] = useState(false);
+  useEffect(() => {
+    if (!enabled || typeof window === 'undefined' || !window.matchMedia) {
+      setMatch(false);
+      return;
+    }
+    const mq = window.matchMedia(SHEET_QUERY);
+    const apply = (): void => setMatch(mq.matches);
+    apply();
+    mq.addEventListener?.('change', apply);
+    return () => mq.removeEventListener?.('change', apply);
+  }, [enabled]);
+  return match;
 }
 
 /**
@@ -104,6 +130,7 @@ export function Popover(props: PopoverProps): JSX.Element {
     className,
     style,
     padded = true,
+    sheetOnMobile = true,
     children,
   } = props;
 
@@ -113,6 +140,9 @@ export function Popover(props: PopoverProps): JSX.Element {
   const triggerRef = useRef<HTMLElement | null>(null);
   const floatingElRef = useRef<HTMLDivElement | null>(null);
   const id = useId();
+  // tooltip 永遠不要變成 sheet（它是被動提示，不該蓋住半個螢幕）
+  const sheet = useSheetViewport(sheetOnMobile && role !== 'tooltip');
+  const [dragY, setDragY] = useState(0);
 
   const setOpen = useCallback(
     (next: boolean) => {
@@ -204,7 +234,61 @@ export function Popover(props: PopoverProps): JSX.Element {
   return (
     <>
       {triggerNode}
-      {open ? (
+      {open && sheet ? (
+        /*
+         * D-5 行動版 bottom sheet（規格 02 §2.5）：由下滑入、60% 高、可下拉關閉、遮罩。
+         * 幾何與 database `_fallback/Popover` 的 `sheetOnMobile` 一致，
+         * 差別只在這裡是 `packages/ui` 的正式實作（focus trap / overlay stack 都在）。
+         */
+        <OverlayPortal>
+          <div
+            className={styles['sheetBackdrop']}
+            style={{ zIndex: overlay.zIndex - 1 }}
+            data-kn-sheet-backdrop=""
+            onPointerDown={() => closeOnOutside && setOpen(false)}
+          />
+          <div
+            ref={setFloatingNode}
+            id={overlay.id ?? id}
+            role={role === 'none' ? undefined : role}
+            aria-label={props['aria-label']}
+            data-sheet="true"
+            className={cx(styles['surface'], styles['sheet'], padded && styles['padded'], 'kn-scroll', className)}
+            style={{
+              zIndex: overlay.zIndex,
+              ...(dragY > 0 ? { transform: `translateY(${dragY}px)`, animation: 'none' } : {}),
+              ...style,
+            }}
+          >
+            {/* 拖曳把手：按住往下拉超過 88px 就關掉 */}
+            <div
+              className={styles['sheetGrip']}
+              data-kn-sheet-grip=""
+              aria-hidden="true"
+              onPointerDown={(e) => {
+                const startY = e.clientY;
+                const node = e.currentTarget;
+                node.setPointerCapture(e.pointerId);
+                const move = (ev: PointerEvent): void => setDragY(Math.max(0, ev.clientY - startY));
+                const up = (ev: PointerEvent): void => {
+                  node.removeEventListener('pointermove', move);
+                  node.removeEventListener('pointerup', up);
+                  node.removeEventListener('pointercancel', up);
+                  if (ev.clientY - startY > 88) setOpen(false);
+                  setDragY(0);
+                };
+                node.addEventListener('pointermove', move);
+                node.addEventListener('pointerup', up);
+                node.addEventListener('pointercancel', up);
+              }}
+            >
+              <span className={styles['sheetGripBar']} />
+            </div>
+            {children}
+          </div>
+        </OverlayPortal>
+      ) : null}
+      {open && !sheet ? (
         <OverlayPortal>
           <div
             ref={setFloatingNode}

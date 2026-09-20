@@ -1,0 +1,188 @@
+/**
+ * RWD 全域補強（gap-review §D，D-1 / D-3 / D-6 / D-9 / D-11 / D-12）。
+ *
+ * 元件層一律 CSS Modules；這裡只放「**跨模組**的斷點規則」——
+ * 也就是「在某個寬度下，整個 app 的某一類元素要一起變」的那幾條。
+ * 模組的 class 名會被 hash，所以這裡一律用 **全域 class（`kn-*`）／
+ * `[class*='…']` 的局部比對／aria 屬性** 當選擇器，不依賴 hash 後的名字。
+ *
+ * 斷點（與 stores/ui.ts 的 `currentBreakpoint()` 一致）：
+ *   <768 手機 ｜ 768–1023 平板直式 ｜ 1024–1279 平板橫式/小筆電 ｜ ≥1280 桌機
+ */
+
+/* ═══════════════════════════════════════════════════════════
+   D-9 / D-1：內容欄留白隨斷點縮（規格 02 §6.5）
+   桌機 96（tokens.css 的預設）／1024–1279 72／768–1023 48／<768 16
+   ═══════════════════════════════════════════════════════════ */
+
+/*
+ * D-9：內容欄固定 724 寬 + 置中，所以「留白」＝（主欄寬 − 724）/ 2。
+ * 主欄在 768 只有 768、在 1024 釘住側邊欄後只剩 784 —— 留白各剩 22 / 30，
+ * 視覺上就是貼邊。768–1279 改成由 padding 撐出 48，文字欄跟著縮（Notion 網頁版的做法）。
+ * ≥1280 主欄至少 1010，天然留白 143，不需要額外 padding。
+ */
+@media (min-width: 768px) and (max-width: 1279px) {
+  :root {
+    --kn-size-content-gutter: 48px;
+    /* 平板的頂欄與桌機同高 44（規格 02 §2.4） */
+    --kn-size-topbar: 44px;
+  }
+
+  .kn-page-layout .kn-editor-host,
+  .kn-page-layout .kn-page-header-body,
+  .kn-page-layout .kn-editor-shell {
+    padding-left: var(--kn-size-content-gutter);
+    padding-right: var(--kn-size-content-gutter);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   D-3：safe-area（瀏海 / home indicator）
+   shell 的頂欄與底部固定列，以及任何 `position: fixed` 的滿版浮層。
+   桌機瀏覽器 env(...) 一律 0，所以這些規則在桌機是 no-op。
+   ═══════════════════════════════════════════════════════════ */
+
+@media (max-width: 767px) {
+  header[role='banner'] {
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-left: max(8px, env(safe-area-inset-left, 0px));
+    padding-right: max(6px, env(safe-area-inset-right, 0px));
+    height: calc(var(--kn-size-topbar-compact) + env(safe-area-inset-top, 0px));
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   D-6：觸控裝置的命中區 ≥ 44px（規格 02 §6.5）
+   用 `(hover: none)` 而不是寬度 —— 觸控筆電 / 平板橫式也要放大。
+   只放大「命中區」，不動視覺尺寸（icon 還是 16–20px）。
+   ═══════════════════════════════════════════════════════════ */
+
+@media (hover: none) {
+  /* 頂欄 / 側邊欄 / 面板的 icon 按鈕 */
+  header[role='banner'] button,
+  nav[aria-label='側邊欄'] button,
+  nav[aria-label='側邊欄'] a,
+  aside[aria-label='側邊面板'] button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  /* 側邊欄的頁面列（treeitem）本身 30px → 44px */
+  nav[aria-label='側邊欄'] [role='treeitem'] {
+    min-height: 44px;
+  }
+
+  /* 選單項 / 清單項（@kennote/ui 的 MenuList、slash menu、搜尋結果） */
+  [role='menuitem'],
+  [role='option'] {
+    min-height: 44px;
+  }
+
+  /* 資料庫表格「開啟」鈕與列首的展開鈕 */
+  [class*='openButton'],
+  [class*='rowOpen'],
+  [class*='expandButton'] {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   D-11：資料庫的看板 / 日曆 / 圖庫在 390 的走查修正
+   （只用選擇器覆寫，不動 features/database 的 .tsx / .module.css）
+   ═══════════════════════════════════════════════════════════ */
+
+@media (max-width: 767px) {
+  /* 看板：泳道縮到 ~78vw，一次看得到一欄半，靠 scroll-snap 一欄一欄滑 */
+  [class*='viewport'] [class*='board'] {
+    scroll-snap-type: x proximity;
+    padding-bottom: 12px;
+    -webkit-overflow-scrolling: touch;
+  }
+  [class*='viewport'] [class*='board'] > [class*='column'] {
+    width: min(78vw, 300px);
+    scroll-snap-align: start;
+  }
+
+  /* 圖庫：large（460px 下限）在 390 會把版面撐破 → 一律單欄 */
+  [class*='viewport'] [class*='grid'][data-size='large'],
+  [class*='viewport'] [class*='grid'][data-size='medium'] {
+    grid-template-columns: 1fr;
+  }
+  [class*='viewport'] [class*='grid'][data-size='small'] {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  }
+
+  /*
+   * 日曆：7 欄在 390 每格只有 ~50px。
+   * 讓格子可以縮到 0（不然 min-content 會撐出水平捲動）、列高降到 72、字不換行。
+   */
+  [class*='viewport'] [class*='weekdays'],
+  [class*='viewport'] [class*='grid']:not([data-size]) {
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+  }
+  [class*='viewport'] [class*='grid']:not([data-size]) {
+    grid-auto-rows: minmax(72px, 1fr);
+  }
+  [class*='viewport'] [class*='day'] {
+    min-width: 0;
+    min-height: 72px;
+    overflow: hidden;
+  }
+  [class*='viewport'] [class*='day'] > * {
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  [class*='viewport'] [class*='weekdays'] span {
+    padding: 6px 0;
+    font-size: 11px;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   D-12：橫向（landscape，例如 844×390）
+   視窗高度很矮時：封面壓扁、頂欄縮、底部工具列變單行（不顯示文字）。
+   ═══════════════════════════════════════════════════════════ */
+
+@media (max-height: 460px) and (orientation: landscape) {
+  :root {
+    --kn-size-cover: 30dvh;
+  }
+  .kn-page-layout .kn-page-icon {
+    font-size: 40px;
+  }
+  /* 橫向時鍵盤幾乎吃掉整個畫面，底部工具列讓位 */
+  [aria-label='底部工具列'] {
+    height: calc(40px + env(safe-area-inset-bottom, 0px));
+  }
+  [aria-label='底部工具列'] span[class*='label'] {
+    display: none;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   D-2：`100dvh`。html/body/#root 的 `height: 100%` 在行動瀏覽器
+   會跟著網址列跳動；有 dvh 的瀏覽器一律改吃 dvh。
+   ═══════════════════════════════════════════════════════════ */
+
+@supports (height: 100dvh) {
+  html,
+  body,
+  #root {
+    height: 100dvh;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   D-1 收尾：側邊欄已經佔位時，頂欄的漢堡是重複的
+   （側邊欄自己右上角就有收合鈕）。各 route 傳的是
+   `ui.sidebarCollapsed || bp !== 'desktop'`，平板釘住後仍然是 true，
+   於是 768–1279 會同時看到兩顆一樣的圖示。
+   ═══════════════════════════════════════════════════════════ */
+
+.kn-shell[data-sidebar='docked'] header[role='banner'] button[aria-label='開啟側邊欄'] {
+  display: none;
+}

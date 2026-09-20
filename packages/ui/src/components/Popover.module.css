@@ -106,3 +106,87 @@
     animation: none;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════
+   D-5 行動版 bottom sheet（規格 02 §2.5）
+   `(hover: none) and (max-width: 767px)` 時，Menu / Popover 一律
+   由下滑入、佔 60% 高、可下拉關閉、帶遮罩。
+   幾何跟 database `_fallback/Popover` 的 `sheetOnMobile` 對齊。
+   ═══════════════════════════════════════════════════════════ */
+
+.sheetBackdrop {
+  position: fixed;
+  inset: 0;
+  background: rgb(15 15 15 / 32%);
+  animation: kn-sheet-fade 120ms var(--kn-ui-ease);
+}
+
+.sheet {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  top: auto;
+  width: auto;
+  max-width: none;
+  height: 60dvh;
+  max-height: 60dvh;
+  display: flex;
+  flex-direction: column;
+  border-radius: 12px 12px 0 0;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  overscroll-behavior: contain;
+  animation: kn-sheet-up 180ms var(--kn-ui-ease);
+}
+
+/* sheet 內的清單要把剩下的高度吃滿，不然 60% 的 sheet 只露出半截 */
+.sheet > *:not(.sheetGrip) {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.sheetGrip {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* D-6：把手本身就是 ≥44px 的觸控目標 */
+  height: 28px;
+  padding: 12px 0 8px;
+  touch-action: none;
+  cursor: grab;
+}
+
+.sheetGripBar {
+  display: block;
+  width: 36px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--kn-ui-divider, rgb(0 0 0 / 12%));
+}
+
+@keyframes kn-sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@keyframes kn-sheet-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sheet,
+  .sheetBackdrop {
+    animation: none;
+  }
+}

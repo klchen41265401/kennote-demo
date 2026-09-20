@@ -198,3 +198,14 @@
 .option[aria-selected='true'] {
   background: var(--kn-ui-selected-bg);
 }
+
+/* D-5 / D-6：行動版 bottom sheet 裡的選單項放大到 44px（規格 02 §2.5） */
+@media (hover: none) and (max-width: 767px) {
+  .list {
+    min-width: 0;
+    padding: 4px 8px calc(8px + env(safe-area-inset-bottom, 0px));
+  }
+  .item {
+    min-height: 44px;
+  }
+}

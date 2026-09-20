@@ -3,7 +3,8 @@
   align-items: center;
   justify-content: center;
   gap: var(--kn-space-3);
-  height: 100vh;
+  /* D-2：行動瀏覽器網址列會吃掉 100vh 的底部 */
+  height: 100dvh;
   color: var(--kn-color-text-secondary);
   font-size: var(--kn-font-size-sm);
 }

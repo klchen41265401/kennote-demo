@@ -1,0 +1,73 @@
+/**
+ * D-4 手機底部固定工具列。
+ * 高度 52 + safe-area（D-3）；鍵盤打開時整條收起來讓位給編輯器的格式工具列（D-7）。
+ */
+
+.bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 45;
+  display: flex;
+  align-items: stretch;
+  justify-content: space-around;
+  gap: 2px;
+  height: calc(52px + env(safe-area-inset-bottom, 0px));
+  padding: 0 4px env(safe-area-inset-bottom, 0px);
+  background: var(--kn-color-bg);
+  border-top: 1px solid var(--kn-color-divider);
+  /* 網址列收合 / 鍵盤造成的可視區變化：吸在 visualViewport 的底緣 */
+  transform: translateY(calc(-1 * var(--kn-vv-offset-bottom, 0px)));
+  transition: transform var(--kn-motion-fast) var(--kn-motion-ease);
+}
+
+/* 鍵盤打開 → 讓位（編輯器的格式工具列會佔住鍵盤上緣） */
+.bar[data-hidden='true'] {
+  display: none;
+}
+
+.item {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  /* D-6：觸控目標 ≥44px */
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--kn-color-text-secondary);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.item:active {
+  background: var(--kn-color-surface-active);
+  color: var(--kn-color-text);
+}
+
+.glyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  font-size: 20px;
+  line-height: 1;
+  font-weight: 500;
+}
+
+.label {
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bar {
+    transition: none;
+  }
+}

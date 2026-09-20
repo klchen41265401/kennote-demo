@@ -41,6 +41,7 @@
   left: 8px;
   top: 8px;
   bottom: 8px;
+  max-height: calc(var(--kn-vv-height, 100dvh) - 16px);
   width: 270px;
   z-index: 50;
   border-radius: 8px;
@@ -81,11 +82,15 @@
   position: fixed;
   left: 0;
   top: 0;
-  bottom: 0;
+  /* D-2 / D-7：行動瀏覽器的網址列與軟鍵盤都會吃掉 100vh 的底部 */
+  height: var(--kn-vv-height, 100dvh);
   width: min(320px, 86vw);
   z-index: 50;
   background: var(--kn-color-sidebar-bg);
   box-shadow: var(--kn-shadow-lg);
+  /* D-3：safe-area（瀏海 / home indicator / 圓角） */
+  padding: env(safe-area-inset-top, 0px) 0 env(safe-area-inset-bottom, 0px)
+    env(safe-area-inset-left, 0px);
   animation: slideIn var(--kn-motion-normal) var(--kn-motion-ease);
 }
 @keyframes slideIn {
@@ -216,7 +221,10 @@
   position: fixed;
   top: 0;
   right: 0;
-  bottom: 0;
+  /* D-2 / D-7：跟著 visualViewport（軟鍵盤）縮，別被網址列切掉 */
+  height: var(--kn-vv-height, 100dvh);
+  padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px)
+    env(safe-area-inset-bottom, 0px) 0;
   z-index: 56;
   width: min(380px, 100vw);
   background: var(--kn-color-bg);
@@ -243,7 +251,23 @@
   }
 }
 
+/* ── D-1：768–1279 平板（佔位側邊欄 + 覆蓋式右側面板）────────────────
+   規格 02 §2.4 / §6.5：768–1023 內容欄 padding 48、側邊欄 240；
+   1024–1279 內容欄 72。右側面板到 1279 都是覆蓋抽屜，≥1280 才是佔位欄。 */
+@media (min-width: 768px) and (max-width: 1279px) {
+  .rightSlot {
+    display: none;
+  }
+  .rightDrawer {
+    width: min(380px, 60vw);
+  }
+}
+
 @media (max-width: 767px) {
+  /* 手機：底部固定工具列不能蓋住內容 */
+  .main {
+    padding-bottom: calc(52px + env(safe-area-inset-bottom, 0px));
+  }
   .skeletonPage {
     padding: 32px 16px 0;
   }

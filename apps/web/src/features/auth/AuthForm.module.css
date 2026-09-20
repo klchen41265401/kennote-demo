@@ -2,7 +2,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 100vh;
+  /* D-2：手機上 100vh 會被網址列切掉，表單底部的按鈕按不到 */
+  min-height: 100dvh;
   padding: var(--kn-space-5);
   background: var(--kn-color-bg-subtle);
 }

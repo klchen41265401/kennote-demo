@@ -1,6 +1,6 @@
 .shell {
   display: flex;
-  height: 100vh;
+  height: 100dvh;
   overflow: hidden;
 }
 
@@ -18,7 +18,7 @@
   align-items: center;
   justify-content: center;
   gap: var(--kn-space-2);
-  height: 100vh;
+  height: 100dvh;
   color: var(--kn-color-text-secondary);
   font-size: var(--kn-font-size-sm);
 }
