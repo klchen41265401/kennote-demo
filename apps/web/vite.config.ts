@@ -17,6 +17,8 @@ export default defineConfig(({ mode }) => {
   const wsTarget = target.replace(/^http/, 'ws');
 
   return {
+    // GitHub Pages 等子路徑部署：VITE_BASE=/kennote-demo/（預設根路徑）
+    base: env['VITE_BASE'] || '/',
     plugins: [react()],
     server: {
       port: 5173,
