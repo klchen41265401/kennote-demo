@@ -20,12 +20,12 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
+          node-version: '22'
+      - name: Enable pnpm via corepack
+        run: corepack enable && corepack prepare pnpm@9.15.0 --activate && pnpm --version
+      - run: pnpm install --no-frozen-lockfile
 
       # ⭐ 自研紀律檢查：黑名單 + editor-core 零依賴 + web 依賴數量上限
       - name: deps:check
@@ -62,12 +62,12 @@ jobs:
       JWT_SECRET: ci-secret-ci-secret-ci-secret-ci-secret-ci
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
+          node-version: '22'
+      - name: Enable pnpm via corepack
+        run: corepack enable && corepack prepare pnpm@9.15.0 --activate && pnpm --version
+      - run: pnpm install --no-frozen-lockfile
       - name: migrate
         run: pnpm db:migrate
       - name: integration tests
@@ -80,12 +80,12 @@ jobs:
     needs: [check]
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
+          node-version: '22'
+      - name: Enable pnpm via corepack
+        run: corepack enable && corepack prepare pnpm@9.15.0 --activate && pnpm --version
+      - run: pnpm install --no-frozen-lockfile
       - run: pnpm build
 
   security:
@@ -95,10 +95,10 @@ jobs:
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
+          node-version: '22'
+      - name: Enable pnpm via corepack
+        run: corepack enable && corepack prepare pnpm@9.15.0 --activate && pnpm --version
+      - run: pnpm install --no-frozen-lockfile
       - run: pnpm audit --audit-level=high

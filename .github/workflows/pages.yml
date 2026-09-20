@@ -20,12 +20,12 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile=false
+      - name: Enable pnpm via corepack
+        run: corepack enable && corepack prepare pnpm@9.15.0 --activate && pnpm --version
+      - run: pnpm install --no-frozen-lockfile
       - name: Build web (demo mode, sub-path)
         env:
           VITE_BASE: /kennote-demo/
