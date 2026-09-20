@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="kennote">
+  <rect width="64" height="64" rx="14" fill="#2c2c2b"/>
+  <path d="M20 16v32M20 33l14-17M26 26.5 45 48"
+        fill="none" stroke="#ffffff" stroke-width="6"
+        stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

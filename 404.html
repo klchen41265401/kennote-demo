@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#191919" media="(prefers-color-scheme: dark)" />
+    <meta
+      name="description"
+      content="kennote —— 區塊式編輯器 + 結構化資料庫 + 多人即時協作的自研知識庫。"
+    />
+    <link rel="icon" type="image/svg+xml" href="/kennote-demo/favicon.svg" />
+    <link rel="apple-touch-icon" href="/kennote-demo/favicon.svg" />
+    <title>kennote</title>
+    <script>
+      // 在第一次繪製之前就把主題套上，避免深色模式下的白色閃光
+      try {
+        var t = localStorage.getItem('kennote:theme');
+        if (t === 'dark' || t === 'light') document.documentElement.setAttribute('data-theme', t);
+      } catch (e) {}
+    </script>
+    <script type="module" crossorigin src="/kennote-demo/assets/index-CVZhS7oc.js"></script>
+    <link rel="stylesheet" crossorigin href="/kennote-demo/assets/index-BQiHowsm.css">
+  </head>
+  <body>
+    <div id="root"></div>
+    <div id="kn-overlay-root"></div>
+  </body>
+</html>
